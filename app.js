@@ -21,9 +21,13 @@ const variations = {
     { label: 'Pipe into paste -', source: "rev /usr/share/dict/words | paste /usr/share/dict/words - | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'One substitution', source: "paste /usr/share/dict/words <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Two substitutions', source: "paste <(cat /usr/share/dict/words) <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
-    { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 3< <(cat /usr/share/dict/words) 4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+    { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 \\\n  3< <(cat /usr/share/dict/words) \\\n  4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
   ],
 };
+variations.timingReverse = [
+  { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
+  { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
+];
 for (const [key, list] of Object.entries(variations)) examples[key] = list[0].source;
 const exampleSources = key => variations[key]?.map(variation => variation.source) ?? [examples[key]];
 
@@ -100,7 +104,11 @@ function usageInsights(model) {
     }
     // For example echo | sleep 2: the reader neither reads the pipe nor writes stdout.
     if (activity.notRead && !activity.noWrites && portUsage(target, 1).state === 'unused') {
-      return `<p class="usage-insight">${targetName} never reads the pipe and writes nothing to stdout, so data from ${sourceName} is discarded and the pipeline produces no output. ${sourceName} can finish at once if its output fits in the pipe buffer (typically 64 KiB on Linux); a larger write waits until ${targetName} exits and then fails with SIGPIPE. The shell still waits for ${targetName} before the next prompt.</p>`;
+      // When the producer's stdout was redirected away from the pipe, its output still goes there.
+      const stdout = source.fds[1] === pipe
+        ? `so data from ${sourceName} is discarded and the pipeline produces no output.`
+        : `so anything ${sourceName} writes to the pipe is discarded. ${sourceName}’s stdout goes to ${escape(destinationLabel(source.fds[1], 1, model.commands, source))} instead of the pipe, so that output is not lost.`;
+      return `<p class="usage-insight">${targetName} never reads the pipe and writes nothing to stdout, ${stdout} Writes that fit in the pipe buffer (typically 64 KiB on Linux) finish at once; a larger write waits until ${targetName} exits and then fails with SIGPIPE. The shell still waits for ${targetName} before the next prompt.</p>`;
     }
     return '';
   }).join('');
@@ -213,7 +221,7 @@ function diagram(model) {
         if (fd !== 0 && cmd === producer && next.fds[0] === dest) {
           const q = port(next, 0);
           paths.push(path(`M ${p.x} ${p.y} C ${p.x + 50} ${p.y}, ${q.x - 50} ${q.y}, ${q.x - 5} ${q.y}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`));
-          if (fd === 1 || cmd.fds[1] !== dest) paths.push(`<text class="pipe-label" x="${(p.x + q.x) / 2}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
+          if (fd === 1 || cmd.fds[1] !== dest) paths.push(`<text class="pipe-label" x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
         } else if (cmd.substitution && fd !== 0 && next.fds[0] === dest && geometry(next).y < geometry(cmd).y) {
           // An inherited pipe: run below the reader's card, then into its stdin.
           const q = port(next, 0), gapY = geometry(next).y + 178;
@@ -355,7 +363,7 @@ function render() {
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
     $('#insights').innerHTML = usageInsights(currentModel) + substitutionInsights(currentModel);
-    $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Additional descriptors are listed below.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
+    $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Open Descriptor details below to see the others.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
     showVariations();
     try { localStorage.setItem('pipeviewer-pipeline', currentSource); } catch { /* Storage is optional. */ }
@@ -400,14 +408,22 @@ $('.primary-button').setAttribute('aria-keyshortcuts', isMac ? 'Meta+Enter' : 'C
 $('#pipeline-form').addEventListener('submit', event => { event.preventDefault(); render(); });
 $('#pipeline-form').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); render(); } });
 $('#pipeline').addEventListener('input', () => {
+  fitEditor();
   $('#flow-caption').hidden = $('#pipeline').value === currentSource;
 });
-function loadExample(key) { $('#pipeline').value = examples[key]; render(); }
+// Grow the editor to fit multi-line pipelines; CSS caps its height.
+function fitEditor() {
+  const editor = $('#pipeline');
+  editor.style.height = 'auto';
+  editor.style.height = `${editor.scrollHeight}px`;
+}
+function loadExample(key) { $('#pipeline').value = examples[key]; fitEditor(); render(); }
 $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
   if (!button) return;
   const [key, i] = button.dataset.variation.split(':');
   $('#pipeline').value = variations[key][Number(i)].source;
+  fitEditor();
   render();
 });
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
@@ -432,4 +448,8 @@ $('#download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 try { const saved = localStorage.getItem('pipeviewer-pipeline'); if (saved) $('#pipeline').value = saved; } catch { /* Storage is optional. */ }
+fitEditor();
+// Wrapping changes once the web font loads or the window resizes.
+document.fonts?.ready.then(fitEditor);
+addEventListener('resize', fitEditor);
 render();
