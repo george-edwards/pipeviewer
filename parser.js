@@ -156,7 +156,7 @@ function buildPipeline(tokens, inherited, context, substitution) {
       }
       fds[fd] = dest;
       if (op.startsWith('&')) fds[2] = dest;
-      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op} ${target.raw}`, fd, destination: dest, description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}` });
+      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op}${op.endsWith('&') ? '' : ' '}${target.raw}`, fd, destination: dest, description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}` });
     }
     if (!words.length) throw new Error('Add a command before or after the redirects.');
     if (argv[0].procsub) throw new Error('Start each command with its name. A process substitution cannot be the command itself.');

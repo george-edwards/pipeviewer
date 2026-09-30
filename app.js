@@ -6,9 +6,9 @@ const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', 
 const names = ['stdin', 'stdout', 'stderr'];
 const examples = {
   simple: 'cat access.log | grep "404" | sort',
-  file: 'sort < names.txt | uniq -c > counts.txt',
-  merge: 'cat access.log | grep "404" > errors.log 2>&1',
-  order: 'curl https://example.com 2>&1 > response.html | grep "error"',
+  file: 'sort < names.txt | uniq -c 1> counts.txt',
+  merge: 'cat access.log | grep "404" 1> errors.log 2>&1',
+  order: 'curl https://example.com 2>&1 1> response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
   timing: 'sleep 2 | echo "hello, world"',
   timingReverse: 'echo "hello, world" | sleep 2',
