@@ -251,7 +251,10 @@ function render() {
     $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}`;
     $('#flow-caption').hidden = true;
     $('#diagram').innerHTML = diagram(currentModel);
-    $('#diagram').style.minWidth = `${Math.max(720, $('#diagram svg').viewBox.baseVal.width * .85)}px`;
+    const viewBox = $('#diagram svg').viewBox.baseVal;
+    $('#diagram').style.minWidth = `${Math.max(720, viewBox.width * .85)}px`;
+    // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
+    $('#diagram svg').style.maxHeight = `${480 * viewBox.height / 390}px`;
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="number">${cmd.key}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
