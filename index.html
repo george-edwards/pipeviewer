@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fa">
+  <meta name="description" content="Follow stdin, stdout, and stderr through your Unix pipeline. An interactive visual guide to pipes and redirects.">
+  <title>Pipeviewer — Follow the flow.</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand" aria-label="Pipeviewer home"><span class="brand-icon" aria-hidden="true">⌁</span> pipeviewer<span class="brand-dot">.</span></a>
+    <button class="text-button" id="reference-button"><span aria-hidden="true">⌘</span> Quick reference <span class="arrow" aria-hidden="true">↗</span></button>
+  </header>
+  <main>
+    <section class="intro">
+      <div class="eyebrow"><span></span> A LITTLE CLARITY FOR YOUR COMMAND LINE</div>
+      <h1>Follow the <span>flow.</span></h1>
+      <p>Your pipeline, untangled. See exactly where stdin, stdout,<br class="desktop-break"> and stderr go — one connection at a time.</p>
+    </section>
+    <section class="editor-panel" aria-labelledby="editor-title">
+      <div class="panel-top"><label id="editor-title" for="pipeline"><span class="terminal-symbol" aria-hidden="true">❯_</span> Your pipeline</label><span class="shell-label">Bash-style syntax</span></div>
+      <form id="pipeline-form">
+        <div class="code-editor"><span class="prompt" aria-hidden="true">$</span><textarea id="pipeline" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editor-hint" placeholder="cat access.log | grep '404' > errors.log">cat access.log | grep "404" > errors.log 2>&1</textarea></div>
+        <div class="editor-bottom"><span id="editor-hint"><span class="privacy-dot"></span> Stays in your browser. Never executed.</span><button class="primary-button" type="submit">Visualize pipeline <span aria-hidden="true">→</span></button></div>
+      </form>
+    </section>
+    <div class="examples"><span>TRY A PIPELINE</span><button data-example="simple">Simple pipe <span>↗</span></button><button data-example="file">Read & write files <span>↗</span></button><button data-example="merge">Merge stderr <span>↗</span></button><button data-example="order">Order matters <span>↗</span></button><button data-example="discard">Discard errors <span>↗</span></button></div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section id="results" aria-labelledby="flow-title">
+      <div class="section-heading"><div><h2 id="flow-title">The flow <span id="command-count" class="count"></span></h2><p id="flow-caption">Follow each stream from source to destination.</p></div><div class="legend" aria-label="Stream colors"><span><i class="dot stdin"></i>0 <b>stdin</b></span><span><i class="dot stdout"></i>1 <b>stdout</b></span><span><i class="dot stderr"></i>2 <b>stderr</b></span></div></div>
+      <div class="diagram-panel"><div class="diagram-toolbar"><span><i class="live-dot"></i> DESCRIPTOR MAP</span><button id="download" title="Download diagram as SVG" aria-label="Download diagram as SVG">↓ <span>Export SVG</span></button></div><div id="diagram-scroll" tabindex="0" aria-label="Pipeline diagram, scroll horizontally for longer pipelines"><div id="diagram"></div></div><div class="diagram-footer"><span><span aria-hidden="true">↳</span> Pipes connect stdout to the next command’s stdin.</span><span id="redirect-count"></span></div></div>
+      <div id="notes" role="status"></div>
+      <div class="details-heading"><h2>Under the hood</h2><span>Every descriptor. Every destination.</span></div>
+      <div id="details" class="details"></div>
+    </section>
+    <aside class="tip"><span class="tip-icon" aria-hidden="true">✳</span><div><strong>A small detail with a big difference.</strong><p>Redirects are read left to right. <code>2>&1</code> sends stderr wherever stdout points <em>at that moment.</em></p></div><button id="order-tip">See it in action <span aria-hidden="true">→</span></button></aside>
+    <footer><span>Made for those “wait, where does that go?” moments.</span><span><span class="footer-icon" aria-hidden="true">⌁</span> Think in streams.</span></footer>
+  </main>
+  <dialog id="reference"><div class="modal-heading"><h2>A quick reference</h2><button id="close-reference" aria-label="Close quick reference">×</button></div><p>Three standard streams. A handful of operators.</p><div class="reference-streams"><span><i class="dot stdin"></i><strong>0 · stdin</strong> Standard input</span><span><i class="dot stdout"></i><strong>1 · stdout</strong> Standard output</span><span><i class="dot stderr"></i><strong>2 · stderr</strong> Standard error</span></div><dl><dt>cmd | next</dt><dd>Connect stdout to the next command’s stdin.</dd><dt>&lt; file</dt><dd>Read stdin from a file.</dd><dt>&gt; file / &gt;&gt; file</dt><dd>Write stdout to a file / append to a file.</dd><dt>2&gt; errors.log</dt><dd>Write stderr to a separate file.</dd><dt>2&gt;&amp;1</dt><dd>Copy stdout’s current destination to stderr.</dd><dt>&amp;&gt; file / &amp;&gt;&gt; file</dt><dd>Write / append both output streams to a file.</dd><dt>cmd |&amp; next</dt><dd>Pipe both output streams, applying the stderr copy after explicit redirects.</dd><dt>2&gt;&amp;-</dt><dd>Close a descriptor.</dd></dl><p class="reference-limit">This is a static map of a simple Bash-style pipeline. It does not run commands, inspect files, or expand variables. Shell scripts, substitutions, and here-documents are outside its scope.</p><a href="https://www.gnu.org/software/bash/manual/html_node/Redirections.html" target="_blank" rel="noreferrer">Read the Bash redirection guide ↗</a></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

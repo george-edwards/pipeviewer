@@ -1,0 +1,79 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parsePipeline, destinationLabel } from '../parser.js';
+
+test('standard descriptors connect across a pipeline', () => {
+  const { commands: [a, b] } = parsePipeline('cat input | sort');
+  assert.equal(a.fds[0].id, 'terminal-in');
+  assert.equal(a.fds[1], b.fds[0]);
+  assert.equal(b.fds[1].id, 'terminal-out');
+  assert.equal(a.fds[2].id, 'terminal-err');
+});
+test('descriptor copies capture the current destination, not future redirects', () => {
+  const a = parsePipeline('cmd > out 2>&1').commands[0];
+  assert.equal(a.fds[1], a.fds[2]);
+  const b = parsePipeline('cmd 2>&1 > out').commands[0];
+  assert.equal(b.fds[2].id, 'terminal-out');
+  assert.equal(b.fds[1].label, 'out');
+});
+test('pipes are assigned before redirects', () => {
+  const { commands: [a, b] } = parsePipeline('cmd 2>&1 > out | next');
+  assert.equal(a.fds[2], b.fds[0]);
+  assert.equal(a.fds[1].label, 'out');
+});
+test('|& copies stdout after explicit redirects', () => {
+  const model = parsePipeline('cmd > out 2> errors |& next');
+  assert.equal(model.commands[0].fds[1], model.commands[0].fds[2]);
+  assert.equal(model.commands[0].fds[2].label, 'out');
+  assert.match(model.notes[0], /no writer/);
+});
+test('quotes and escapes protect operator characters', () => {
+  const model = parsePipeline('printf "a|b" \\| \'2>f\' | grep "a" > "file with spaces"');
+  assert.equal(model.commands.length, 2);
+  assert.equal(model.commands[1].fds[1].label, 'file with spaces');
+});
+test('only an adjacent unquoted number names a descriptor', () => {
+  const a = parsePipeline('echo 2 > out').commands[0];
+  assert.equal(a.command, 'echo 2');
+  assert.equal(a.fds[2].id, 'terminal-err');
+  const b = parsePipeline('echo "2"> out').commands[0];
+  assert.equal(b.command, 'echo "2"');
+  const c = parsePipeline('echo 2> out').commands[0];
+  assert.equal(c.fds[2].label, 'out');
+});
+test('read, append, combined output, null, and close redirects', () => {
+  const a = parsePipeline('sort < input >> output 2>/dev/null').commands[0];
+  assert.equal(a.fds[0].mode, 'read');
+  assert.equal(a.fds[1].mode, 'append');
+  assert.equal(a.fds[2].type, 'null');
+  const b = parsePipeline('cmd &>> all').commands[0];
+  assert.equal(b.fds[1], b.fds[2]);
+  assert.equal(b.fds[2].mode, 'append');
+  assert.equal(parsePipeline('cmd 2>&-').commands[0].fds[2].type, 'closed');
+});
+test('extra descriptors can save and restore destinations', () => {
+  const a = parsePipeline('cmd 3>&1 1>out 2>&3 3>&-').commands[0];
+  assert.equal(a.fds[2].id, 'terminal-out');
+  assert.equal(a.fds[3].type, 'closed');
+});
+test('overridden input pipe reports no reader', () => {
+  const model = parsePipeline('cmd | sort < input');
+  assert.match(model.notes[0], /no reader/);
+});
+test('comments and line continuations', () => {
+  assert.equal(parsePipeline('cat \\\n input | sort # a comment').commands.length, 2);
+  assert.equal(parsePipeline('echo a#b').commands[0].command, 'echo a#b');
+});
+test('unsupported and incomplete syntax produces actionable errors', () => {
+  for (const source of ['', 'cmd |', '| cmd', 'cmd >', 'cmd "oops', 'cmd && other', 'cmd; other', 'cmd << EOF', 'echo $(whoami)', 'echo `pwd`', 'cmd > $HOME/out', 'cmd 2>&9', 'cmd 3>&- 2>&3', 'cmd > ""', 'cmd\nother']) {
+    assert.throws(() => parsePipeline(source), Error, source);
+  }
+});
+test('quoted literal expansion characters in filenames stay literal', () => {
+  assert.equal(parsePipeline("cmd > '$literal'").commands[0].fds[1].label, '$literal');
+  assert.equal(parsePipeline('cmd > "a*b"').commands[0].fds[1].label, 'a*b');
+});
+test('null input supplies end-of-file rather than discarding output', () => {
+  const cmd = parsePipeline('cat < /dev/null').commands[0];
+  assert.equal(destinationLabel(cmd.fds[0], 0), '/dev/null · end-of-file');
+});
