@@ -121,7 +121,7 @@ function diagram(model) {
   bottom.forEach((d, i) => positions.set(d.id, { x: 180 + i * (width - 350) / Math.max(1, bottom.length), y: 353 + extra, w: 168, h: 61 }));
   const paths = [];
   const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
-  const path = (d, fd, dashed = false, inactive = false, reason = '') => `<g class="stream-link${inactive ? ' unused-link' : ''}"><title>${escape(reason)}</title><path d="${d}" fill="none" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="2" ${dashed || inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`;
+  const path = (d, fd, dashed = false, inactive = false, reason = '') => `<g class="stream-link${inactive ? ' unused-link' : ''}"><title>${escape(reason)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="2" ${dashed || inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`;
   const stub = (p, fd, label, inactive, reason) => {
     const endX = p.x + (fd === 0 ? -43 : 43);
     paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason));
@@ -158,7 +158,9 @@ function diagram(model) {
       paths.push(path(`M ${q.x} ${q.y} C ${q.x + 60} ${q.y}, ${end}`, 1, false, inactive, reason));
     }
   };
-  model.all.forEach((cmd, lane) => {
+  const laneLinks = [];
+  model.all.forEach(cmd => {
+    const row = Math.min(3, grid.place.get(cmd).row);
     const fdsToDraw = [0, 1, 2, ...bottomSubs(cmd).map(bottomFd)];
     for (const fd of fdsToDraw) {
       const dest = cmd.fds[fd], p = port(cmd, fd);
@@ -199,18 +201,40 @@ function diagram(model) {
           const topX = box.x + box.w / 2;
           paths.push(path(`M ${topX} ${box.y} V 92 Q ${topX} 80 ${topX + 12} 80 H ${p.x - 57} Q ${p.x - 45} 80 ${p.x - 45} 92 V ${p.y - 12} Q ${p.x - 45} ${p.y} ${p.x - 33} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason));
         } else if (dest.id === 'terminal-in') paths.push(path(`M ${box.x + box.w} ${box.y + 30} C ${p.x - 25} ${box.y + 30}, ${p.x - 25} ${p.y}, ${p.x - 4} ${p.y}`, fd, false, inactive, usage.reason));
-        else paths.push(path(`M ${box.x + box.w / 2} ${box.y} V ${302 + extra} Q ${box.x + box.w / 2} ${290 + extra} ${box.x + box.w / 2 - 12} ${290 + extra} H ${p.x - 35} Q ${p.x - 45} ${290 + extra} ${p.x - 45} ${278 + extra} V ${p.y + 12} Q ${p.x - 45} ${p.y} ${p.x - 30} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason));
+        else laneLinks.push({ input: true, fd, box, p, upper: p.x - 45 - row * 10, lower: box.x + box.w / 2, down: true, dashed: false, inactive, reason: usage.reason });
       } else if (dest.id === 'terminal-out' && !cmd.substitution && cmd.index === model.commands.length - 1 && fd === 1) {
         paths.push(path(`M ${p.x} ${p.y} H ${box.x - 4}`, fd, false, inactive, usage.reason));
       } else {
-        const targetX = box.x + box.w / 2 + (fd === 2 ? 18 : -18);
-        const laneY = 283 + extra + fd * 15 + lane * 2;
-        const turnX = p.x + 20 + fd * 7;
-        paths.push(path(`M ${p.x} ${p.y} H ${turnX - 10} Q ${turnX} ${p.y} ${turnX} ${p.y + 10} V ${laneY - 12} Q ${turnX} ${laneY} ${turnX - 12} ${laneY} ${box.y < laneY
-          // Terminal output sits above the lanes: rise into its bottom edge.
-          ? `H ${targetX} Q ${targetX} ${laneY} ${targetX} ${laneY - 12} V ${box.y + box.h + 4}`
-          : `H ${targetX} Q ${targetX} ${laneY} ${targetX} ${laneY + 12} V ${box.y - 4}`}`, fd, dest.type === 'closed', inactive, usage.reason));
+        // Terminal boxes sit above the lanes, so routes to them rise; the rest drop to the bottom row.
+        laneLinks.push({ input: false, fd, box, p, upper: p.x + 20 + fd * 7 + row * 16, lower: box.x + box.w / 2 + (fd === 2 ? 18 : -18),
+          down: !['terminal-in', 'terminal-out'].includes(dest.id), dashed: dest.type === 'closed', inactive, reason: usage.reason });
       }
+    }
+  });
+  // Each bottom route gets its own lane. A route must sit above another when that one's horizontal
+  // would cross its vertical from the card, or its rise to a terminal; and below one it drops through.
+  const spans = (link, x) => Math.min(link.upper, link.lower) + 1 < x && x < Math.max(link.upper, link.lower) - 1;
+  const mustBeAbove = (a, b) => spans(b, a.upper) || (!a.down && spans(b, a.lower)) || (b.down && spans(a, b.lower));
+  const lanes = [], remaining = [...laneLinks];
+  while (remaining.length) {
+    const blockers = link => remaining.filter(other => other !== link && mustBeAbove(other, link)).length;
+    const next = remaining.reduce((best, link) => blockers(link) < blockers(best) ? link : best);
+    lanes.push(next);
+    remaining.splice(remaining.indexOf(next), 1);
+  }
+  const laneY = k => 283 + extra + k * 11;
+  const bottomY = Math.max(353, 283 + (lanes.length - 1) * 11 + 36) + extra;
+  bottom.forEach(d => { positions.get(d.id).y = bottomY; });
+  lanes.forEach((link, k) => {
+    const { p, box, upper, lower } = link, y = laneY(k);
+    const r = Math.min(10, Math.abs(lower - upper) / 2);
+    if (link.input) {
+      const s = Math.sign(upper - lower) || 1;
+      paths.push(path(`M ${lower} ${box.y} V ${y + 10} Q ${lower} ${y} ${lower + s * r} ${y} H ${upper - s * r} Q ${upper} ${y} ${upper} ${y - 10} V ${p.y + 12} Q ${upper} ${p.y} ${upper + 12} ${p.y} H ${p.x - 4}`, link.fd, false, link.inactive, link.reason));
+    } else {
+      const s = Math.sign(lower - upper) || 1;
+      const end = link.down ? `Q ${lower} ${y} ${lower} ${y + 10} V ${box.y - 4}` : `Q ${lower} ${y} ${lower} ${y - 10} V ${box.y + box.h + 4}`;
+      paths.push(path(`M ${p.x} ${p.y} H ${upper - 10} Q ${upper} ${p.y} ${upper} ${p.y + 10} V ${y - 10} Q ${upper} ${y} ${upper + s * r} ${y} H ${lower - s * r} ${end}`, link.fd, link.dashed, link.inactive, link.reason));
     }
   });
   const nodes = [...used.values()].map(dest => {
@@ -252,7 +276,7 @@ function diagram(model) {
       ${ports}${argumentPorts}</g>`;
   });
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
-  const height = 390 + extra;
+  const height = 390 + (bottomY - 353);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 55 ${width} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="0" y="55" width="${width}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
 }
 

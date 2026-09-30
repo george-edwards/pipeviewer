@@ -142,6 +142,13 @@ function buildPipeline(tokens, inherited, context, substitution) {
         // The controlling terminal: the same device the usual descriptors 0–2 start on.
         dest = context.endpoint(op === '<' ? 'terminal-in' : fd === 2 && !op.startsWith('&') ? 'terminal-err' : 'terminal-out');
         via = ' (/dev/tty)';
+      } else if (['/dev/stdin', '/dev/stdout', '/dev/stderr'].includes(target.value)) {
+        // Bash opens the descriptor's current destination, much like a copy with >& or <&.
+        const source = ['/dev/stdin', '/dev/stdout', '/dev/stderr'].indexOf(target.value);
+        dest = fds[source];
+        if (!dest || dest.type === 'closed') throw new Error(`${target.value} refers to descriptor ${source}, which is not open in this command.`);
+        // A file is opened again, so the two descriptors do not share an offset.
+        via = dest.type === 'file' ? ` (${target.value} opens the file again with its own offset, so writes can overwrite each other)` : ` (${target.value})`;
       } else {
         if (!target.value) throw new Error('A redirect needs a nonempty filename.');
         const mode = op.includes('>>') ? 'append' : op === '<' ? 'read' : 'write';

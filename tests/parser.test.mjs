@@ -88,3 +88,14 @@ test('/dev/tty redirects reach the terminal rather than a file', () => {
   assert.equal(model.substitutions[0].commands[0].fds[1].id, 'terminal-out');
   assert.equal(parsePipeline("cmd > '/dev/tty'").commands[0].fds[1].id, 'terminal-out');
 });
+test('/dev/stdout, /dev/stderr, and /dev/stdin reach the current destination of 1, 2, and 0', () => {
+  const { commands: [a, b] } = parsePipeline('ls x 2>/dev/stdout | grep y > /dev/stderr');
+  assert.equal(a.fds[2], b.fds[0]);
+  assert.equal(b.fds[1].id, 'terminal-err');
+  const [c] = parsePipeline('cmd > out 2>/dev/stdout').commands;
+  assert.equal(c.fds[2], c.fds[1]);
+  assert.match(c.steps[1].description, /overwrite each other/);
+  const [d] = parsePipeline('cmd < in 3</dev/stdin').commands;
+  assert.equal(d.fds[3].label, 'in');
+  assert.throws(() => parsePipeline('cmd 1>&- 2>/dev/stdout'), /descriptor 1/);
+});
