@@ -1,30 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8fa">
   <meta name="description" content="Follow stdin, stdout, and stderr through your Unix pipeline. An interactive visual guide to pipes and redirects.">
   <title>Pipeviewer</title>
+  <script>
+    let savedTheme;
+    try { savedTheme = localStorage.getItem('pipeviewer-theme'); } catch {}
+    document.documentElement.dataset.theme = ['light', 'dark'].includes(savedTheme)
+      ? savedTheme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  </script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="site-header">
     <a href="/" class="brand" aria-label="Pipeviewer home"><span class="brand-icon" aria-hidden="true">⌁</span> pipeviewer<span class="brand-dot">.</span></a>
-    <button class="text-button" id="reference-button"><span aria-hidden="true">⌘</span> Quick reference <span class="arrow" aria-hidden="true">↗</span></button>
+    <div class="header-actions">
+      <button class="text-button" id="reference-button">Quick reference</button>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+        <span id="theme-label">Dark mode</span>
+      </button>
+    </div>
   </header>
   <main>
     <section class="editor-panel" aria-labelledby="editor-title">
       <div class="panel-top"><label id="editor-title" for="pipeline"><span class="terminal-symbol" aria-hidden="true">❯_</span> Your pipeline</label><span class="shell-label">Bash-style syntax</span></div>
       <form id="pipeline-form">
-        <div class="code-editor"><span class="prompt" aria-hidden="true">$</span><textarea id="pipeline" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editor-hint" placeholder="cat access.log | grep '404' > errors.log">cat access.log | grep "404" > errors.log 2>&1</textarea></div>
-        <div class="editor-bottom"><span id="editor-hint"><span class="privacy-dot"></span> Stays in your browser. Never executed.</span><button class="primary-button" type="submit">Visualize pipeline <span aria-hidden="true">→</span></button></div>
+        <div class="code-editor"><span class="prompt" aria-hidden="true">$</span><textarea id="pipeline" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editor-hint shortcut-hint" placeholder="cat access.log | grep '404' > errors.log">cat access.log | grep "404" > errors.log 2>&1</textarea></div>
+        <div class="editor-bottom"><span id="editor-hint"><span class="privacy-dot"></span> Stays in your browser. Never executed.</span><button class="primary-button" type="submit" aria-label="Visualise" aria-describedby="shortcut-hint">Visualise <kbd id="shortcut-hint" aria-label="Control plus Enter">Ctrl+Enter</kbd></button></div>
       </form>
     </section>
     <div class="examples"><span>EXAMPLES</span><button data-example="simple">Simple pipe</button><button data-example="file">Read & write files</button><button data-example="merge">Merge stderr</button><button data-example="order">Order matters</button><button data-example="discard">Discard errors</button></div>
     <div id="error" class="error" role="alert" hidden></div>
     <section id="results" aria-labelledby="flow-title">
-      <div class="section-heading"><div><h2 id="flow-title">Stream map <span id="command-count" class="count"></span></h2><p id="flow-caption" role="status" hidden>Pipeline edited — press Visualize pipeline to update.</p></div><div class="legend" aria-label="Stream colors"><span><i class="dot stdin"></i>0 <b>stdin</b></span><span><i class="dot stdout"></i>1 <b>stdout</b></span><span><i class="dot stderr"></i>2 <b>stderr</b></span></div></div>
+      <div class="section-heading"><div><h2 id="flow-title">Stream map <span id="command-count" class="count"></span></h2><p id="flow-caption" role="status" hidden>Pipeline edited — press Visualise to update.</p></div><div class="legend" aria-label="Stream colours"><span><i class="dot stdin"></i>0 <b>stdin</b></span><span><i class="dot stdout"></i>1 <b>stdout</b></span><span><i class="dot stderr"></i>2 <b>stderr</b></span></div></div>
       <div class="diagram-panel"><div class="diagram-toolbar"><span id="redirect-count"></span><button id="download" title="Download diagram as SVG" aria-label="Download diagram as SVG">↓ <span>Export SVG</span></button></div><div id="diagram-scroll" tabindex="0" aria-label="Pipeline diagram, scroll horizontally for longer pipelines"><div id="diagram"></div></div></div>
       <div id="notes" role="status"></div>
       <div class="details-heading"><h2>Descriptor details</h2></div>

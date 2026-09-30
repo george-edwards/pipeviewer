@@ -1,6 +1,6 @@
 # Pipeviewer
 
-A small, dependency-free web app that maps stdin (0), stdout (1), and stderr (2) through a Unix pipeline. Paste a command, choose **Visualize pipeline**, and follow the colored connections. Nothing you paste is executed or sent to a server.
+A small, dependency-free web app that maps stdin (0), stdout (1), and stderr (2) through a Unix pipeline. Paste a command, choose **Visualise**, and follow the coloured connections. Nothing you paste is executed or sent to a server.
 
 ## Run
 
@@ -13,7 +13,7 @@ npm start
 Open http://localhost:5173. Use `npm run dev -- --port 3000` for a different port.
 
 ```sh
-npm test       # Parser behavior and redirect ordering
+npm test       # Parser behaviour and redirect ordering
 npm run build # Static files in dist/
 ```
 
@@ -21,7 +21,8 @@ Serve `dist/` with any static host. No build dependencies or backend are needed.
 
 ## Features
 
-- Colored stream diagram, exact per-command descriptor mappings, and SVG export.
+- Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.
+- Coloured stream diagram, exact per-command descriptor mappings, and SVG export.
 - Clickable examples, quick reference, and local persistence of the last pipeline.
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.
 - `|`, `|&`, `<`, `>`, `>>`, `>|`, `n>&m`, `n<&m`, `&>`, `&>>`, and descriptor closing.

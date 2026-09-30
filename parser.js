@@ -118,8 +118,8 @@ export function parsePipeline(input) {
   return { commands: result, endpoints: [...endpoints.values()], pipes, notes };
 }
 
-export function destinationLabel(dest, fd) {
-  if (dest.type === 'pipe') return fd === 0 ? `Pipe from command ${dest.from + 1}` : `Pipe to command ${dest.to + 1}`;
+export function destinationLabel(dest, fd, commands) {
+  if (dest.type === 'pipe') return fd === 0 ? `Pipe from ${commands[dest.from].command}` : `Pipe to ${commands[dest.to].command}`;
   if (dest.type === 'null') return `/dev/null · ${dest.mode === 'read' ? 'end-of-file' : 'discard'}`;
   if (dest.type === 'file') return `${dest.label} · ${dest.mode === 'read' ? 'read' : dest.mode === 'append' ? 'append' : 'overwrite'}`;
   return dest.label;
