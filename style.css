@@ -78,9 +78,19 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .primary-button:hover { background: #493096; }
 .primary-button kbd { font-family: inherit; font-size: 11px; font-weight: 400; color: #e2dcfa; white-space: nowrap; }
 .examples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 0 26px; }
-.examples>span { font-size: 10px; letter-spacing: 1.2px; color: var(--muted); margin-right: 8px; font-weight: 600; }
+/* Row labels share a width so the example rows and variations line up. */
+.examples>span, .variations>span { font-size: 10px; letter-spacing: 1.2px; color: var(--muted); margin-right: 8px; font-weight: 600; min-width: 122px; }
 .examples button { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 6px 9px; color: var(--muted); font-size: 12px; }
 .examples button:hover, .examples button.active { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+.examples:has(+ .examples, + .variations:not([hidden])) { padding-bottom: 10px; }
+.examples + .examples { padding-top: 0; }
+.variations { display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 0 0 26px; }
+/* A segmented control: the variations are alternatives, so exactly one is pressed. */
+.variations button { background: var(--surface); border: 1px solid var(--border); margin-left: -1px; padding: 5px 10px; color: var(--muted); font-size: 12px; }
+.variations button:first-of-type { border-radius: 5px 0 0 5px; margin-left: 0; }
+.variations button:last-of-type { border-radius: 0 5px 5px 0; }
+.variations button:hover { color: var(--purple); }
+.variations button.active { position: relative; background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
 h2 { font-size: 16px; letter-spacing: -.3px; margin: 0; font-weight: 650; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
 .section-heading h2 { display: flex; align-items: center; gap: 10px; }
@@ -189,7 +199,11 @@ dialog a { font-size: 12px; color: var(--purple); }
   .code-editor { padding-left: 17px; padding-right: 15px; gap: 10px; }
   textarea { font-size: 13px; }
   .examples { gap: 7px; padding-bottom: 27px; }
+  .examples:has(+ .examples, + .variations:not([hidden])) { padding-bottom: 14px; }
   .examples>span { width: 100%; margin-bottom: 2px; }
+  .variations { gap: 7px; }
+  .variations>span { width: 100%; margin-bottom: 2px; }
+  .variations button, .variations button:first-of-type, .variations button:last-of-type { margin-left: 0; border-radius: 5px; }
   .text-button { font-size: 12px; }
   dl { grid-template-columns: 120px 1fr; gap: 15px 10px; }
   #diagram svg { min-height: 280px; }

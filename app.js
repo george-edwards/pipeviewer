@@ -11,9 +11,31 @@ const examples = {
   order: 'curl https://example.com 2>&1 > response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
   timing: 'sleep 2 | echo "hello, world"',
+  timingReverse: 'echo "hello, world" | sleep 2',
   procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
   procsubIn: 'paste <(cut -f 1 names.tsv) <(cut -f 3 scores.tsv)',
 };
+// Examples with several equivalent spellings, shown as toggles once one of them is loaded.
+const variations = {
+  palindromes: [
+    { label: 'Pipe into paste -', source: "rev /usr/share/dict/words | paste /usr/share/dict/words - | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+    { label: 'One substitution', source: "paste /usr/share/dict/words <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+    { label: 'Two substitutions', source: "paste <(cat /usr/share/dict/words) <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+    { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 3< <(cat /usr/share/dict/words) 4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+  ],
+};
+for (const [key, list] of Object.entries(variations)) examples[key] = list[0].source;
+const exampleSources = key => variations[key]?.map(variation => variation.source) ?? [examples[key]];
+
+function showVariations() {
+  const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
+  $('#variations').hidden = !key;
+  if (!key) return;
+  $('#variations').innerHTML = `<span>VARIATIONS</span>${variations[key].map((variation, i) => {
+    const active = variation.source === currentSource;
+    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(variation.source)}">${escape(variation.label)}</button>`;
+  }).join('')}`;
+}
 let currentModel;
 let currentSource = '';
 
@@ -330,7 +352,8 @@ function render() {
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
     $('#insights').innerHTML = usageInsights(currentModel) + substitutionInsights(currentModel);
     $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Additional descriptors are listed below.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
-    document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', examples[button.dataset.example] === currentSource));
+    document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
+    showVariations();
     try { localStorage.setItem('pipeviewer-pipeline', currentSource); } catch { /* Storage is optional. */ }
   } catch (error) {
     $('#error').textContent = error.message;
@@ -376,6 +399,13 @@ $('#pipeline').addEventListener('input', () => {
   $('#flow-caption').hidden = $('#pipeline').value === currentSource;
 });
 function loadExample(key) { $('#pipeline').value = examples[key]; render(); }
+$('#variations').addEventListener('click', event => {
+  const button = event.target.closest('[data-variation]');
+  if (!button) return;
+  const [key, i] = button.dataset.variation.split(':');
+  $('#pipeline').value = variations[key][Number(i)].source;
+  render();
+});
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
