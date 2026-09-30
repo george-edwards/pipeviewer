@@ -114,7 +114,9 @@ function diagram(model) {
     used.set(dest.id, dest);
   }));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
-  const width = Math.max(850, 240 + grid.cols * 360 + 175, 350 + bottom.length * 190);
+  // Space for the terminal boxes is only kept when a stream uses them.
+  const minX = used.has('terminal-in') ? 0 : 140;
+  const width = Math.max(850, used.has('terminal-out') ? 240 + grid.cols * 360 + 175 : 180 + grid.cols * 360, 350 + bottom.length * 190);
   const positions = new Map();
   positions.set('terminal-in', { x: 20 + grid.shift * 360, y: 149, w: 155, h: 59 });
   positions.set('terminal-out', { x: width - 174, y: 149, w: 155, h: 59 });
@@ -277,7 +279,7 @@ function diagram(model) {
   });
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
   const height = 390 + (bottomY - 353);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 55 ${width} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="0" y="55" width="${width}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} 55 ${width - minX} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="${minX}" y="55" width="${width - minX}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
 }
 
 const zoomSteps = [.5, .67, .8, 1, 1.25, 1.5, 2, 2.5, 3];

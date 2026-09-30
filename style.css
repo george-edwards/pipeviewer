@@ -21,6 +21,7 @@
   --focus: #8865df;
   color: var(--text);
   background: var(--page);
+  --content: 1200px;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -47,7 +48,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; transition: background .16s, color .16s; }
 button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 a { color: inherit; }
-.site-header { height: 80px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 max(6.5%, calc((100vw - 1200px)/2)); background: var(--surface); }
+.site-header { height: 80px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 max(6.5%, calc((100vw - var(--content))/2)); background: var(--surface); }
 .brand { text-decoration: none; display: flex; align-items: center; font-size: 23px; font-weight: 700; letter-spacing: -1px; }
 .brand-icon { width: 32px; height: 32px; border-radius: 9px; background: var(--purple-bg); color: var(--purple); display: grid; place-items: center; font-family: monospace; font-size: 31px; margin-right: 10px; }
 .brand-dot { color: var(--purple); }
@@ -59,7 +60,7 @@ a { color: inherit; }
 .theme-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sun-icon, [data-theme="dark"] .moon-icon { display: none; }
 [data-theme="dark"] .sun-icon { display: block; }
-main { max-width: 1200px; margin: auto; padding: 32px 40px 40px; }
+main { max-width: var(--content); margin: auto; padding: 32px 40px 40px; }
 .editor-panel { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .panel-top { height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; border-bottom: 1px solid var(--border); }
 .panel-top label { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
@@ -136,7 +137,7 @@ h2 { font-size: 16px; letter-spacing: -.3px; margin: 0; font-weight: 650; }
 .usage-assumption { margin-left: auto; }
 .connection-sample { width: 24px; border-top: 2px solid var(--purple); }
 .connection-sample.unused { border-top: 2px dashed var(--muted); }
-.usage-insight { margin: 14px 0 0; padding: 14px 16px; border-left: 3px solid var(--purple); background: var(--surface); color: var(--text); font-size: 13px; line-height: 1.7; }
+.usage-insight { margin: 14px 0 0; padding: 14px max(16px, calc(100% - 1000px)) 14px 16px; border-left: 3px solid var(--purple); background: var(--surface); color: var(--text); font-size: 13px; line-height: 1.7; }
 .usage-insight code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--purple); }
 .reference-usage-heading { margin: 24px 0 0; font-size: 14px; }
 .steps { border-top: 1px solid var(--border); margin-top: 13px; padding-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.7; }
@@ -144,7 +145,7 @@ h2 { font-size: 16px; letter-spacing: -.3px; margin: 0; font-weight: 650; }
 .steps ol { margin: 7px 0 0; padding-left: 18px; }
 .steps code { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text); }
 .error { padding: 15px 18px; border: 1px solid var(--error); background: var(--error-bg); color: var(--error); border-radius: 8px; font-size: 13px; margin-bottom: 25px; }
-.note { font-size: 12px; color: var(--amber); background: var(--amber-bg); padding: 12px 16px; border-radius: 6px; margin-top: 12px; }
+.note { font-size: 12px; color: var(--amber); background: var(--amber-bg); padding: 12px max(16px, calc(100% - 1000px)) 12px 16px; border-radius: 6px; margin-top: 12px; }
 dialog { border: 1px solid var(--border); border-radius: 16px; width: min(560px, calc(100% - 32px)); padding: 28px; box-shadow: 0 20px 100px #00000040; color: var(--text); background: var(--surface); }
 dialog::backdrop { background: #11151d99; backdrop-filter: blur(4px); }
 .modal-heading { display: flex; align-items: center; justify-content: space-between; }
@@ -160,7 +161,8 @@ dd { margin: 0; line-height: 1.5; }
 .reference-limit { border-top: 1px solid var(--border); padding-top: 16px; }
 dialog a { font-size: 12px; color: var(--purple); }
 [hidden] { display: none !important; }
-@media (min-width: 1450px) { main { padding: 32px 0 40px; } }
+/* Pipelines read left to right, so wide windows give the page their width instead of margins. */
+@media (min-width: 1450px) { :root { --content: calc(100vw - 192px); } main { padding: 32px 0 40px; } }
 @media (max-width: 760px) {
   .site-header { height: 70px; padding: 0 20px; }
   .brand { font-size: 21px; }
