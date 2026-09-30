@@ -27,10 +27,10 @@
     </div>
   </header>
   <main>
-    <section class="editor-panel" aria-labelledby="editor-title">
-      <div class="panel-top"><label id="editor-title" for="pipeline"><span class="terminal-symbol" aria-hidden="true">❯_</span> Your pipeline</label><span class="shell-label">Bash-style syntax</span></div>
+    <section class="editor-panel" aria-label="Your pipeline">
+      <div class="panel-top"><span class="shell-label">Bash-style syntax</span></div>
       <form id="pipeline-form">
-        <div class="code-editor"><span class="prompt" aria-hidden="true">$</span><textarea id="pipeline" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editor-hint shortcut-hint" placeholder="cat access.log | grep '404' 1> errors.log">cat access.log | grep "404" 1> errors.log 2>&1</textarea><div class="resize-handle" id="resize-handle" role="separator" aria-orientation="horizontal" aria-controls="pipeline" aria-label="Resize the pipeline box" tabindex="0" title="Drag to resize · double-click to fit"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M17 5 5 17M17 10.5 10.5 17M17 16l-1 1"/></svg></div></div>
+        <div class="code-editor"><span class="prompt" aria-hidden="true">$</span><textarea id="pipeline" aria-label="Your pipeline" rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editor-hint shortcut-hint" placeholder="cat access.log | grep '404' 1> errors.log">cat access.log | grep "404" 1> errors.log 2>&1</textarea><div class="resize-handle" id="resize-handle" role="separator" aria-orientation="horizontal" aria-controls="pipeline" aria-label="Resize the pipeline box" tabindex="0" title="Drag to resize · double-click to fit"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M17 5 5 17M17 10.5 10.5 17M17 16l-1 1"/></svg></div></div>
         <div class="editor-bottom"><span id="editor-hint"><span class="privacy-dot"></span> Stays in your browser. Never executed.</span><button class="primary-button" type="submit" aria-label="Visualise" aria-describedby="shortcut-hint">Visualise <kbd id="shortcut-hint" aria-label="Control plus Enter">Ctrl+Enter</kbd></button></div>
       </form>
     </section>

@@ -63,8 +63,6 @@ a { color: inherit; }
 main { max-width: var(--content); margin: auto; padding: 32px 40px 40px; }
 .editor-panel { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .panel-top { height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; border-bottom: 1px solid var(--border); }
-.panel-top label { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
-.terminal-symbol { color: var(--purple); font-size: 15px; }
 .shell-label { font: 11px 'IBM Plex Mono', monospace; color: var(--muted); }
 .code-editor { position: relative; display: flex; gap: 15px; padding: 25px 46px 10px 24px; }
 .prompt { font: 16px/1.7 'IBM Plex Mono', monospace; color: var(--purple); }
