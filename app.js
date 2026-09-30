@@ -325,7 +325,8 @@ function render() {
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
-    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="number">${cmd.key}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
+    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
+    $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
     $('#insights').innerHTML = usageInsights(currentModel) + substitutionInsights(currentModel);
     $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Additional descriptors are listed below.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
@@ -379,6 +380,11 @@ document.querySelectorAll('[data-example]').forEach(button => button.addEventLis
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 $('#reference').addEventListener('click', event => { if (event.target === $('#reference')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.target.close(); } });
+// The details start collapsed; remember when a viewer opens them.
+try { $('#details-section').open = localStorage.getItem('pipeviewer-details') === 'open'; } catch {}
+$('#details-section').addEventListener('toggle', () => {
+  try { localStorage.setItem('pipeviewer-details', $('#details-section').open ? 'open' : 'closed'); } catch {}
+});
 $('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => step > zoom) ?? zoom));
 $('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
 $('#zoom-reset').addEventListener('click', () => setZoom(1));

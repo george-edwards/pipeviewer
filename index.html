@@ -46,8 +46,7 @@
       </div>
       <div id="insights" aria-live="polite"></div>
       <div id="notes" role="status"></div>
-      <div class="details-heading"><h2>Descriptor details</h2></div>
-      <div id="details" class="details"></div>
+      <details class="details-section" id="details-section"><summary class="details-heading"><span class="disclosure" aria-hidden="true"></span><h2>Descriptor details</h2><span id="details-count" class="count"></span></summary><div id="details" class="details"></div></details>
     </section>
   </main>
   <dialog id="reference"><div class="modal-heading"><h2>Quick reference</h2><button id="close-reference" aria-label="Close quick reference">×</button></div><div class="reference-streams"><span><i class="dot stdin"></i><strong>0 · stdin</strong> Standard input</span><span><i class="dot stdout"></i><strong>1 · stdout</strong> Standard output</span><span><i class="dot stderr"></i><strong>2 · stderr</strong> Standard error</span></div><dl><dt>cmd | next</dt><dd>Connect stdout to the next command’s stdin.</dd><dt>&lt; file</dt><dd>Read stdin from a file.</dd><dt>&gt; file / &gt;&gt; file</dt><dd>Write stdout to a file / append to a file.</dd><dt>2&gt; errors.log</dt><dd>Write stderr to a separate file.</dd><dt>2&gt;&amp;1</dt><dd>Copy stdout’s current destination to stderr.</dd><dt>&amp;&gt; file / &amp;&gt;&gt; file</dt><dd>Write / append both output streams to a file.</dd><dt>cmd |&amp; next</dt><dd>Pipe both output streams, applying the stderr copy after explicit redirects.</dd><dt>2&gt;&amp;-</dt><dd>Close a descriptor.</dd><dt>2&gt; &gt;(cmd)</dt><dd>Send stderr to another command’s stdin. The command inherits the current descriptors, and Bash does not wait for it.</dd><dt>cmd &lt;(other)</dt><dd>Pass <code>/dev/fd/63</code> as an argument; reading it reads <code>other</code>’s stdout.</dd></dl><h3 class="reference-usage-heading">Connections and usage</h3>
