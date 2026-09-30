@@ -199,3 +199,23 @@ test('unresolved file arguments and options remain conservative for known comman
     assert.notEqual(cmd.usage.fds[source.startsWith('true') ? 1 : 0].state, 'unused', source);
   }
 });
+
+test('head and tail read named files or stdin and may write stdout', () => {
+  for (const source of ['head', 'head -n 5', 'head -5', 'head -c 10M -', 'tail', 'tail -n +2', 'tail -2', 'tail +2', 'tail -f', 'tail --follow=name -n 1 -']) {
+    const [cmd] = parsePipeline(source).commands;
+    assert.equal(cmd.usage.recognised, true, source);
+    assert.equal(cmd.usage.fds[0].state, 'possible', source);
+    assert.equal(cmd.usage.fds[1].state, 'possible', source);
+    assert.equal(cmd.usage.fds[2].label, 'on error', source);
+  }
+  for (const source of ['head -c 10M /dev/urandom', 'head -5 notes.txt', 'tail -n 3 a b', 'tail +2 notes.txt', 'tail -F app.log']) {
+    assert.equal(parsePipeline(source).commands[0].usage.fds[0].state, 'unused', source);
+  }
+  // With more than one operand, GNU tail reads +2 as a file name.
+  assert.equal(parsePipeline('tail +2 a b').commands[0].usage.fds[0].state, 'unused');
+  for (const source of ['head --unknown', 'tail -n', 'head "$FILE"', 'head /dev/stdin']) {
+    assert.equal(parsePipeline(source).commands[0].usage.fds[0].state, 'unknown', source);
+  }
+  const time = parsePipeline('/usr/bin/time -f %M head -c 10M /dev/urandom').commands[0];
+  assert.equal(time.usage.fds[1].state, 'possible');
+});

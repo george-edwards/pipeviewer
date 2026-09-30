@@ -90,7 +90,7 @@ export function inferUsage(argv) {
       set(1, unused(1, 'echo -n with no text suppresses the newline and writes no stdout data.'));
     }
     errors();
-  } else if (['cat', 'wc', 'base64', 'cut', 'paste', 'rev'].includes(name)) {
+  } else if (['cat', 'wc', 'base64', 'cut', 'paste', 'rev', 'head', 'tail'].includes(name)) {
     recognise(); output(); errors();
     const specs = {
       cat: { flags: 'AbenstuvET', longFlags: ['--show-all', '--number-nonblank', '--show-ends', '--number', '--squeeze-blank', '--show-tabs', '--show-nonprinting'] },
@@ -99,8 +99,14 @@ export function inferUsage(argv) {
       cut: { flags: 'Fnswz', values: 'bcfdO', longFlags: ['--only-delimited', '--zero-terminated', '--no-partial'], longValues: ['--bytes', '--characters', '--fields', '--delimiter', '--output-delimiter', '--whitespace-delimited'] },
       paste: { flags: 'sz', values: 'd', longFlags: ['--serial', '--zero-terminated'], longValues: ['--delimiters'] },
       rev: { flags: '0', longFlags: ['--zero'] },
+      head: { flags: 'qvz', values: 'cn', longFlags: ['--quiet', '--silent', '--verbose', '--zero-terminated'], longValues: ['--bytes', '--lines'] },
+      tail: { flags: 'fFqvz', values: 'cns', longFlags: ['--follow', '--retry', '--quiet', '--silent', '--verbose', '--zero-terminated'],
+        longValues: ['--bytes', '--lines', '--follow', '--sleep-interval', '--pid', '--max-unchanged-stats'] },
     };
-    const scan = scanOptions(args, specs[name]);
+    // Obsolete counts: head -5, tail -5, and tail +5 when at most one file follows.
+    const legacy = name === 'head' ? /^-\d+$/ : /^[-+]\d+[bcl]?f?$/;
+    const counted = ['head', 'tail'].includes(name) && args.length <= 2 && !args[0]?.dynamic && legacy.test(args[0]?.value || '');
+    const scan = scanOptions(counted ? args.slice(1) : args, specs[name]);
     if (name === 'wc' && scan.valid && scan.options.has('--files0-from')) {
       const file = scan.options.get('--files0-from');
       set(0, file === '-' ? possible(0, 'wc reads file names from stdin for --files0-from=-.')
