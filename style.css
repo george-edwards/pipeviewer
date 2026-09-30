@@ -66,10 +66,14 @@ main { max-width: var(--content); margin: auto; padding: 32px 40px 40px; }
 .panel-top label { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
 .terminal-symbol { color: var(--purple); font-size: 15px; }
 .shell-label { font: 11px 'IBM Plex Mono', monospace; color: var(--muted); }
-.code-editor { display: flex; gap: 15px; padding: 25px 24px 10px; }
+.code-editor { position: relative; display: flex; gap: 15px; padding: 25px 46px 10px 24px; }
 .prompt { font: 16px/1.7 'IBM Plex Mono', monospace; color: var(--purple); }
-textarea { display: block; resize: vertical; background: transparent; border: 0; width: 100%; min-height: 65px; max-height: 250px; outline: none; font: 14px/1.9 'IBM Plex Mono', monospace; color: var(--text); tab-size: 2; }
+textarea { display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 65px; max-height: 70vh; outline: none; font: 14px/1.9 'IBM Plex Mono', monospace; color: var(--text); tab-size: 2; }
 textarea::placeholder { color: var(--muted); opacity: 1; }
+/* A large resize handle; the native grabber is small and cannot be restyled everywhere. */
+.resize-handle { position: absolute; right: 8px; bottom: 4px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); cursor: ns-resize; touch-action: none; }
+.resize-handle:hover, .resize-handle.dragging { color: var(--purple); background: var(--purple-bg); }
+.resize-handle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .editor-panel:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px var(--purple-bg); }
 .editor-bottom { padding: 4px 18px 16px 23px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 #editor-hint { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
@@ -196,7 +200,7 @@ dialog a { font-size: 12px; color: var(--purple); }
   #editor-hint { font-size: 11px; max-width: 140px; line-height: 1.6; }
   .primary-button { font-size: 12px; gap: 10px; padding: 10px; }
   .primary-button kbd { font-size: 10px; }
-  .code-editor { padding-left: 17px; padding-right: 15px; gap: 10px; }
+  .code-editor { padding: 25px 15px 40px 17px; gap: 10px; }
   textarea { font-size: 13px; }
   .examples { gap: 7px; padding-bottom: 27px; }
   .examples:has(+ .examples, + .variations:not([hidden])) { padding-bottom: 14px; }

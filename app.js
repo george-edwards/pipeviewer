@@ -411,12 +411,39 @@ $('#pipeline').addEventListener('input', () => {
   fitEditor();
   $('#flow-caption').hidden = $('#pipeline').value === currentSource;
 });
-// Grow the editor to fit multi-line pipelines; CSS caps its height.
+// The editor grows with its content up to ten lines, then scrolls. A height the viewer drags
+// to acts as a minimum; CSS caps both.
+let chosenHeight = 0;
 function fitEditor() {
   const editor = $('#pipeline');
+  const lines = parseFloat(getComputedStyle(editor).lineHeight) * 10 + 8;
   editor.style.height = 'auto';
-  editor.style.height = `${editor.scrollHeight}px`;
+  editor.style.height = `${Math.max(Math.min(editor.scrollHeight, lines), chosenHeight)}px`;
+  $('#resize-handle').setAttribute('aria-valuenow', Math.round(editor.offsetHeight));
 }
+function resizeEditor(height) {
+  $('#pipeline').style.height = `${height}px`;
+  chosenHeight = $('#pipeline').offsetHeight;
+  $('#resize-handle').setAttribute('aria-valuenow', Math.round(chosenHeight));
+}
+$('#resize-handle').addEventListener('pointerdown', event => {
+  event.preventDefault();
+  const handle = event.currentTarget, startY = event.clientY, startHeight = $('#pipeline').offsetHeight;
+  handle.setPointerCapture(event.pointerId);
+  handle.classList.add('dragging');
+  const move = moved => resizeEditor(startHeight + moved.clientY - startY);
+  const stop = () => { handle.classList.remove('dragging'); handle.removeEventListener('pointermove', move); };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', stop, { once: true });
+  handle.addEventListener('pointercancel', stop, { once: true });
+});
+$('#resize-handle').addEventListener('keydown', event => {
+  if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const step = parseFloat(getComputedStyle($('#pipeline')).lineHeight);
+  resizeEditor($('#pipeline').offsetHeight + (event.key === 'ArrowDown' ? step : -step));
+});
+$('#resize-handle').addEventListener('dblclick', () => { chosenHeight = 0; fitEditor(); });
 function loadExample(key) { $('#pipeline').value = examples[key]; fitEditor(); render(); }
 $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
