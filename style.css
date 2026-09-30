@@ -81,20 +81,19 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .primary-button { display: flex; align-items: center; gap: 22px; border: 1px solid #593cb6; background: #593cb6; color: #ffffff; border-radius: 7px; font-size: 13px; font-weight: 600; padding: 11px 16px; }
 .primary-button:hover { background: #493096; }
 .primary-button kbd { font-family: inherit; font-size: 11px; font-weight: 400; color: #e2dcfa; white-space: nowrap; }
-.examples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 0 26px; }
-/* Row labels share a width so the example rows and variations line up. */
-.examples>span, .variations>span { font-size: 10px; letter-spacing: 1.2px; color: var(--muted); margin-right: 8px; font-weight: 600; min-width: 122px; }
-.examples button { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 6px 9px; color: var(--muted); font-size: 12px; }
-.examples button:hover, .examples button.active { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
-.examples:has(+ .examples, + .variations:not([hidden])) { padding-bottom: 10px; }
-.examples + .examples { padding-top: 0; }
-.variations { display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 0 0 26px; }
-/* A segmented control: the variations are alternatives, so exactly one is pressed. */
-.variations button { background: var(--surface); border: 1px solid var(--border); margin-left: -1px; padding: 5px 10px; color: var(--muted); font-size: 12px; }
-.variations button:first-of-type { border-radius: 5px 0 0 5px; margin-left: 0; }
-.variations button:last-of-type { border-radius: 0 5px 5px 0; }
-.variations button:hover { color: var(--purple); }
-.variations button.active { position: relative; background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+/* One grid for every example row, so each row's first button starts in the same column. */
+.example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 10px 18px; padding: 14px 0 26px; }
+.example-row { display: contents; }
+.example-row[hidden] { display: none; }
+.row-label { font-size: 10px; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; }
+.example-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.example-buttons button { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 6px 9px; color: var(--muted); font-size: 12px; }
+.example-buttons button:hover, .example-buttons button.active { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+/* A segmented switch on a recessed track, so variations read as modes of one example rather than more examples. */
+.variation-buttons { display: flex; flex-wrap: wrap; gap: 2px; width: fit-content; padding: 3px; background: var(--inset); border: 1px solid var(--border); border-radius: 8px; }
+.variation-buttons button { background: transparent; border: 0; border-radius: 5px; padding: 5px 11px; color: var(--muted); font-size: 12px; }
+.variation-buttons button:hover { color: var(--text); }
+.variation-buttons button.active { background: var(--surface); color: var(--purple); font-weight: 550; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); }
 h2 { font-size: 16px; letter-spacing: -.3px; margin: 0; font-weight: 650; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
 .section-heading h2 { display: flex; align-items: center; gap: 10px; }
@@ -202,12 +201,10 @@ dialog a { font-size: 12px; color: var(--purple); }
   .primary-button kbd { font-size: 10px; }
   .code-editor { padding: 25px 15px 40px 17px; gap: 10px; }
   textarea { font-size: 13px; }
-  .examples { gap: 7px; padding-bottom: 27px; }
-  .examples:has(+ .examples, + .variations:not([hidden])) { padding-bottom: 14px; }
-  .examples>span { width: 100%; margin-bottom: 2px; }
-  .variations { gap: 7px; }
-  .variations>span { width: 100%; margin-bottom: 2px; }
-  .variations button, .variations button:first-of-type, .variations button:last-of-type { margin-left: 0; border-radius: 5px; }
+  /* Stack each label above its buttons. */
+  .example-rows { grid-template-columns: minmax(0, 1fr); gap: 7px; padding-bottom: 27px; }
+  .example-row + .example-row .row-label { margin-top: 7px; }
+  .example-buttons { gap: 7px; }
   .text-button { font-size: 12px; }
   dl { grid-template-columns: 120px 1fr; gap: 15px 10px; }
   #diagram svg { min-height: 280px; }

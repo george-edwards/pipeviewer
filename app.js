@@ -24,6 +24,13 @@ const variations = {
     { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 \\\n  3< <(cat /usr/share/dict/words) \\\n  4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
   ],
 };
+// Explicit descriptor numbers first, then the shorthand Bash also accepts.
+for (const key of ['file', 'merge', 'order']) {
+  variations[key] = [
+    { label: 'Numbered (1>)', source: examples[key] },
+    { label: 'Shorthand (>)', source: examples[key].replace(/(^|\s)1>(?!&)/g, '$1>') },
+  ];
+}
 variations.timingReverse = [
   { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
   { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
@@ -35,10 +42,10 @@ function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
   $('#variations').hidden = !key;
   if (!key) return;
-  $('#variations').innerHTML = `<span>VARIATIONS</span>${variations[key].map((variation, i) => {
+  $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
     const active = variation.source === currentSource;
     return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(variation.source)}">${escape(variation.label)}</button>`;
-  }).join('')}`;
+  }).join('');
 }
 let currentModel;
 let currentSource = '';
