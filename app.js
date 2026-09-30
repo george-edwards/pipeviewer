@@ -98,6 +98,10 @@ function usageInsights(model) {
     if (source.usage.name === 'sleep' && activity.noWrites && target.fds[0] === pipe && portUsage(target, 0).state === 'possible') {
       return `<p class="usage-insight">${sourceName} writes no data, but keeps the pipe open during its delay. ${targetName} reads stdin and can wait for end-of-file until ${sourceName} exits.</p>`;
     }
+    // For example echo | sleep 2: the reader neither reads the pipe nor writes stdout.
+    if (activity.notRead && !activity.noWrites && portUsage(target, 1).state === 'unused') {
+      return `<p class="usage-insight">${targetName} never reads the pipe and writes nothing to stdout, so data from ${sourceName} is discarded and the pipeline produces no output. ${sourceName} can finish at once if its output fits in the pipe buffer (typically 64 KiB on Linux); a larger write waits until ${targetName} exits and then fails with SIGPIPE. The shell still waits for ${targetName} before the next prompt.</p>`;
+    }
     return '';
   }).join('');
 }
