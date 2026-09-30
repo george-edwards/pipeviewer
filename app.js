@@ -13,6 +13,19 @@ const examples = {
   timing: 'sleep 2 | echo "hello, world"',
   timingReverse: 'echo "hello, world" | sleep 2',
   procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
+  wikiWeek: String.raw`parallel "zcat {} \
+          | grep -E '^en |^en\.m ' \
+          | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
+| awk '{n+=$1} END {print n}' \
+| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
+  topPages: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}"' ::: *.gz | LC_ALL=C sort -k1,1 | awk '
+    $1 == prev { sum += $2; next }
+    NR > 1 { print sum, prev }
+    { prev=$1; sum=$2 }
+    END { if (NR) print sum, prev }
+' | sort -rn | head -50 > top-50-pages`,
+  weekDownload: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
+::: {14..20} ::: {00..23}`,
 };
 // Examples with several equivalent spellings, shown as toggles once one of them is loaded.
 const variations = {
@@ -75,8 +88,25 @@ function detailOrder(model) {
   return order;
 }
 
+function jobInsight(job) {
+  const owner = `<code>${escape(job.owner.usage.name)}</code>`, text = `<code>${escape(job.text)}</code>`;
+  const slots = job.slots ? `up to ${escape(job.slots)} jobs at a time` : 'by default one job per CPU core at a time';
+  const appended = job.appended ? ` The command has no replacement string, so ${owner} appends each argument as <code>{}</code>.` : '';
+  const input = {
+    null: 'Each job’s stdin is /dev/null; a job reads only what its arguments name.',
+    blocks: `${owner} splits its input into blocks and feeds each block to one job’s stdin.`,
+    terminal: 'With --tty, each job reads the terminal.',
+    inherit: `${owner} reads arguments from a file. Its manual says the first job gets ${owner}’s stdin and later jobs get /dev/null.`,
+  }[job.input];
+  const output = job.ungroup
+    ? `With -u, jobs write straight to ${owner}’s stdout and stderr, so lines from concurrent jobs can mix.`
+    : `${owner} collects each job’s stdout and stderr and writes them out one whole job at a time, so output from concurrent jobs never interleaves.`;
+  return `<p class="usage-insight">${owner} runs ${text} through a shell once per argument, ${slots}.${appended} ${input} ${output}</p>`;
+}
+
 function substitutionInsights(model) {
   return model.substitutions.map(sub => {
+    if (sub.kind === 'job') return jobInsight(sub);
     const owner = `<code>${escape(sub.owner.usage.name)}</code>`, text = `<code>${escape(sub.text)}</code>`;
     const redirected = Object.keys(sub.owner.fds).map(Number).filter(fd => fd !== sub.fd && sub.owner.fds[fd] === sub.endpoint);
     const via = redirected.length ? `${owner}’s ${redirected.map(fd => names[fd] || `fd ${fd}`).join(' and ')}` : `${owner} (through the argument /dev/fd/${sub.fd})`;
@@ -127,12 +157,13 @@ function usageInsights(model) {
 }
 
 // Main commands fill row 0. Substitutions go below their owner: >(…) to the right, <(…) to the left.
+// A parallel job template starts directly below parallel.
 function layout(model) {
   const place = new Map(), taken = new Set();
   model.commands.forEach((cmd, i) => { place.set(cmd, { col: i, row: 0 }); taken.add(`${i},0`); });
   for (const sub of model.substitutions) {
     const owner = place.get(sub.owner), k = sub.commands.length;
-    const cols = Array.from({ length: k }, (_, j) => (sub.direction === '>' ? owner.col + 1 : owner.col - k) + j);
+    const cols = Array.from({ length: k }, (_, j) => (sub.kind === 'job' ? owner.col : sub.direction === '>' ? owner.col + 1 : owner.col - k) + j);
     let row = owner.row + 1;
     while (cols.some(col => taken.has(`${col},${row}`))) row++;
     sub.commands.forEach((cmd, j) => { place.set(cmd, { col: cols[j], row }); taken.add(`${cols[j]},${row}`); });
@@ -154,7 +185,7 @@ function diagram(model) {
   const geometry = cmd => { const p = grid.place.get(cmd); return { x: 220 + (p.col + grid.shift) * 360, y: 101 + p.row * 200 }; };
   const used = new Map();
   model.all.forEach(cmd => Object.entries(cmd.fds).forEach(([fd, dest]) => {
-    if (Number(fd) > 2 || ['pipe', 'procsub'].includes(dest.type)) return;
+    if (Number(fd) > 2 || ['pipe', 'procsub', 'job'].includes(dest.type) || dest.job) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
     used.set(dest.id, dest);
@@ -184,10 +215,23 @@ function diagram(model) {
     if (typeof sub.place === 'number' && cmd.fds[sub.place] === endpoint) return sub.place;
     return cmd.fds[sub.fd] === endpoint ? sub.fd : null;
   };
-  const bottomSubs = cmd => cmd.substitutions.filter(sub => bottomFd(sub) !== null);
+  const bottomSubs = cmd => cmd.substitutions.filter(sub => sub.kind !== 'job' && bottomFd(sub) !== null);
   const argumentPort = (cmd, sub) => {
     const g = geometry(cmd), same = bottomSubs(cmd).filter(s => s.direction === sub.direction), k = same.indexOf(sub);
     return { x: g.x + (sub.direction === '<' ? 30 + k * 34 : 110 - k * 34), y: g.y + 156 };
+  };
+  // Parallel's bottom edge: blocks it feeds to jobs (--pipe) and the output it collects from them.
+  const jobPort = (job, direction) => { const g = geometry(job.owner); return { x: g.x + (direction === '>' ? 80 : 140), y: g.y + 156 }; };
+  const jobLink = (cmd, fd, dest) => {
+    const p = port(cmd, fd), q = jobPort(dest.job, dest.direction), usage = portUsage(cmd, fd);
+    const inactive = inactiveState(usage.state), gapY = geometry(dest.job.owner).y + (dest.direction === '>' ? 186 : 178);
+    if (dest.direction === '>') {
+      const reason = `${dest.job.owner.usage.name} feeds a block of its input to each job. ${usage.reason}`;
+      paths.push(path(`M ${q.x} ${q.y} V ${gapY - 8} Q ${q.x} ${gapY} ${q.x - 8} ${gapY} H ${p.x - 22} Q ${p.x - 30} ${gapY} ${p.x - 30} ${gapY + 8} V ${p.y - 8} Q ${p.x - 30} ${p.y} ${p.x - 22} ${p.y} H ${p.x - 4}`, 0, false, inactive, reason));
+    } else {
+      const reason = `${dest.job.owner.usage.name} collects each job’s output and writes it to its own stdout. ${usage.reason}`;
+      paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x + 8} Q ${q.x} ${gapY} ${q.x} ${gapY - 8} V ${q.y + 5}`, 1, false, inactive, reason));
+    }
   };
   const inactiveState = state => ['unused', 'closed'].includes(state);
   const substitutionLink = (cmd, fd, sub) => {
@@ -226,6 +270,13 @@ function diagram(model) {
         continue;
       }
       if (fd > 2) continue;
+      if (dest.type === 'job') {
+        const { commands } = dest.job;
+        if ((dest.direction === '>' && fd === 0 && cmd === commands[0]) || (dest.direction === '<' && fd === 1 && cmd === commands.at(-1))) jobLink(cmd, fd, dest);
+        else stub(p, fd, 'parallel', inactive, usage.reason);
+        continue;
+      }
+      if (dest.job) { stub(p, fd, '/dev/null', inactive, usage.reason); continue; }
       if (dest.type === 'pipe') {
         const activity = pipeActivity(dest.commands, dest);
         const producer = dest.commands[dest.from], next = dest.commands[dest.to];
@@ -315,13 +366,24 @@ function diagram(model) {
         <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
         <circle cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
     }).join('');
-    const title = cmd.substitution ? `SUBSTITUTION ${cmd.key}` : `COMMAND ${cmd.key}`;
-    return `<g><title>${escape(cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
-      <rect x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
+    const jobPorts = cmd.substitutions.filter(sub => sub.kind === 'job').flatMap(job => [
+      ...(job.input === 'blocks' ? [['>', 'blocks', palette.green]] : []), ...(job.ungroup ? [] : [['<', 'jobs', palette.purple]]),
+    ].map(([direction, label, color]) => {
+      const p = jobPort(job, direction);
+      return `<g><title>${escape(direction === '>' ? 'parallel feeds a block of its input to each job.' : 'parallel collects each job’s output here.')}</title>
+        <text x="${p.x - 8}" y="${p.y + 14}" text-anchor="end" fill="${palette.muted}" font-size="9">${label}</text>
+        <circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="${color}" stroke-width="1.8"/></g>`;
+    })).join('');
+    const job = cmd.substitution?.kind === 'job';
+    const title = job ? `IN EACH JOB · ${cmd.index + 1}` : cmd.substitution ? `SUBSTITUTION ${cmd.key}` : `COMMAND ${cmd.key}`;
+    // A job template runs many times, so its cards are drawn as a stack.
+    const stack = job ? [8, 4].map(d => `<rect x="${x + d}" y="${y + d}" width="220" height="156" rx="10" fill="${palette.inset}" stroke="${palette.border}"/>`).join('') : '';
+    return `<g><title>${escape(job ? `${cmd.command} · runs in each job started by parallel` : cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
+      ${stack}<rect x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
-      ${ports}${argumentPorts}</g>`;
+      ${ports}${argumentPorts}${jobPorts}</g>`;
   });
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
   const height = 390 + (bottomY - 353);
@@ -366,13 +428,14 @@ function render() {
     currentSource = $('#pipeline').value;
     $('#error').hidden = true;
     $('#results').hidden = false;
-    const subCount = currentModel.all.length - currentModel.commands.length;
-    $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}`;
+    const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
+    const subCount = currentModel.all.length - currentModel.commands.length - jobCount;
+    $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in parallel jobs` : ''}`;
     $('#flow-caption').hidden = true;
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
-    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
+    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>parallel</code> once per argument</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
     $('#insights').innerHTML = usageInsights(currentModel) + substitutionInsights(currentModel);

@@ -9,6 +9,11 @@ const descriptorPattern = /^\/(?:dev\/(?:stdin|fd\/\d+)|proc\/self\/fd\/\d+)$/;
 // A /dev/fd path from a process substitution names that substitution's pipe, never stdin.
 const descriptorPath = file => typeof file === 'string' ? descriptorPattern.test(file) : !file.procsub && descriptorPattern.test(file.value);
 const stdoutPath = file => /^\/(?:dev\/(?:stdout|fd\/1)|proc\/self\/fd\/1)$/.test(file);
+// GNU parallel's replacement strings, such as {}, {.}, {/} and {2}. Parallel fills them in
+// before a shell sees the command, so they are not brace expansions or globs.
+const replacements = /\{(?:\d*(?:\.|\/|\/\/|\/\.)?|#|%)\}/g;
+export const hasReplacement = text => text.search(replacements) !== -1;
+export const fillReplacements = word => word.dynamic && !/[$*?[\]{}~]/.test(word.raw.replace(replacements, '')) ? { ...word, dynamic: false } : word;
 
 // A small option scanner. It consumes known option values so they are not mistaken for files.
 function scanOptions(args, { flags = '', values = '', longFlags = [], longValues = [], stopAtOperand = false } = {}) {
@@ -70,11 +75,14 @@ function namesFrom(name, file) {
 
 // For commands with too many options to list: unknown short letters and long options are
 // treated as flags. Only use it where a misread operand cannot claim that a stream is unused.
-function lenientOptions(args, { shortValues = '', longValues = [] }) {
+// With stopAtOperand, the first operand and everything after it are returned as rest.
+function lenientOptions(args, { shortValues = '', longValues = [], stopAtOperand = false }) {
   const options = [], operands = [];
+  let rest = [];
   for (let i = 0; i < args.length; i++) {
     const value = args[i].value;
-    if (value === '--') { operands.push(...args.slice(i + 1).map(arg => arg.value)); break; }
+    if (value === '--') { rest = args.slice(i + 1); operands.push(...rest.map(arg => arg.value)); break; }
+    if (stopAtOperand && (!value.startsWith('-') || value === '-')) { rest = args.slice(i); break; }
     if (value.startsWith('--')) {
       const [key, attached] = value.includes('=') ? [value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1)] : [value, null];
       options.push([key, longValues.includes(key) ? attached ?? args[++i]?.value : true]);
@@ -88,10 +96,14 @@ function lenientOptions(args, { shortValues = '', longValues = [] }) {
   }
   const has = (...keys) => options.some(([key]) => keys.includes(key));
   const values = (...keys) => options.filter(([key]) => keys.includes(key)).map(([, value]) => value);
-  return { options, operands, has, values };
+  return { options, operands, rest, has, values };
 }
 
 export function inferUsage(argv) {
+  // Leading locale and timezone assignments, as in LC_ALL=C sort, change formatting but not which
+  // program runs or the streams it uses. Others, such as PATH=…, stay unknown. Quoted words are not assignments.
+  const command = argv.findIndex(arg => !/^(?:LC_[A-Z]+|LANG|LANGUAGE|TZ)=/.test(arg.raw ?? arg.value));
+  if (command > 0) return inferUsage(argv.slice(command));
   const name = argv[0]?.value || 'command';
   const result = { name, recognised: false, fds: Object.fromEntries(streamNames.map((stream, fd) => [fd,
     usage('unknown', 'usage unknown', `Usage of ${stream} is unknown for this command. A connection does not imply data transfer.`),
@@ -120,10 +132,12 @@ export function inferUsage(argv) {
       set(1, unused(1, 'echo -n with no text suppresses the newline and writes no stdout data.'));
     }
     errors();
-  } else if (['cat', 'wc', 'base64', 'basenc', 'cut', 'paste', 'rev', 'head', 'tail'].includes(name)) {
+  } else if (['cat', 'zcat', 'wc', 'base64', 'basenc', 'cut', 'paste', 'rev', 'head', 'tail'].includes(name)) {
     recognise(); output(); errors();
     const specs = {
       cat: { flags: 'AbenstuvET', longFlags: ['--show-all', '--number-nonblank', '--show-ends', '--number', '--squeeze-blank', '--show-tabs', '--show-nonprinting'] },
+      zcat: { flags: 'cdfklLnNqtv123456789', values: 'S', longFlags: ['--stdout', '--to-stdout', '--decompress', '--uncompress', '--force', '--keep', '--list', '--license',
+        '--no-name', '--name', '--quiet', '--test', '--verbose', '--synchronous', '--rsyncable', '--fast', '--best'], longValues: ['--suffix'] },
       wc: { flags: 'clmwL', longFlags: ['--bytes', '--chars', '--lines', '--words', '--max-line-length'], longValues: ['--files0-from', '--total'] },
       base64: { flags: 'di', values: 'w', longFlags: ['--decode', '--ignore-garbage'], longValues: ['--wrap'] },
       basenc: { flags: 'di', values: 'w', longFlags: ['--decode', '--ignore-garbage', '--base64', '--base64url', '--base32', '--base32hex', '--base16', '--base2msbf', '--base2lsbf', '--z85'], longValues: ['--wrap'] },
@@ -142,6 +156,11 @@ export function inferUsage(argv) {
       set(0, namesFrom(name, scan.options.get('--files0-from')));
     } else {
       set(0, fileInput(name, scan, { dashMeansStdin: name !== 'rev', maxFiles: ['base64', 'basenc'].includes(name) ? 1 : Infinity }));
+    }
+    if (name === 'zcat' && args.length === 1 && ['-h', '-V', '-L'].includes(args[0].value)) {
+      set(0, unused(0, 'zcat prints help, version or licence information without reading stdin.'));
+    } else if (name === 'zcat' && scan.valid && ['-t', '--test'].some(key => scan.options.has(key)) && !['-l', '--list'].some(key => scan.options.has(key))) {
+      set(1, unused(1, 'zcat -t checks the compressed data and reports problems on stderr; it writes nothing to stdout.'));
     }
   } else if (name === 'ls') {
     recognise();
@@ -189,7 +208,7 @@ export function inferUsage(argv) {
       set(0, unused(0, 'time has no command to run and does not read stdin.'));
       set(1, unused(1, 'time has no command to run; missing-command diagnostics go to stderr.'));
     }
-  } else if (name === 'awk') {
+  } else if (['awk', 'mawk', 'gawk', 'nawk'].includes(name)) {
     recognise(); output('awk may print from its program to stdout, depending on its input and rules.'); errors();
     let script = null, scriptFromFile = false, readsScriptInput = false, files = [], valid = literalArgs, i = 0;
     if (args.length === 1 && ['--help', '--version'].includes(args[0].value)) set(0, unused(0, 'awk prints help or version information without reading stdin.'));
@@ -255,7 +274,7 @@ export function inferUsage(argv) {
         if (inPlace && simpleScripts) set(1, unused(1, 'sed -i sends normal output back to the input files. This simple script does not write stdout.'));
       }
     }
-  } else if (name === 'grep') {
+  } else if (['grep', 'egrep', 'fgrep'].includes(name)) {
     recognise(); output('grep may write matching lines, counts or file names to stdout.'); errors();
     const scan = scanOptions(args, { flags: 'EFGPiyvwxcLloqsbHhnTZzrRaUV', values: 'efmABCdD',
       longFlags: ['--extended-regexp', '--fixed-strings', '--basic-regexp', '--perl-regexp', '--ignore-case', '--no-ignore-case', '--invert-match', '--word-regexp',
@@ -347,6 +366,55 @@ export function inferUsage(argv) {
       const logFile = opts.values('-o', '--output-file', '-a', '--append-output').length > 0;
       if (!opts.has('-q', '--quiet') && !logFile) set(2, usage('possible', 'log + errors', 'wget logs its progress to stderr unless -q or -o is given, and may write diagnostics.'));
     }
+  } else if (name === 'parallel') {
+    recognise(); errors();
+    output('parallel passes each job’s stdout through to its own, one whole job at a time unless -u is given. --dry-run prints the commands instead.');
+    set(2, usage('possible', 'may write', 'parallel and its jobs may write stderr, including diagnostics and, in interactive use, a citation notice.'));
+    const opts = lenientOptions(args, { shortValues: 'aCdEIjLnNPsSW', stopAtOperand: true,
+      longValues: ['--arg-file', '--jobs', '--max-procs', '--joblog', '--results', '--res', '--block', '--block-size', '--colsep', '--delimiter', '--replace',
+        '--max-args', '--max-lines', '--max-replace-args', '--sshlogin', '--sshloginfile', '--slf', '--workdir', '--wd', '--tmpdir', '--timeout', '--tagstring',
+        '--load', '--memfree', '--delay', '--retries', '--env', '--basefile', '--transferfile', '--return', '--header', '--arg-sep', '--arg-file-sep',
+        '--recstart', '--recend', '--halt', '--nice', '--eof', '--termseq'] });
+    // Arguments follow :::, or name argument files after ::::. The + forms link sources instead of combining them.
+    const separator = token => !token.dynamic && /^::::?\+?$/.test(token.value);
+    const cut = opts.rest.findIndex(separator);
+    const command = cut === -1 ? opts.rest : opts.rest.slice(0, cut);
+    const argFiles = opts.values('-a', '--arg-file').map(value => ({ value, dynamic: value === undefined }));
+    let sources = 0, fromFiles = false;
+    for (const token of cut === -1 ? [] : opts.rest.slice(cut)) {
+      if (separator(token)) { sources++; fromFiles = token.value.startsWith('::::'); } else if (fromFiles) argFiles.push(token);
+    }
+    const optionsLiteral = args.slice(0, args.length - opts.rest.length).every(arg => !arg.dynamic);
+    const pipe = opts.has('--pipe', '--spreadstdin'), pipepart = opts.has('--pipepart');
+    // Parallel runs its command through a shell for each job, so the parser can draw it as a pipeline.
+    const words = command.map(fillReplacements);
+    if (optionsLiteral && words.length && words.every(word => !word.dynamic && !word.procsub) && !opts.has('--arg-sep', '--arg-file-sep', '--dry-run')) {
+      const joined = words.map(word => word.value).join(' ');
+      // Without a replacement string, parallel appends the arguments to the command.
+      const appended = !pipe && !pipepart && !hasReplacement(joined);
+      result.job = { source: appended ? `${joined} {}` : joined, appended, ungroup: opts.has('-u', '--ungroup'),
+        input: pipe || pipepart ? 'blocks' : opts.has('--tty') ? 'terminal' : argFiles.length && argFiles.every(file => file.value !== '-') ? 'inherit' : 'null',
+        slots: opts.values('-j', '--jobs', '-P', '--max-procs').at(-1) };
+    }
+    if (args.length === 1 && ['-h', '--help', '-V', '--version'].includes(args[0].value)) set(0, unused(0, 'parallel prints help or version information without reading stdin.'));
+    else if (!optionsLiteral || opts.has('--arg-sep', '--arg-file-sep', '--tty')) set(0, unknownInput(name));
+    else if (argFiles.some(file => file.dynamic || descriptorPath(file))) set(0, unknownInput(name));
+    else if (argFiles.some(file => file.value === '-')) set(0, possible(0, pipe ? 'parallel --pipe splits stdin into blocks for its jobs when the input file is “-”.' : 'parallel reads arguments from stdin for :::: - or -a -.'));
+    else if (pipe || pipepart) {
+      if (argFiles.length > 0) set(0, unused(0, 'parallel splits the named file into blocks for its jobs, not stdin.'));
+      else if (!pipepart) set(0, possible(0, 'parallel --pipe splits stdin into blocks and feeds each block to a job’s stdin.'));
+    } else if (sources === 0 && argFiles.length === 0) set(0, possible(0, 'parallel reads arguments from stdin, one per line, when no ::: or :::: input source is given.'));
+    else if (argFiles.length === 0) set(0, unused(0, 'parallel takes its arguments from :::, and each job’s stdin comes from /dev/null.'));
+    else {
+      // The manual passes stdin to the first job when arguments come from a file.
+      const child = words.length ? inferUsage(words) : null;
+      set(0, child?.fds[0].state === 'unused'
+        ? unused(0, `parallel reads arguments from a file; ${child.name} does not read the stdin passed to the first job.`)
+        : child?.fds[0].state === 'possible'
+          ? possible(0, `parallel reads arguments from a file and passes stdin to the first job, which ${child.name} may read.`)
+          : unknownInput(name));
+    }
+    if (opts.has('--bar', '--eta', '--progress')) set(2, usage('possible', 'progress + errors', 'parallel draws its progress display on stderr, and it and its jobs may write diagnostics.'));
   } else if (name === 'find') {
     recognise(); errors();
     output('find may print matching paths to stdout.');

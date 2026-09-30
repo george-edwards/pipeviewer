@@ -97,3 +97,53 @@ test('substitutions redirected to extra descriptors keep that descriptor number'
   // Without a matching path argument, fd 3 usage stays unknown.
   assert.equal(portUsage(parsePipeline('paste a 3< <(cat words)').commands[0], 3).state, 'unknown');
 });
+
+test('a parallel job command becomes a template whose output parallel collects', () => {
+  const model = parsePipeline(`parallel "zcat {} | grep -E '^en ' | awk '{t+=\\$3} END {print t}'" ::: a.gz b.gz | awk '{n+=$1} END {print n}'`);
+  const [parallel, sum] = model.commands;
+  const [job] = model.substitutions;
+  const [zcat, grep, awk] = job.commands;
+  assert.equal(job.kind, 'job');
+  assert.equal(job.text, "zcat {} | grep -E '^en ' | awk '{t+=$3} END {print t}'");
+  assert.equal(zcat.fds[0].type, 'null');
+  assert.equal(zcat.usage.fds[0].state, 'unused', '{} is filled in by parallel, not globbed');
+  assert.equal(zcat.fds[1], grep.fds[0]);
+  assert.equal(awk.fds[1].type, 'job');
+  for (const cmd of job.commands) assert.equal(cmd.fds[2], awk.fds[1]);
+  assert.deepEqual(model.pipes[0].writers, [parallel], 'grouped jobs never write to the pipe themselves');
+  assert.equal(sum.fds[0], parallel.fds[1]);
+  assert.equal(destinationLabel(awk.fds[1], 1, model.commands, awk), 'parallel · collected, then written to its stdout');
+});
+
+test('parallel -u jobs write to parallel’s stdout, and --pipe feeds them blocks', () => {
+  const ungrouped = parsePipeline('parallel -u "zcat {} | wc -l" ::: a b | sort');
+  const job = ungrouped.substitutions[0];
+  assert.equal(job.commands[1].fds[1], ungrouped.pipes[0]);
+  assert.equal(job.commands[1].fds[2].id, 'terminal-err');
+  assert.deepEqual(ungrouped.pipes[0].writers, [ungrouped.commands[0], job.commands[1]]);
+  const piped = parsePipeline('zcat big.gz | parallel --pipe --block 50M wc -l').substitutions[0];
+  assert.equal(piped.text, 'wc -l', '--pipe does not append arguments');
+  assert.deepEqual([piped.commands[0].fds[0].type, piped.commands[0].fds[0].direction], ['job', '>']);
+  assert.equal(parsePipeline('parallel --tty vi ::: a').substitutions[0].commands[0].fds[0].id, 'terminal-in');
+  assert.equal(parsePipeline('parallel -a list cat').substitutions[0].commands[0].fds[0].id, 'terminal-in', 'the first job gets stdin');
+  assert.equal(parsePipeline('parallel -a - cat').substitutions[0].commands[0].fds[0].type, 'null');
+});
+
+test('parallel appends {} without a replacement string, and unreadable jobs stay arguments', () => {
+  assert.equal(parsePipeline('parallel gzip -9 ::: a b').substitutions[0].text, 'gzip -9 {}');
+  assert.equal(parsePipeline('parallel "zcat {} > {.}.txt" ::: a.gz').substitutions[0].commands[0].fds[1].label, '{.}.txt');
+  for (const source of ['parallel --dry-run gzip ::: a', 'parallel ::: "echo a" "echo b"', 'parallel "$CMD" ::: a']) {
+    assert.equal(parsePipeline(source).substitutions.length, 0, source);
+  }
+  const model = parsePipeline('parallel "make {} && echo done" ::: a b');
+  assert.equal(model.substitutions.length, 0);
+  assert.equal(model.endpoints.some(dest => dest.id.startsWith('job-')), false, 'a failed job leaves no endpoints behind');
+  assert.match(model.notes[0], /^The parallel job command is shown as an argument\. “&&” is not supported/);
+});
+
+test('egrep and fgrep are modelled like grep', () => {
+  for (const name of ['egrep', 'fgrep']) {
+    assert.equal(parsePipeline(`${name} x`).commands[0].usage.fds[0].state, 'possible');
+    assert.equal(parsePipeline(`${name} x file`).commands[0].usage.fds[0].state, 'unused');
+  }
+});

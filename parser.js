@@ -1,4 +1,4 @@
-import { inferUsage, substitutionUsage } from './usage.js';
+import { inferUsage, substitutionUsage, fillReplacements } from './usage.js';
 
 /** A deliberately limited shell parser. Input is never evaluated or executed. */
 function tokenize(source, start = 0, nested = false) {
@@ -60,6 +60,34 @@ function tokenize(source, start = 0, nested = false) {
 }
 
 const letters = 'abcdefghijklmnopqrstuvwxyz';
+const fillAll = tokens => tokens.map(token => token.type === 'procsub' ? { ...token, tokens: fillAll(token.tokens) } : token.type === 'word' ? fillReplacements(token) : token);
+
+/**
+ * GNU parallel runs its command through a shell once per argument. When that command parses,
+ * it becomes a job template below parallel. Jobs start after parallel's redirects apply. By
+ * default parallel collects their output; with -u they write to its stdout and stderr directly.
+ */
+function addJob(cmd, context) {
+  const { source, input, ungroup } = cmd.usage.job;
+  const saved = { substitutions: context.substitutions.length, owned: cmd.substitutions.length, endpoints: new Set(context.endpoints.keys()) };
+  try {
+    const tokens = fillAll(tokenize(source).tokens);
+    const job = { ...cmd.usage.job, id: `job-${context.substitutions.length}`, kind: 'job', key: `${cmd.key}j`, text: source, owner: cmd };
+    const collected = context.endpoint(`${job.id}-out`, 'job', 'parallel', { owner: cmd, job, direction: '<' });
+    const stdin = input === 'blocks' ? context.endpoint(`${job.id}-in`, 'job', 'parallel', { owner: cmd, job, direction: '>' })
+      : input === 'terminal' ? context.endpoint('terminal-in')
+        : input === 'inherit' ? cmd.fds[0]
+          : context.endpoint(`${job.id}-null`, 'null', '/dev/null', { mode: 'read', job });
+    cmd.substitutions.push(job);
+    context.substitutions.push(job);
+    Object.assign(job, buildPipeline(tokens, { 0: stdin, 1: ungroup ? cmd.fds[1] : collected, 2: ungroup ? cmd.fds[2] : collected }, context, job));
+  } catch (error) {
+    context.substitutions.length = saved.substitutions;
+    cmd.substitutions.length = saved.owned;
+    for (const id of [...context.endpoints.keys()]) if (!saved.endpoints.has(id)) context.endpoints.delete(id);
+    context.notes.push(`The parallel job command is shown as an argument. ${error.message}`);
+  }
+}
 
 /**
  * Builds one pipeline. Process substitutions recurse with a snapshot of the owning
@@ -176,6 +204,7 @@ function buildPipeline(tokens, inherited, context, substitution) {
         cmd.usage.fds[sub.place] = substitutionUsage(cmd.usage.name, sub.direction, sub.place, true);
       }
     }
+    if (cmd.usage.job) addJob(cmd, context);
   });
   for (const pipe of pipes) pipe.commands = commands;
   return { commands, pipes };
@@ -196,12 +225,12 @@ export function parsePipeline(input) {
     if (!endpoints.has(id)) endpoints.set(id, { id, type, label, ...extra });
     return endpoints.get(id);
   };
-  const context = { endpoint, substitutions: [] };
+  const context = { endpoint, endpoints, substitutions: [], notes: [] };
   const terminal = { 0: endpoint('terminal-in', 'terminal', 'Terminal input'), 1: endpoint('terminal-out', 'terminal', 'Terminal output'), 2: endpoint('terminal-err', 'terminal', 'Terminal stderr') };
   const main = buildPipeline(tokens, terminal, context, null);
   const all = [...main.commands, ...context.substitutions.flatMap(sub => sub.commands)];
-  if (all.length - main.commands.length > 12) throw new Error('This view supports up to 12 commands inside process substitutions.');
-  const notes = [];
+  if (all.length - main.commands.length > 12) throw new Error('This view supports up to 12 commands inside process substitutions and parallel jobs.');
+  const notes = [...context.notes];
   for (const pipeline of [main, ...context.substitutions]) {
     for (const pipe of pipeline.pipes) {
       // A substitution holds copies of its owner's descriptors, so it can keep a pipe end open.
@@ -219,6 +248,9 @@ export function destinationLabel(dest, fd, commands, cmd) {
   if (dest.type === 'procsub') {
     if (!cmd || dest.owner === cmd) return `${dest.label} · /dev/fd/${dest.fd}`;
     return `${dest.direction === '>' ? 'Substitution input from' : 'Substitution output to'} ${dest.owner.command}`;
+  }
+  if (dest.type === 'job') {
+    return dest.direction === '>' ? 'Blocks from parallel' : `parallel · collected, then written to its ${fd === 2 ? 'stderr' : 'stdout'}`;
   }
   if (dest.type === 'pipe') {
     const list = dest.commands || commands;

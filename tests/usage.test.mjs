@@ -277,3 +277,41 @@ test('basenc reads one file or stdin with any encoding option', () => {
   for (const source of ['basenc --base32 input', 'basenc -d --base2msbf input']) assert.equal(stdin(source), 'unused', source);
   for (const source of ['basenc --base32 a b', 'basenc --base99', 'basenc --base32 "$FILE"']) assert.equal(stdin(source), 'unknown', source);
 });
+
+test('zcat reads named files or stdin, and -t writes nothing to stdout', () => {
+  for (const source of ['zcat', 'zcat -f', 'zcat -', 'zcat -S .z a.gz -']) assert.deepEqual(states(source), [true, 'possible', 'possible', 'possible'], source);
+  for (const source of ['zcat a.gz', 'zcat -v a.gz b.gz', 'zcat --suffix .z a', 'zcat -h', 'zcat --version']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['zcat -r dir', 'zcat "$FILE"', 'zcat /dev/stdin']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['zcat -t a.gz', 'zcat --test -v a.gz']) assert.equal(stdout(source), 'unused', source);
+  assert.equal(stdout('zcat -tl a.gz'), 'possible');
+});
+
+test('parallel reads stdin for arguments or --pipe blocks, but not with ::: arguments', () => {
+  for (const source of ['parallel echo', 'parallel -j4 wget -q', 'parallel wc -l :::: -', 'parallel -a - echo', 'parallel --pipe --block 50M wc -l', 'parallel --pipe -k wc -l ::: a b']) {
+    assert.equal(stdin(source), 'possible', source);
+  }
+  for (const source of ['parallel --bar count ::: *.gz', 'parallel -k --tag "zcat {} | wc -l" ::: a.gz b.gz', 'parallel cat ::: a b', 'parallel --pipepart -a big wc -l', 'parallel --help']) {
+    assert.equal(stdin(source), 'unused', source);
+  }
+  for (const source of ['parallel -j "$N" echo ::: a', 'parallel --arg-sep ,,, echo ,,, a', 'parallel echo :::: "$LIST"', 'parallel -a /dev/stdin echo']) {
+    assert.equal(stdin(source), 'unknown', source);
+  }
+  assert.equal(stdout('parallel --dry-run gzip ::: a'), 'possible');
+  assert.equal(parsePipeline('parallel --bar echo ::: a').commands[0].usage.fds[2].label, 'progress + errors');
+});
+
+test('parallel passes stdin to the first job when arguments come from a file', () => {
+  assert.equal(stdin('parallel -a list cat'), 'possible');
+  assert.equal(stdin('parallel echo {} :::: list'), 'unused');
+  assert.equal(stdin('parallel -a list wc -l {.}.txt'), 'unused', 'replacement strings are not shell globs');
+  assert.equal(stdin('parallel -a list custom'), 'unknown');
+});
+
+test('leading locale and timezone assignments do not name the command', () => {
+  assert.deepEqual(states('LC_ALL=C sort -k1,1'), [true, 'possible', 'possible', 'possible']);
+  assert.equal(stdin('LC_ALL=C TZ=UTC sort input'), 'unused');
+  assert.equal(parsePipeline('LC_ALL=C sort').commands[0].usage.name, 'sort');
+  assert.equal(states('"LC_ALL=C" sort')[0], false, 'a quoted word is a command name');
+  assert.equal(states('LC_ALL=C')[0], false);
+  for (const source of ['PATH=/opt/bin sort', 'LD_PRELOAD=x.so sort', 'LC_ALL=C VAR=1 sort']) assert.equal(states(source)[0], false, source);
+});
