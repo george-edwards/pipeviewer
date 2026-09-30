@@ -12,11 +12,13 @@
     document.documentElement.dataset.theme = ['light', 'dark'].includes(savedTheme)
       ? savedTheme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="site-header">
-    <a href="/" class="brand" aria-label="Pipeviewer home"><span class="brand-icon" aria-hidden="true">⌁</span> pipeviewer<span class="brand-dot">.</span></a>
+    <a href="/" class="brand" aria-label="Pipeviewer home"><img class="brand-icon" src="/favicon.svg" width="32" height="32" alt=""> pipeviewer<span class="brand-dot">.</span></a>
     <div class="header-actions">
       <button class="text-button" id="reference-button">Quick reference</button>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode">

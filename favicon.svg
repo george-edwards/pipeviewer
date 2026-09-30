@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- stdin enters a command; stdout and stderr leave it, in the stream colours. -->
+  <rect width="32" height="32" rx="8" fill="#593cb6"/>
+  <g fill="none" stroke-width="2.6" stroke-linecap="round">
+    <path d="M4 16H11" stroke="#62d8ba"/>
+    <path d="M21 13.5C24.5 13.5 24 9 28 9" stroke="#ffffff"/>
+    <path d="M21 18.5C24.5 18.5 24 23 28 23" stroke="#ffc579"/>
+  </g>
+  <rect x="11" y="10.5" width="10" height="11" rx="2.5" fill="#ffffff"/>
+</svg>
