@@ -194,7 +194,11 @@ function diagram(model) {
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason); continue; }
       const box = positions.get(dest.id);
       if (fd === 0) {
-        if (dest.id === 'terminal-in') paths.push(path(`M ${box.x + box.w} ${box.y + 30} C ${p.x - 25} ${box.y + 30}, ${p.x - 25} ${p.y}, ${p.x - 4} ${p.y}`, fd, false, inactive, usage.reason));
+        if (dest.id === 'terminal-in' && cmd.index > 0) {
+          // A later command reading the terminal (< /dev/tty): pass above the earlier cards.
+          const topX = box.x + box.w / 2;
+          paths.push(path(`M ${topX} ${box.y} V 92 Q ${topX} 80 ${topX + 12} 80 H ${p.x - 57} Q ${p.x - 45} 80 ${p.x - 45} 92 V ${p.y - 12} Q ${p.x - 45} ${p.y} ${p.x - 33} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason));
+        } else if (dest.id === 'terminal-in') paths.push(path(`M ${box.x + box.w} ${box.y + 30} C ${p.x - 25} ${box.y + 30}, ${p.x - 25} ${p.y}, ${p.x - 4} ${p.y}`, fd, false, inactive, usage.reason));
         else paths.push(path(`M ${box.x + box.w / 2} ${box.y} V ${302 + extra} Q ${box.x + box.w / 2} ${290 + extra} ${box.x + box.w / 2 - 12} ${290 + extra} H ${p.x - 35} Q ${p.x - 45} ${290 + extra} ${p.x - 45} ${278 + extra} V ${p.y + 12} Q ${p.x - 45} ${p.y} ${p.x - 30} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason));
       } else if (dest.id === 'terminal-out' && !cmd.substitution && cmd.index === model.commands.length - 1 && fd === 1) {
         paths.push(path(`M ${p.x} ${p.y} H ${box.x - 4}`, fd, false, inactive, usage.reason));
@@ -202,7 +206,10 @@ function diagram(model) {
         const targetX = box.x + box.w / 2 + (fd === 2 ? 18 : -18);
         const laneY = 283 + extra + fd * 15 + lane * 2;
         const turnX = p.x + 20 + fd * 7;
-        paths.push(path(`M ${p.x} ${p.y} H ${turnX - 10} Q ${turnX} ${p.y} ${turnX} ${p.y + 10} V ${laneY - 12} Q ${turnX} ${laneY} ${turnX - 12} ${laneY} H ${targetX} Q ${targetX} ${laneY} ${targetX} ${laneY + 12} V ${box.y - 4}`, fd, dest.type === 'closed', inactive, usage.reason));
+        paths.push(path(`M ${p.x} ${p.y} H ${turnX - 10} Q ${turnX} ${p.y} ${turnX} ${p.y + 10} V ${laneY - 12} Q ${turnX} ${laneY} ${turnX - 12} ${laneY} ${box.y < laneY
+          // Terminal output sits above the lanes: rise into its bottom edge.
+          ? `H ${targetX} Q ${targetX} ${laneY} ${targetX} ${laneY - 12} V ${box.y + box.h + 4}`
+          : `H ${targetX} Q ${targetX} ${laneY} ${targetX} ${laneY + 12} V ${box.y - 4}`}`, fd, dest.type === 'closed', inactive, usage.reason));
       }
     }
   });

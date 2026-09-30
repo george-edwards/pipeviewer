@@ -77,3 +77,14 @@ test('null input supplies end-of-file rather than discarding output', () => {
   const cmd = parsePipeline('cat < /dev/null').commands[0];
   assert.equal(destinationLabel(cmd.fds[0], 0), '/dev/null · end-of-file');
 });
+test('/dev/tty redirects reach the terminal rather than a file', () => {
+  const [a] = parsePipeline('cmd > /dev/tty 2>>/dev/tty < /dev/tty').commands;
+  assert.deepEqual([a.fds[0].id, a.fds[1].id, a.fds[2].id], ['terminal-in', 'terminal-out', 'terminal-err']);
+  assert.match(a.steps[0].description, /Terminal output \(\/dev\/tty\)/);
+  const [b] = parsePipeline('cmd &> /dev/tty').commands;
+  assert.equal(b.fds[1], b.fds[2]);
+  assert.equal(b.fds[2].type, 'terminal');
+  const model = parsePipeline('/usr/bin/time -f %M 2> >(cat 1>/dev/tty) head -c 10M /dev/urandom | base64 1>/dev/null');
+  assert.equal(model.substitutions[0].commands[0].fds[1].id, 'terminal-out');
+  assert.equal(parsePipeline("cmd > '/dev/tty'").commands[0].fds[1].id, 'terminal-out');
+});

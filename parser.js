@@ -138,6 +138,10 @@ function buildPipeline(tokens, inherited, context, substitution) {
           dest = fds[Number(target.value)];
           if (!dest || dest.type === 'closed') throw new Error(`Descriptor ${target.value} is not open in this command.`);
         } else throw new Error(`Use a descriptor number or “-” after ${op}. For files, use > or &>.`);
+      } else if (target.value === '/dev/tty') {
+        // The controlling terminal: the same device the usual descriptors 0–2 start on.
+        dest = context.endpoint(op === '<' ? 'terminal-in' : fd === 2 && !op.startsWith('&') ? 'terminal-err' : 'terminal-out');
+        via = ' (/dev/tty)';
       } else {
         if (!target.value) throw new Error('A redirect needs a nonempty filename.');
         const mode = op.includes('>>') ? 'append' : op === '<' ? 'read' : 'write';
