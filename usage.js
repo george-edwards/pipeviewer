@@ -5,7 +5,9 @@ const usage = (state, label, reason) => ({ state, label, reason });
 const unused = (fd, reason) => usage('unused', fd === 0 ? 'not read' : 'never written', reason);
 const possible = (fd, reason) => usage('possible', fd === 0 ? 'may read' : fd === 2 ? 'on error' : 'may write', reason);
 const unknownInput = name => usage('unknown', 'usage unknown', `${name}: these arguments do not establish whether stdin is read.`);
-const descriptorPath = file => /^\/(?:dev\/(?:stdin|fd\/\d+)|proc\/self\/fd\/\d+)$/.test(file);
+const descriptorPattern = /^\/(?:dev\/(?:stdin|fd\/\d+)|proc\/self\/fd\/\d+)$/;
+// A /dev/fd path from a process substitution names that substitution's pipe, never stdin.
+const descriptorPath = file => typeof file === 'string' ? descriptorPattern.test(file) : !file.procsub && descriptorPattern.test(file.value);
 
 // A small option scanner. It consumes known option values so they are not mistaken for files.
 function scanOptions(args, { flags = '', values = '', longFlags = [], longValues = [], stopAtOperand = false } = {}) {
@@ -53,7 +55,7 @@ function scanOptions(args, { flags = '', values = '', longFlags = [], longValues
 function fileInput(name, scan, { dashMeansStdin = true, maxFiles = Infinity } = {}) {
   if (scan.help) return unused(0, `${name} prints help or version information without reading stdin.`);
   if (!scan.valid || scan.files.length > maxFiles || scan.files.some(file => file.dynamic)) return unknownInput(name);
-  if (scan.files.some(file => descriptorPath(file.value))) return unknownInput(name);
+  if (scan.files.some(file => descriptorPath(file))) return unknownInput(name);
   if (scan.files.length === 0 || (dashMeansStdin && scan.files.some(file => file.value === '-')))
     return possible(0, `${name} may read stdin when no input files are given${dashMeansStdin ? ' or when “-” names stdin' : ''}.`);
   return unused(0, `${name} reads the named file${scan.files.length === 1 ? '' : 's'} instead of stdin.`);
@@ -174,7 +176,7 @@ export function inferUsage(argv) {
       if (scriptFromFile || script !== undefined) {
         const fileArgs = files.filter(file => file.value !== '-' && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(file.value));
         if (readsScriptInput) set(0, possible(0, 'awk reads program source from stdin for -f -.'));
-        else if (files.some(file => descriptorPath(file.value))) set(0, unknownInput(name));
+        else if (files.some(file => descriptorPath(file))) set(0, unknownInput(name));
         else if (!scriptFromFile && script && /^\s*BEGIN\s*\{[^{}]*\}\s*$/.test(script) && !/\b(?:getline|ARGV|system)\b|@/.test(script)) set(0, unused(0, 'This BEGIN-only awk program finishes without reading input records.'));
         else if (files.some(file => file.value === '-')) set(0, possible(0, 'awk reads stdin when “-” names an input file.'));
         else if (files.length === 0 || fileArgs.length === 0) set(0, possible(0, 'awk may read stdin when no input files are named. A BEGIN-only program may exit without reading.'));
@@ -209,7 +211,7 @@ export function inferUsage(argv) {
       if (sourceFromFile || scripts.length > 0) {
         const simpleScripts = !sourceFromFile && scripts.every(script => !/[;\n]/.test(script) && (/^s([^\w\s]).*\1.*\1[gIp0-9]*$/.test(script) || /^\d*[pdqQ]$/.test(script)));
         if (readsScriptInput) set(0, possible(0, 'sed reads program source from stdin for -f -.'));
-        else if (files.some(file => descriptorPath(file.value))) set(0, unknownInput(name));
+        else if (files.some(file => descriptorPath(file))) set(0, unknownInput(name));
         else if (files.some(file => file.value === '-')) set(0, possible(0, 'sed reads stdin when “-” names an input file.'));
         else if (files.length === 0) set(0, possible(0, 'sed may read stdin when no input files are named.'));
         else if (simpleScripts) {
@@ -236,12 +238,19 @@ export function portUsage(command, fd) {
   return command.usage.fds[fd] || usage('unknown', 'usage unknown', 'Usage of this additional descriptor is unknown.');
 }
 
+export function substitutionUsage(name, direction, fd, viaArgument) {
+  if (!viaArgument) return usage('unused', 'not used', `Bash keeps /dev/fd/${fd} open, but ${name} reaches the substitution through the redirected descriptor.`);
+  return usage('possible', direction === '<' ? 'may read' : 'may write', `${name} receives the path /dev/fd/${fd} as an argument and may open it to ${direction === '<' ? 'read' : 'write'}.`);
+}
+
 export function pipeActivity(commands, pipe) {
   const source = commands[pipe.from], target = commands[pipe.to];
-  const writers = Object.entries(source.fds).filter(([, dest]) => dest === pipe);
+  // The parser adds process substitutions that inherited this pipe as writers or readers.
+  const writers = (pipe.writers || [source]).flatMap(cmd => Object.entries(cmd.fds).filter(([, dest]) => dest === pipe).map(([fd]) => portUsage(cmd, Number(fd))));
   // Extra descriptors could be used by an unmodelled operation: never infer zero.
-  const noWrites = writers.length === 0 || writers.every(([fd]) => portUsage(source, Number(fd)).state === 'unused');
-  const notRead = target.fds[0] === pipe && portUsage(target, 0).state === 'unused';
+  const noWrites = writers.length === 0 || writers.every(state => state.state === 'unused');
+  const readers = (pipe.readers || [target]).filter(cmd => cmd.fds[0] === pipe);
+  const notRead = target.fds[0] === pipe && readers.every(cmd => portUsage(cmd, 0).state === 'unused');
   return {
     noWrites, notRead,
     label: noWrites ? 'pipe · no writes' : notRead ? 'pipe · not read' : 'pipe',
