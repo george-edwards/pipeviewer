@@ -85,7 +85,7 @@ function render() {
     $('#error').hidden = true;
     $('#results').hidden = false;
     $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}`;
-    $('#flow-caption').textContent = 'Follow each stream from source to destination.';
+    $('#flow-caption').hidden = true;
     $('#diagram').innerHTML = diagram(currentModel);
     $('#diagram').style.minWidth = `${Math.max(720, $('#diagram svg').viewBox.baseVal.width * .85)}px`;
     const redirects = currentModel.commands.reduce((total, cmd) => total + cmd.steps.length, 0);
@@ -105,11 +105,10 @@ function render() {
 $('#pipeline-form').addEventListener('submit', event => { event.preventDefault(); render(); });
 $('#pipeline').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); render(); } });
 $('#pipeline').addEventListener('input', () => {
-  if ($('#pipeline').value !== currentSource) $('#flow-caption').textContent = 'Pipeline edited — press Visualize pipeline to update.';
+  $('#flow-caption').hidden = $('#pipeline').value === currentSource;
 });
 function loadExample(key) { $('#pipeline').value = examples[key]; render(); }
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
-$('#order-tip').addEventListener('click', () => { loadExample('order'); $('#pipeline').focus(); $('#pipeline').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 $('#reference').addEventListener('click', event => { if (event.target === $('#reference')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.target.close(); } });
