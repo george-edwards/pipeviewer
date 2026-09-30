@@ -13,7 +13,6 @@ const examples = {
   timing: 'sleep 2 | echo "hello, world"',
   timingReverse: 'echo "hello, world" | sleep 2',
   procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
-  procsubIn: 'paste <(cut -f 1 names.tsv) <(cut -f 3 scores.tsv)',
 };
 // Examples with several equivalent spellings, shown as toggles once one of them is loaded.
 const variations = {
@@ -22,6 +21,12 @@ const variations = {
     { label: 'One substitution', source: "paste /usr/share/dict/words <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Two substitutions', source: "paste <(cat /usr/share/dict/words) <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 \\\n  3< <(cat /usr/share/dict/words) \\\n  4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+  ],
+  procsubIn: [
+    { label: 'Plain', source: 'cat <(head /etc/hosts) <(head /etc/shells) <(echo hello, world)' },
+    { label: 'Labelled lines', source: "cat <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    <(echo hello, world)" },
+    // Explicit redirects choose the descriptor numbers instead of Bash.
+    { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
   ],
 };
 // Explicit descriptor numbers first, then the shorthand Bash also accepts.
