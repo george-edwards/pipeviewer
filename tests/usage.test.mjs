@@ -269,3 +269,11 @@ test('find ignores stdin and prints by default, unless its actions or commands s
   for (const source of ['find .', 'find . -delete -print', 'find . -exec wc -l {} +', 'find . -fprint /dev/stdout']) assert.equal(stdout(source), 'possible', source);
   assert.equal(stdout('find . -exec rm {} \\;'), 'unknown');
 });
+
+test('basenc reads one file or stdin with any encoding option', () => {
+  for (const source of ['basenc --base32', 'basenc --base64url -d', 'basenc --z85 -w 0 -', 'basenc --base16 --wrap=76']) {
+    assert.deepEqual(states(source), [true, 'possible', 'possible', 'possible'], source);
+  }
+  for (const source of ['basenc --base32 input', 'basenc -d --base2msbf input']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['basenc --base32 a b', 'basenc --base99', 'basenc --base32 "$FILE"']) assert.equal(stdin(source), 'unknown', source);
+});

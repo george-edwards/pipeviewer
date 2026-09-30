@@ -120,12 +120,13 @@ export function inferUsage(argv) {
       set(1, unused(1, 'echo -n with no text suppresses the newline and writes no stdout data.'));
     }
     errors();
-  } else if (['cat', 'wc', 'base64', 'cut', 'paste', 'rev', 'head', 'tail'].includes(name)) {
+  } else if (['cat', 'wc', 'base64', 'basenc', 'cut', 'paste', 'rev', 'head', 'tail'].includes(name)) {
     recognise(); output(); errors();
     const specs = {
       cat: { flags: 'AbenstuvET', longFlags: ['--show-all', '--number-nonblank', '--show-ends', '--number', '--squeeze-blank', '--show-tabs', '--show-nonprinting'] },
       wc: { flags: 'clmwL', longFlags: ['--bytes', '--chars', '--lines', '--words', '--max-line-length'], longValues: ['--files0-from', '--total'] },
       base64: { flags: 'di', values: 'w', longFlags: ['--decode', '--ignore-garbage'], longValues: ['--wrap'] },
+      basenc: { flags: 'di', values: 'w', longFlags: ['--decode', '--ignore-garbage', '--base64', '--base64url', '--base32', '--base32hex', '--base16', '--base2msbf', '--base2lsbf', '--z85'], longValues: ['--wrap'] },
       cut: { flags: 'Fnswz', values: 'bcfdO', longFlags: ['--only-delimited', '--zero-terminated', '--no-partial'], longValues: ['--bytes', '--characters', '--fields', '--delimiter', '--output-delimiter', '--whitespace-delimited'] },
       paste: { flags: 'sz', values: 'd', longFlags: ['--serial', '--zero-terminated'], longValues: ['--delimiters'] },
       rev: { flags: '0', longFlags: ['--zero'] },
@@ -140,7 +141,7 @@ export function inferUsage(argv) {
     if (name === 'wc' && scan.valid && scan.options.has('--files0-from')) {
       set(0, namesFrom(name, scan.options.get('--files0-from')));
     } else {
-      set(0, fileInput(name, scan, { dashMeansStdin: name !== 'rev', maxFiles: name === 'base64' ? 1 : Infinity }));
+      set(0, fileInput(name, scan, { dashMeansStdin: name !== 'rev', maxFiles: ['base64', 'basenc'].includes(name) ? 1 : Infinity }));
     }
   } else if (name === 'ls') {
     recognise();
