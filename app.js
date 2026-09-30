@@ -249,6 +249,37 @@ function diagram(model) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 55 ${width} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="0" y="55" width="${width}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
 }
 
+const zoomSteps = [.5, .67, .8, 1, 1.25, 1.5, 2, 2.5, 3];
+let zoom = 1;
+
+// Draws the diagram at the current zoom. 100% is the fitted size; other levels scale from it.
+function showDiagram() {
+  const scroll = $('#diagram-scroll'), host = $('#diagram');
+  const centre = scroll.scrollWidth ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0;
+  host.innerHTML = diagram(currentModel);
+  const svg = $('#diagram svg'), viewBox = svg.viewBox.baseVal;
+  host.style.width = '';
+  host.style.minWidth = `${Math.max(720, viewBox.width * .85)}px`;
+  // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
+  svg.style.maxHeight = `${480 * viewBox.height / 390}px`;
+  const box = zoom !== 1 && svg.getBoundingClientRect();
+  if (box?.width) {
+    const fitted = Math.min(box.width / viewBox.width, box.height / viewBox.height);
+    host.style.width = host.style.minWidth = `${viewBox.width * fitted * zoom}px`;
+    svg.style.maxHeight = 'none';
+    svg.style.minHeight = '0';
+    scroll.scrollLeft = centre * scroll.scrollWidth - scroll.clientWidth / 2;
+  }
+  $('#zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
+  $('#zoom-out').disabled = zoom === zoomSteps[0];
+  $('#zoom-in').disabled = zoom === zoomSteps.at(-1);
+}
+
+function setZoom(level) {
+  zoom = level;
+  if (currentModel) showDiagram();
+}
+
 function render() {
   try {
     currentModel = parsePipeline($('#pipeline').value);
@@ -258,11 +289,7 @@ function render() {
     const subCount = currentModel.all.length - currentModel.commands.length;
     $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}`;
     $('#flow-caption').hidden = true;
-    $('#diagram').innerHTML = diagram(currentModel);
-    const viewBox = $('#diagram svg').viewBox.baseVal;
-    $('#diagram').style.minWidth = `${Math.max(720, viewBox.width * .85)}px`;
-    // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
-    $('#diagram svg').style.maxHeight = `${480 * viewBox.height / 390}px`;
+    showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="number">${cmd.key}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
@@ -290,7 +317,7 @@ function applyTheme(theme) {
   $('#theme-toggle').title = `Switch to ${action.toLowerCase()}`;
   $('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--page').trim();
   // Recolour the existing diagram without submitting edits or closing details.
-  if (currentModel) $('#diagram').innerHTML = diagram(currentModel);
+  if (currentModel) showDiagram();
 }
 
 $('#theme-toggle').addEventListener('click', () => {
@@ -319,8 +346,14 @@ document.querySelectorAll('[data-example]').forEach(button => button.addEventLis
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 $('#reference').addEventListener('click', event => { if (event.target === $('#reference')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.target.close(); } });
+$('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => step > zoom) ?? zoom));
+$('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
+$('#zoom-reset').addEventListener('click', () => setZoom(1));
 $('#download').addEventListener('click', () => {
-  const svg = $('#diagram svg').outerHTML;
+  // Export without on-page sizing so the file scales to wherever it is opened.
+  const copy = $('#diagram svg').cloneNode(true);
+  copy.removeAttribute('style');
+  const svg = copy.outerHTML;
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = 'pipeline.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
