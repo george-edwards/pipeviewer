@@ -155,8 +155,16 @@ function buildPipeline(tokens, inherited, context, substitution) {
       cmd.steps.push({ text: '|&', fd: 2, destination: fds[1], description: `stderr follows stdout → ${fds[1].label}` });
     }
     cmd.command = words.join(' ');
-    cmd.usage = inferUsage(argv);
-    for (const sub of cmd.substitutions) cmd.usage.fds[sub.fd] = substitutionUsage(cmd.usage.name, sub.direction, sub.fd, sub.place === 'argument');
+    // Redirects apply before the command runs, so /dev/fd/3 names whatever 3< <(…) opened.
+    const substitutionPath = token => !token.dynamic && fds[token.value.match(/^\/(?:dev|proc\/self)\/fd\/(\d+)$/)?.[1]]?.type === 'procsub';
+    const paths = argv.map(token => !token.procsub && substitutionPath(token) ? { ...token, procsub: true } : token);
+    cmd.usage = inferUsage(paths);
+    for (const sub of cmd.substitutions) {
+      cmd.usage.fds[sub.fd] = substitutionUsage(cmd.usage.name, sub.direction, sub.fd, sub.place === 'argument');
+      if (sub.place > 2 && fds[sub.place] === sub.endpoint && argv.some(token => substitutionPath(token) && token.value.endsWith(`/fd/${sub.place}`))) {
+        cmd.usage.fds[sub.place] = substitutionUsage(cmd.usage.name, sub.direction, sub.place, true);
+      }
+    }
   });
   for (const pipe of pipes) pipe.commands = commands;
   return { commands, pipes };

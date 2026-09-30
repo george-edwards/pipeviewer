@@ -40,8 +40,8 @@ function detailOrder(model) {
 function substitutionInsights(model) {
   return model.substitutions.map(sub => {
     const owner = `<code>${escape(sub.owner.usage.name)}</code>`, text = `<code>${escape(sub.text)}</code>`;
-    const redirected = [0, 1, 2].filter(fd => sub.owner.fds[fd] === sub.endpoint);
-    const via = redirected.length ? `${owner}’s ${redirected.map(fd => names[fd]).join(' and ')}` : `${owner} (through the argument /dev/fd/${sub.fd})`;
+    const redirected = Object.keys(sub.owner.fds).map(Number).filter(fd => fd !== sub.fd && sub.owner.fds[fd] === sub.endpoint);
+    const via = redirected.length ? `${owner}’s ${redirected.map(fd => names[fd] || `fd ${fd}`).join(' and ')}` : `${owner} (through the argument /dev/fd/${sub.fd})`;
     if (sub.direction === '<') {
       return `<p class="usage-insight">Bash runs ${text} alongside ${owner} and connects its stdout to ${via}.</p>`;
     }
@@ -128,10 +128,17 @@ function diagram(model) {
     paths.push(`<text x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
   };
   const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
-  // Substitutions passed as arguments attach to the bottom edge: <(…) on the left, >(…) on the right.
-  const argumentSubs = cmd => cmd.substitutions.filter(sub => cmd.fds[sub.fd] === sub.endpoint && ![0, 1, 2].some(f => cmd.fds[f] === sub.endpoint));
+  // Substitutions not on 0–2 attach to the bottom edge: <(…) on the left, >(…) on the right.
+  // A redirect such as 3< <(…) keeps its own number; arguments use Bash's /dev/fd number.
+  const bottomFd = sub => {
+    const { owner: cmd, endpoint } = sub;
+    if ([0, 1, 2].some(f => cmd.fds[f] === endpoint)) return null;
+    if (typeof sub.place === 'number' && cmd.fds[sub.place] === endpoint) return sub.place;
+    return cmd.fds[sub.fd] === endpoint ? sub.fd : null;
+  };
+  const bottomSubs = cmd => cmd.substitutions.filter(sub => bottomFd(sub) !== null);
   const argumentPort = (cmd, sub) => {
-    const g = geometry(cmd), same = argumentSubs(cmd).filter(s => s.direction === sub.direction), k = same.indexOf(sub);
+    const g = geometry(cmd), same = bottomSubs(cmd).filter(s => s.direction === sub.direction), k = same.indexOf(sub);
     return { x: g.x + (sub.direction === '<' ? 30 + k * 34 : 110 - k * 34), y: g.y + 156 };
   };
   const inactiveState = state => ['unused', 'closed'].includes(state);
@@ -141,7 +148,8 @@ function diagram(model) {
     const s = fd <= 2 ? port(cmd, fd) : argumentPort(cmd, sub);
     const [writer, reader] = sub.direction === '>' ? [portUsage(cmd, fd), portUsage(inner, 0)] : [portUsage(inner, 1), portUsage(cmd, fd)];
     const inactive = inactiveState(writer.state) || inactiveState(reader.state);
-    const reason = `${sub.text} is connected through /dev/fd/${sub.fd}. ${writer.reason} ${reader.reason}`;
+    const connection = fd === sub.fd ? `through /dev/fd/${sub.fd}` : `to ${names[fd] || `fd ${fd}`}, opened from /dev/fd/${sub.fd}`;
+    const reason = `${sub.text} is connected ${connection}. ${writer.reason} ${reader.reason}`;
     if (sub.direction === '>') {
       const start = fd <= 2 ? `C ${s.x + 60} ${s.y}` : `C ${s.x} ${s.y + 60}`;
       paths.push(path(`M ${s.x} ${s.y} ${start}, ${q.x - 60} ${q.y}, ${q.x - 5} ${q.y}`, fd <= 2 ? fd : 3, false, inactive, reason));
@@ -151,7 +159,7 @@ function diagram(model) {
     }
   };
   model.all.forEach((cmd, lane) => {
-    const fdsToDraw = [0, 1, 2, ...cmd.substitutions.map(sub => sub.fd)];
+    const fdsToDraw = [0, 1, 2, ...bottomSubs(cmd).map(bottomFd)];
     for (const fd of fdsToDraw) {
       const dest = cmd.fds[fd], p = port(cmd, fd);
       const usage = portUsage(cmd, fd);
@@ -160,7 +168,7 @@ function diagram(model) {
         // The owner draws each link once, from a redirected port when there is one.
         const sub = dest.substitution;
         if (dest.owner === cmd) {
-          if (fd <= 2 || argumentSubs(cmd).includes(sub)) substitutionLink(cmd, fd, sub);
+          if (fd <= 2 || bottomFd(sub) === fd) substitutionLink(cmd, fd, sub);
         } else if (fd <= 2 && !(fd === 0 && cmd === sub.commands[0] && sub.direction === '>') && !(fd === 1 && cmd === sub.commands.at(-1) && sub.direction === '<')) {
           // An inherited copy of another substitution's pipe, such as stderr from a later >(…).
           stub(p, fd, short(dest.label, 14), inactive, usage.reason);
@@ -222,10 +230,10 @@ function diagram(model) {
         <circle cx="${p.x}" cy="${p.y}" r="4" fill="${usage.state === 'possible' ? colors[fd] : palette.surface}" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="1.8" ${usage.state === 'unknown' ? 'stroke-dasharray="2 2"' : ''}/>
       </g>`;
     }).join('');
-    const argumentPorts = argumentSubs(cmd).map(sub => {
-      const p = argumentPort(cmd, sub), usage = portUsage(cmd, sub.fd);
-      return `<g data-command="${cmd.key}" data-fd="${sub.fd}" data-usage="${usage.state}"><title>${escape(usage.reason)}</title>
-        <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${sub.fd}</text>
+    const argumentPorts = bottomSubs(cmd).map(sub => {
+      const fd = bottomFd(sub), p = argumentPort(cmd, sub), usage = portUsage(cmd, fd);
+      return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(usage.reason)}</title>
+        <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
         <circle cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
     }).join('');
     const title = cmd.substitution ? `SUBSTITUTION ${cmd.key}` : `COMMAND ${cmd.key}`;

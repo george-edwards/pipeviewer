@@ -82,3 +82,18 @@ test('malformed process substitutions produce actionable errors', () => {
   };
   for (const [source, message] of Object.entries(cases)) assert.throws(() => parsePipeline(source), message, source);
 });
+
+test('substitutions redirected to extra descriptors keep that descriptor number', () => {
+  const model = parsePipeline('paste /dev/fd/3 /dev/fd/4 3< <(cat words) 4< <(rev words)');
+  const [paste] = model.commands;
+  const [cat, rev] = model.substitutions;
+  assert.deepEqual([cat.place, rev.place], [3, 4]);
+  assert.equal(paste.fds[3], cat.endpoint);
+  assert.equal(paste.fds[4], rev.endpoint);
+  assert.equal(portUsage(paste, 3).label, 'may read');
+  assert.equal(portUsage(paste, 4).label, 'may read');
+  // The named paths are the substitutions, so paste does not read stdin.
+  assert.equal(portUsage(paste, 0).state, 'unused');
+  // Without a matching path argument, fd 3 usage stays unknown.
+  assert.equal(portUsage(parsePipeline('paste a 3< <(cat words)').commands[0], 3).state, 'unknown');
+});
