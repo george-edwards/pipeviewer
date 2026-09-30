@@ -315,7 +315,7 @@ function diagram(model) {
       <rect x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
-      <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="12" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 24))}</text>
+      <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
       ${ports}${argumentPorts}</g>`;
   });
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
@@ -333,9 +333,10 @@ function showDiagram() {
   host.innerHTML = diagram(currentModel);
   const svg = $('#diagram svg'), viewBox = svg.viewBox.baseVal;
   host.style.width = '';
-  host.style.minWidth = `${Math.max(720, viewBox.width * .85)}px`;
+  // Sizes are in rem so the drawing, and its text, grows with the viewer's font size.
+  host.style.minWidth = `${Math.max(45, viewBox.width * .85 / 16)}rem`;
   // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
-  svg.style.maxHeight = `${480 * viewBox.height / 390}px`;
+  svg.style.maxHeight = `${30 * viewBox.height / 390}rem`;
   const box = zoom !== 1 && svg.getBoundingClientRect();
   if (box?.width) {
     const fitted = Math.min(box.width / viewBox.width, box.height / viewBox.height);

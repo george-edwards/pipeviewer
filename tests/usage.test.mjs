@@ -219,3 +219,53 @@ test('head and tail read named files or stdin and may write stdout', () => {
   const time = parsePipeline('/usr/bin/time -f %M head -c 10M /dev/urandom').commands[0];
   assert.equal(time.usage.fds[1].state, 'possible');
 });
+
+const states = source => { const { usage } = parsePipeline(source).commands[0]; return [usage.recognised, ...[0, 1, 2].map(fd => usage.fds[fd].state)]; };
+const stdin = source => states(source)[1], stdout = source => states(source)[2];
+
+test('grep reads stdin only without file operands, and -q never writes stdout', () => {
+  for (const source of ['grep 404', 'grep -E ".{5,}"', 'grep -e x -e y', 'grep -f - a.log', 'grep -v x -', 'grep -c x']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['grep 404 a.log', 'grep -e x a b', 'grep -r TODO', 'grep -rn TODO src', 'grep -f patterns a.log', 'grep --help']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['grep', 'grep "$PATTERN"', 'grep -5 x', 'grep x /dev/stdin']) assert.equal(stdin(source), 'unknown', source);
+  assert.equal(stdout('grep -q 404'), 'unused');
+  assert.equal(stdout('grep --quiet 404 a.log'), 'unused');
+  assert.equal(stdout('grep -l 404 a.log'), 'possible');
+});
+
+test('sort and uniq read files or stdin; -o, check mode and uniq output files leave stdout unused', () => {
+  for (const source of ['sort', 'sort -n -k 2 -t,', 'sort -', 'sort --files0-from=-', 'uniq', 'uniq -c', 'uniq -', 'uniq - out', 'uniq --group=append']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['sort names.txt', 'sort -o out.txt names.txt', 'sort --files0-from=list', 'uniq in', 'uniq -c in out']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['sort -o out.txt', 'sort -c names', 'sort --check=quiet names', 'uniq in out', 'uniq - out']) assert.equal(stdout(source), 'unused', source);
+  for (const source of ['sort', 'sort -o /dev/stdout names', 'uniq in', 'uniq in -']) assert.equal(stdout(source), 'possible', source);
+  assert.equal(stdin('uniq a b c'), 'unknown', 'uniq takes at most two operands');
+});
+
+test('curl reads stdin only for “-” values and writes stdout unless every response is saved', () => {
+  for (const source of ['curl https://example.com', 'curl -sSL https://example.com', 'curl -d x=1 https://example.com', 'curl -o - https://example.com']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['curl -d @- https://example.com', 'curl --data-binary @- https://example.com', 'curl -T - ftp://example.com', 'curl -F "f=@-" https://example.com', 'curl -K -']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['curl "$URL"', 'curl -d @/dev/stdin https://example.com', 'curl -K config']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['curl -o page.html https://example.com', 'curl -sSLo page.html https://example.com', 'curl -O https://example.com/a https://example.com/b']) assert.equal(stdout(source), 'unused', source);
+  for (const source of ['curl https://example.com', 'curl -o - https://example.com', 'curl -o a https://example.com/a https://example.com/b', 'curl -o a -w "%{http_code}" https://example.com']) assert.equal(stdout(source), 'possible', source);
+  assert.equal(parsePipeline('curl https://example.com').commands[0].usage.fds[2].label, 'progress + errors');
+  assert.equal(parsePipeline('curl -s https://example.com').commands[0].usage.fds[2].label, 'on error');
+});
+
+test('wget saves to files unless -O - sends the document to stdout', () => {
+  for (const source of ['wget https://example.com', 'wget -i urls.txt', 'wget -q -O page.html https://example.com']) {
+    assert.equal(stdin(source), 'unused', source);
+    assert.equal(stdout(source), 'unused', source);
+  }
+  for (const source of ['wget -qO- https://example.com', 'wget -O - https://example.com', 'wget --output-document=- https://example.com', 'wget --help']) assert.equal(stdout(source), 'possible', source);
+  assert.equal(stdin('wget -i -'), 'possible');
+  assert.equal(stdin('wget "$URL"'), 'unknown');
+  assert.equal(parsePipeline('wget https://example.com').commands[0].usage.fds[2].label, 'log + errors');
+});
+
+test('find ignores stdin and prints by default, unless its actions or commands say otherwise', () => {
+  for (const source of ['find .', 'find . -name "*.log" -delete', 'find . -exec wc -l {} +', 'find src -type f -print0']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['find . -ok rm {} \\;', 'find . -exec cat \\;', 'find -files0-from -']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['find . -exec rm {} \\;', 'find . -name *.log']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['find . -delete', 'find . -name "*.c" -exec grep -q main {} \\;', 'find . -fprint list']) assert.equal(stdout(source), 'unused', source);
+  for (const source of ['find .', 'find . -delete -print', 'find . -exec wc -l {} +', 'find . -fprint /dev/stdout']) assert.equal(stdout(source), 'possible', source);
+  assert.equal(stdout('find . -exec rm {} \\;'), 'unknown');
+});

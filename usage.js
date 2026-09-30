@@ -8,6 +8,7 @@ const unknownInput = name => usage('unknown', 'usage unknown', `${name}: these a
 const descriptorPattern = /^\/(?:dev\/(?:stdin|fd\/\d+)|proc\/self\/fd\/\d+)$/;
 // A /dev/fd path from a process substitution names that substitution's pipe, never stdin.
 const descriptorPath = file => typeof file === 'string' ? descriptorPattern.test(file) : !file.procsub && descriptorPattern.test(file.value);
+const stdoutPath = file => /^\/(?:dev\/(?:stdout|fd\/1)|proc\/self\/fd\/1)$/.test(file);
 
 // A small option scanner. It consumes known option values so they are not mistaken for files.
 function scanOptions(args, { flags = '', values = '', longFlags = [], longValues = [], stopAtOperand = false } = {}) {
@@ -61,6 +62,35 @@ function fileInput(name, scan, { dashMeansStdin = true, maxFiles = Infinity } = 
   return unused(0, `${name} reads the named file${scan.files.length === 1 ? '' : 's'} instead of stdin.`);
 }
 
+// wc and sort can take NUL-separated file names from a file, or from stdin with “-”.
+function namesFrom(name, file) {
+  if (file === '-') return possible(0, `${name} reads file names from stdin for --files0-from=-.`);
+  return descriptorPath(file) ? unknownInput(name) : unused(0, `${name} reads file names from the specified file, not stdin.`);
+}
+
+// For commands with too many options to list: unknown short letters and long options are
+// treated as flags. Only use it where a misread operand cannot claim that a stream is unused.
+function lenientOptions(args, { shortValues = '', longValues = [] }) {
+  const options = [], operands = [];
+  for (let i = 0; i < args.length; i++) {
+    const value = args[i].value;
+    if (value === '--') { operands.push(...args.slice(i + 1).map(arg => arg.value)); break; }
+    if (value.startsWith('--')) {
+      const [key, attached] = value.includes('=') ? [value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1)] : [value, null];
+      options.push([key, longValues.includes(key) ? attached ?? args[++i]?.value : true]);
+    } else if (value.startsWith('-') && value !== '-') {
+      for (let j = 1; j < value.length; j++) {
+        if (!shortValues.includes(value[j])) { options.push([`-${value[j]}`, true]); continue; }
+        options.push([`-${value[j]}`, j + 1 < value.length ? value.slice(j + 1) : args[++i]?.value]);
+        break;
+      }
+    } else operands.push(value);
+  }
+  const has = (...keys) => options.some(([key]) => keys.includes(key));
+  const values = (...keys) => options.filter(([key]) => keys.includes(key)).map(([, value]) => value);
+  return { options, operands, has, values };
+}
+
 export function inferUsage(argv) {
   const name = argv[0]?.value || 'command';
   const result = { name, recognised: false, fds: Object.fromEntries(streamNames.map((stream, fd) => [fd,
@@ -108,9 +138,7 @@ export function inferUsage(argv) {
     const counted = ['head', 'tail'].includes(name) && args.length <= 2 && !args[0]?.dynamic && legacy.test(args[0]?.value || '');
     const scan = scanOptions(counted ? args.slice(1) : args, specs[name]);
     if (name === 'wc' && scan.valid && scan.options.has('--files0-from')) {
-      const file = scan.options.get('--files0-from');
-      set(0, file === '-' ? possible(0, 'wc reads file names from stdin for --files0-from=-.')
-        : descriptorPath(file) ? unknownInput(name) : unused(0, 'wc reads file names from the specified file, not stdin.'));
+      set(0, namesFrom(name, scan.options.get('--files0-from')));
     } else {
       set(0, fileInput(name, scan, { dashMeansStdin: name !== 'rev', maxFiles: name === 'base64' ? 1 : Infinity }));
     }
@@ -152,7 +180,7 @@ export function inferUsage(argv) {
         set(fd, usage(inferred.state, inferred.label, `/usr/bin/time runs ${child.name}. ${inferred.reason}`));
       }
       const outputFile = scan.options.get('-o') ?? scan.options.get('--output');
-      if (outputFile && /^\/(?:dev\/(?:stdout|fd\/1)|proc\/self\/fd\/1)$/.test(outputFile)) {
+      if (outputFile && stdoutPath(outputFile)) {
         output('/usr/bin/time sends timing data to a path that refers to stdout; the child may also write stdout.');
       }
       set(2, usage('possible', outputFile === undefined ? 'timing + errors' : 'may write', '/usr/bin/time writes timing data to stderr by default; the child or time itself may also write diagnostics. With -o, timing data goes to a file.'));
@@ -225,6 +253,129 @@ export function inferUsage(argv) {
         }
         if (inPlace && simpleScripts) set(1, unused(1, 'sed -i sends normal output back to the input files. This simple script does not write stdout.'));
       }
+    }
+  } else if (name === 'grep') {
+    recognise(); output('grep may write matching lines, counts or file names to stdout.'); errors();
+    const scan = scanOptions(args, { flags: 'EFGPiyvwxcLloqsbHhnTZzrRaUV', values: 'efmABCdD',
+      longFlags: ['--extended-regexp', '--fixed-strings', '--basic-regexp', '--perl-regexp', '--ignore-case', '--no-ignore-case', '--invert-match', '--word-regexp',
+        '--line-regexp', '--count', '--color', '--colour', '--files-without-match', '--files-with-matches', '--only-matching', '--quiet', '--silent', '--no-messages',
+        '--byte-offset', '--with-filename', '--no-filename', '--line-number', '--initial-tab', '--null', '--null-data', '--text', '--recursive',
+        '--dereference-recursive', '--line-buffered', '--binary'],
+      longValues: ['--regexp', '--file', '--max-count', '--after-context', '--before-context', '--context', '--binary-files', '--devices', '--directories',
+        '--exclude', '--exclude-from', '--exclude-dir', '--include', '--label', '--color', '--colour'] });
+    const option = key => scan.options.get(key);
+    const patternFile = option('-f') ?? option('--file');
+    const patternOption = patternFile !== undefined || option('-e') !== undefined || option('--regexp') !== undefined;
+    // Without -e or -f, the first operand is the pattern rather than a file.
+    const files = patternOption ? scan.files : scan.files.slice(1);
+    const recursive = ['-r', '-R', '--recursive', '--dereference-recursive'].some(key => scan.options.has(key)) || [option('-d'), option('--directories')].includes('recurse');
+    if (scan.help || (args.length === 1 && args[0].value === '-V')) set(0, unused(0, 'grep prints help or version information without reading stdin.'));
+    else if (scan.valid && (patternOption || scan.files.length > 0)) {
+      if (patternFile === '-') set(0, possible(0, 'grep reads patterns from stdin for -f -.'));
+      else if (patternFile !== undefined && descriptorPath(patternFile)) set(0, unknownInput(name));
+      else if (recursive && files.length === 0) set(0, unused(0, 'grep -r searches the working directory when no files are named, not stdin.'));
+      else set(0, fileInput(name, { ...scan, files }));
+      if (['-q', '--quiet', '--silent'].some(key => scan.options.has(key))) set(1, unused(1, 'grep -q reports a match through its exit status and writes nothing to stdout.'));
+    }
+  } else if (name === 'sort') {
+    recognise(); output('sort may write sorted lines to stdout once it has read all of its input.'); errors();
+    const scan = scanOptions(args, { flags: 'bdfgiMhnRrsuVzcCm', values: 'kotST',
+      longFlags: ['--ignore-leading-blanks', '--dictionary-order', '--ignore-case', '--general-numeric-sort', '--ignore-nonprinting', '--month-sort',
+        '--human-numeric-sort', '--numeric-sort', '--random-sort', '--reverse', '--version-sort', '--check', '--debug', '--merge', '--stable', '--unique', '--zero-terminated'],
+      longValues: ['--key', '--output', '--field-separator', '--buffer-size', '--temporary-directory', '--parallel', '--batch-size', '--compress-program',
+        '--random-source', '--sort', '--files0-from', '--check'] });
+    if (scan.valid && scan.options.has('--files0-from')) set(0, namesFrom(name, scan.options.get('--files0-from')));
+    else set(0, fileInput(name, scan));
+    if (scan.valid && !scan.help) {
+      const outputFile = scan.options.get('-o') ?? scan.options.get('--output');
+      if (['-c', '-C', '--check'].some(key => scan.options.has(key))) set(1, unused(1, 'sort in check mode reports disorder through stderr and its exit status; it writes nothing to stdout.'));
+      else if (outputFile !== undefined && !stdoutPath(outputFile)) set(1, unused(1, 'sort -o writes the sorted result to the named file instead of stdout.'));
+    }
+  } else if (name === 'uniq') {
+    recognise(); output('uniq may write the remaining or counted lines to stdout.'); errors();
+    // --all-repeated and --group take an optional value, so they appear as flags and as values.
+    const scan = scanOptions(args, { flags: 'cdDiuz', values: 'fsw',
+      longFlags: ['--count', '--repeated', '--all-repeated', '--group', '--ignore-case', '--unique', '--zero-terminated'],
+      longValues: ['--skip-fields', '--skip-chars', '--check-chars', '--all-repeated', '--group'] });
+    // uniq takes at most an input file and an output file.
+    const [input, outputFile] = scan.files;
+    if (scan.help) set(0, fileInput(name, scan));
+    else if (scan.valid && scan.files.length <= 2) {
+      set(0, fileInput(name, { ...scan, files: input ? [input] : [] }));
+      if (outputFile && !outputFile.dynamic && outputFile.value !== '-' && !stdoutPath(outputFile.value)) set(1, unused(1, 'uniq writes to the named output file instead of stdout.'));
+    }
+  } else if (name === 'curl') {
+    recognise(); errors();
+    output('curl writes the response body to stdout unless -o or -O saves it; -w and some trace options also write stdout.');
+    if (literalArgs) {
+      const opts = lenientOptions(args, { shortValues: 'AbcCdDeEFhHKmoPQrtTuUwxXyYz',
+        longValues: ['--data', '--data-ascii', '--data-binary', '--data-raw', '--data-urlencode', '--json', '--form', '--form-string', '--upload-file', '--config',
+          '--output', '--output-dir', '--write-out', '--dump-header', '--trace', '--trace-ascii', '--stderr', '--header', '--user-agent', '--request', '--url', '--user',
+          '--proxy', '--max-time', '--connect-timeout', '--retry', '--cookie', '--cookie-jar', '--referer', '--range', '--cert', '--key', '--cacert', '--variable'] });
+      // “-” and “@-” name stdin in data, form, upload and config values; for output options “-” is stdout.
+      const writers = ['-o', '--output', '-D', '--dump-header', '--trace', '--trace-ascii', '--stderr', '-c', '--cookie-jar', '-w', '--write-out'];
+      const inputs = opts.options.filter(([key, value]) => typeof value === 'string' && !writers.includes(key)).map(([, value]) => value);
+      const uploads = opts.values('-T', '--upload-file');
+      if (opts.has('-h', '--help', '-V', '--version')) set(0, unused(0, 'curl prints help or version information without reading stdin.'));
+      else if (inputs.some(value => /(?:^|[@<])-$/.test(value)) || uploads.includes('.')) set(0, possible(0, 'curl reads upload data, form fields or its config from stdin when a value names “-”.'));
+      else if (inputs.some(value => /(?:^|[@<])\/(?:dev|proc)\//.test(value)) || opts.has('-K', '--config')) set(0, unknownInput(name));
+      else set(0, unused(0, 'curl sends data from its arguments and named files; these arguments do not read stdin.'));
+      const urls = opts.operands.filter(value => value.includes('://')).length + opts.values('--url').length;
+      const saved = opts.values('-o', '--output').filter(file => file !== '-' && !stdoutPath(file)).length + (opts.has('-O', '--remote-name', '--remote-name-all') ? urls : 0);
+      const toStdout = opts.has('-w', '--write-out') || opts.values('-o', '--output', '-D', '--dump-header', '--trace', '--trace-ascii', '--stderr').includes('-');
+      if (urls > 0 && saved >= urls && !toStdout && !opts.has('-h', '--help', '-V', '--version')) set(1, unused(1, 'curl saves every response to a file and nothing else is sent to stdout.'));
+      if (!opts.has('-s', '--silent')) set(2, usage('possible', 'progress + errors', 'curl shows a progress meter on stderr when its output is not a terminal, and may write diagnostics.'));
+    }
+  } else if (name === 'wget') {
+    recognise(); errors();
+    set(0, unknownInput(name));
+    output('wget may write to stdout for -O - or for help and version information.');
+    if (literalArgs) {
+      const opts = lenientOptions(args, { shortValues: 'oaiBtOTwQPUelARDIXY',
+        longValues: ['--output-document', '--input-file', '--output-file', '--append-output', '--user-agent', '--tries', '--timeout', '--wait', '--directory-prefix',
+          '--execute', '--level', '--accept', '--reject', '--domains', '--header', '--post-data', '--post-file', '--body-data', '--body-file', '--method', '--user',
+          '--password', '--load-cookies', '--save-cookies', '--base', '--config', '--limit-rate', '--quota', '--referer'] });
+      const help = opts.has('-h', '--help', '-V', '--version');
+      const inputs = opts.values('-i', '--input-file', '--post-file', '--body-file');
+      if (help) set(0, unused(0, 'wget prints help or version information without reading stdin.'));
+      else if (inputs.includes('-')) set(0, possible(0, 'wget reads URLs or request data from stdin when -i or a body file is “-”.'));
+      else if (inputs.every(file => !descriptorPath(file))) set(0, unused(0, 'wget downloads the URLs in its arguments or input file; it does not read stdin.'));
+      if (!help && !opts.values('-O', '--output-document', '-o', '--output-file', '-a', '--append-output').some(file => file === '-' || stdoutPath(file))) {
+        set(1, unused(1, 'wget saves downloads to files and logs to stderr; it writes nothing to stdout.'));
+      }
+      const logFile = opts.values('-o', '--output-file', '-a', '--append-output').length > 0;
+      if (!opts.has('-q', '--quiet') && !logFile) set(2, usage('possible', 'log + errors', 'wget logs its progress to stderr unless -q or -o is given, and may write diagnostics.'));
+    }
+  } else if (name === 'find') {
+    recognise(); errors();
+    output('find may print matching paths to stdout.');
+    // Bash leaves a bare {} alone; find replaces it with each path.
+    const words = args.map(arg => arg.raw === '{}' ? { ...arg, dynamic: false } : arg);
+    const values = words.map(arg => arg.value);
+    if (args.length === 1 && ['--help', '--version'].includes(values[0])) set(0, unused(0, 'find prints help or version information without reading stdin.'));
+    else if (words.every(arg => !arg.dynamic)) {
+      // Commands from -exec and -ok inherit find's stdin and stdout.
+      const children = [];
+      let prints = false, actions = false, prompts = false, namesFromStdin = false;
+      for (let i = 0; i < args.length; i++) {
+        const value = values[i];
+        if (['-exec', '-execdir', '-ok', '-okdir'].includes(value)) {
+          const end = values.findIndex((token, j) => j > i && [';', '+'].includes(token));
+          children.push(inferUsage(words.slice(i + 1, end === -1 ? words.length : end)));
+          prompts ||= value.startsWith('-ok');
+          actions = true; i = end === -1 ? args.length : end;
+        } else if (['-print', '-print0', '-printf', '-ls'].includes(value)) prints = actions = true;
+        else if (['-fprint', '-fprint0', '-fprintf', '-fls'].includes(value)) { actions = true; prints ||= stdoutPath(values[i + 1]); }
+        else if (['-delete', '-quit'].includes(value)) actions = true;
+        else if (value === '-files0-from') namesFromStdin ||= values[i + 1] === '-';
+      }
+      const states = fd => children.map(child => child.fds[fd].state);
+      if (prompts || namesFromStdin || states(0).includes('possible')) set(0, possible(0, prompts ? 'find -ok reads each confirmation from stdin.' : namesFromStdin ? 'find reads starting points from stdin for -files0-from -.' : 'A command run by find -exec may read the inherited stdin.'));
+      else if (states(0).every(state => state === 'unused')) set(0, unused(0, children.length ? 'find walks the named paths, and the commands it runs do not read stdin.' : 'find walks the named paths; it does not read stdin.'));
+      // Without an action, find prints each match.
+      if (actions && !prints && states(1).every(state => state === 'unused')) set(1, unused(1, 'This find expression acts on matches without printing them; it writes nothing to stdout.'));
+      else if (actions && !prints && states(1).includes('unknown')) set(1, usage('unknown', 'usage unknown', 'find prints nothing itself, but a command it runs may write stdout.'));
+      if (prompts) set(2, usage('possible', 'may write', 'find -ok writes each confirmation prompt to stderr.'));
     }
   } else if (name === 'true' || name === 'false') {
     recognise();
