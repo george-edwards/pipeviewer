@@ -1,3 +1,5 @@
+import { inferUsage } from './usage.js';
+
 /** A deliberately limited shell parser. Input is never evaluated or executed. */
 function tokenize(source) {
   const tokens = [];
@@ -68,13 +70,13 @@ export function parsePipeline(input) {
   const pipes = connectors.map((_, i) => endpoint(`pipe-${i}`, 'pipe', `Pipe ${i + 1}`, { from: i, to: i + 1 }));
   const result = commands.map((tokens, index) => {
     const fds = { 0: index ? pipes[index - 1] : terminalIn, 1: pipes[index] || terminalOut, 2: terminalErr };
-    const words = [], steps = [];
+    const words = [], argv = [], steps = [];
     for (let i = 0; i < tokens.length; i++) {
       let token = tokens[i], fd;
       if (token.type === 'word' && /^\d+$/.test(token.raw) && tokens[i + 1]?.type === 'op' && /^[<>]/.test(tokens[i + 1].value) && token.end === tokens[i + 1].start) {
         fd = Number(token.value); token = tokens[++i];
       }
-      if (token.type === 'word') { words.push(token.raw); continue; }
+      if (token.type === 'word') { words.push(token.raw); argv.push(token); continue; }
       const op = token.value;
       if (!['<', '>', '>>', '>|', '>&', '<&', '&>', '&>>'].includes(op)) {
         throw new Error(`“${op}” is not supported yet. Use simple commands, pipes, and file or descriptor redirects.`);
@@ -106,7 +108,7 @@ export function parsePipeline(input) {
       fds[2] = fds[1];
       steps.push({ text: '|&', fd: 2, destination: fds[1], description: `stderr follows stdout → ${fds[1].label}` });
     }
-    return { index, command: words.join(' '), fds, steps };
+    return { index, command: words.join(' '), fds, steps, usage: inferUsage(argv) };
   });
   const notes = [];
   for (const pipe of pipes) {

@@ -22,7 +22,8 @@ Serve `dist/` with any static host. No build dependencies or backend are needed.
 ## Features
 
 - Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.
-- Coloured stream diagram, exact per-command descriptor mappings, and SVG export.
+- Coloured stream diagram, per-command descriptor mappings, and SVG export.
+- Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
 - Clickable examples, quick reference, and local persistence of the last pipeline.
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.
 - `|`, `|&`, `<`, `>`, `>>`, `>|`, `n>&m`, `n<&m`, `&>`, `&>>`, and descriptor closing.
@@ -30,6 +31,8 @@ Serve `dist/` with any static host. No build dependencies or backend are needed.
 
 ## Scope
 
-This is a static descriptor map of simple Bash-style pipelines, assuming the usual initial descriptors 0–2 are open. It does not infer what commands do with their arguments (for example, `tee` opening a file), inspect files, check permissions, or execute input. Additional descriptors are listed in the cards; the diagram focuses on 0–2. Unsupported control operators, substitutions, here-documents, and dynamic redirect filenames produce an error. It does not model aliases, functions, shell options, or inherited descriptors beyond 0–2.
+This is a static descriptor map of simple Bash-style pipelines, assuming the usual initial descriptors 0–2 are open. It recognises `wc`, `base64`, `/usr/bin/time`, `true`, `false`, `sleep`, `echo`, `printf`, `cat`, `xargs`, `ls`, `cut`, `paste`, `awk`, `sed`, and `rev`. Common GNU/Linux options and file operands affect stream-usage hints. The `time` wrapper follows the usage of its child command. Advanced scripts, unseen script files, unknown options, and dynamic arguments retain conservative hints where needed. It does not inspect files, check permissions, or execute input. Other commands and unsupported argument forms remain conservative; filenames opened by commands themselves (for example, `tee`) are not mapped. Usage assumes standard commands without aliases or replacement functions. “No writes” is an inference, never a measured byte count. Diagnostics remain possible, including when stderr is merged into a pipe. Additional descriptors are listed in the cards; the diagram focuses on 0–2. Unsupported control operators, substitutions, here-documents, and dynamic redirect filenames produce an error. It does not model aliases, functions, shell options, or inherited descriptors beyond 0–2.
 
 Semantics follow the Bash manual sections on [redirections](https://www.gnu.org/s/bash/manual/html_node/Redirections.html) and [pipelines](https://www.gnu.org/software/bash/manual/html_node/Pipelines).
+
+Command usage references: [GNU Coreutils](https://www.gnu.org/software/coreutils/manual/coreutils.html), [GNU time](https://www.gnu.org/software/time/manual/html_node/Invoking-time.html), [GNU xargs](https://www.gnu.org/software/findutils/manual/html_node/find_html/xargs-options.html), [GNU awk](https://www.gnu.org/software/gawk/manual/html_node/Invoking-Summary.html), [GNU sed](https://www.gnu.org/software/sed/manual/sed.html), and [util-linux rev](https://github.com/util-linux/util-linux/blob/master/text-utils/rev.1.adoc).
