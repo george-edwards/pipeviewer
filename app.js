@@ -1,5 +1,5 @@
 import { parsePipeline, destinationLabel } from './parser.js';
-import { portUsage, pipeActivity } from './usage.js';
+import { portUsage, pipeActivity, commands } from './usage.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -657,6 +657,9 @@ $('#variations').addEventListener('click', event => {
   render();
 });
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
+// The reference lists every modelled command, in registry order, so it never falls behind commands/.
+const known = commands.flatMap(rule => rule.names).map(name => `<code>${escape(name)}</code>`);
+$('#known-commands').innerHTML = `${known.slice(0, -1).join(', ')}, and ${known.at(-1)}`;
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 // Chapter starts in seconds, marked by hand when the talk was first published.

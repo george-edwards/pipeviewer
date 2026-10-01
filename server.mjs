@@ -29,7 +29,7 @@ http.createServer(async (req, res) => {
     try { await sendVideo(req, res, video[1]); } catch { res.writeHead(404); res.end('Not found'); }
     return;
   }
-  const file = files[pathname];
+  const file = files[pathname] ?? /^\/(commands\/[\w-]+\.js)$/.exec(pathname)?.[1];
   if (!file) { res.writeHead(404); res.end('Not found'); return; }
   try {
     const body = await readFile(new URL(file, import.meta.url));
