@@ -1,10 +1,13 @@
-import { usage, unused, stdoutPath, scanOptions } from './helpers.js';
+import { usage, unused, stdoutPath, scanOptions, bsd } from './helpers.js';
+
+// macOS ships the BSD time: https://github.com/apple-oss-distributions/shell_cmds/blob/shell_cmds-326/time/time.c
+const macos = bsd('ahlo:p');
 
 export default {
   names: ['/usr/bin/time'],
-  infer({ args, set, output, errors, infer }) {
+  infer({ args, set, output, errors, infer, platform }) {
     errors();
-    const scan = scanOptions(args, { flags: 'apvqV', values: 'fo', longFlags: ['--append', '--portability', '--verbose', '--quiet'],
+    const scan = scanOptions(args, platform === 'macos' ? macos : { flags: 'apvqV', values: 'fo', longFlags: ['--append', '--portability', '--verbose', '--quiet'],
       longValues: ['--format', '--output'], stopAtOperand: true });
     if (scan.help || (args.length === 1 && args[0].value === '-V')) {
       set(0, unused(0, 'time prints help or version information without reading stdin.'));

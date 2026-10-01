@@ -2,6 +2,8 @@ import { unused, scanOptions, runsCommand } from './helpers.js';
 
 export default {
   names: ['runcon'],
+  macos: false,
+  instead: { macos: { '*': 'macOS has no SELinux' } },
   infer(ctx) {
     const { set, output, errors } = ctx;
     // runcon CONTEXT COMMAND…, or runcon with -c, -t, -u, -r or -l and then COMMAND….

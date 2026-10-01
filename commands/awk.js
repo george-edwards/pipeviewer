@@ -2,6 +2,9 @@ import { unused, possible, unknownInput, descriptorPath } from './helpers.js';
 
 export default {
   names: ['awk', 'mawk', 'gawk', 'nawk'],
+  // macOS ships only awk, the one true awk.
+  macos: ['awk'],
+  instead: { macos: { '*': 'use awk' } },
   infer({ name, args, literalArgs, set, output, errors }) {
     output('awk may print from its program to stdout, depending on its input and rules.'); errors();
     let script = null, scriptFromFile = false, readsScriptInput = false, files = [], valid = literalArgs, i = 0;

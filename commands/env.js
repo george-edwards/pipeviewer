@@ -1,10 +1,13 @@
-import { unused, scanOptions, runsCommand } from './helpers.js';
+import { unused, scanOptions, runsCommand, bsd } from './helpers.js';
+
+// macOS ships the BSD env: https://github.com/apple-oss-distributions/shell_cmds/blob/shell_cmds-326/env/env.c
+const macos = { ...bsd('0C:iP:S:u:v'), stopAtOperand: true };
 
 export default {
   names: ['env'],
   infer(ctx) {
     const { args, set, output, errors } = ctx;
-    const scan = scanOptions(args, { flags: 'i0v', values: 'uCS', longFlags: ['--ignore-environment', '--null', '--block-signal', '--default-signal', '--ignore-signal', '--list-signal-handling', '--debug'],
+    const scan = scanOptions(args, ctx.platform === 'macos' ? macos : { flags: 'i0v', values: 'uCS', longFlags: ['--ignore-environment', '--null', '--block-signal', '--default-signal', '--ignore-signal', '--list-signal-handling', '--debug'],
       longValues: ['--unset', '--chdir', '--split-string', '--block-signal', '--default-signal', '--ignore-signal'], stopAtOperand: true });
     // -S splits a string into a command line, which is not parsed here.
     if (!scan.valid || scan.options.has('-S') || scan.options.has('--split-string')) return;

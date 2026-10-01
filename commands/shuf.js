@@ -2,6 +2,8 @@ import { unused, unknownInput, descriptorPath, stdoutPath, scanOptions, fileInpu
 
 export default {
   names: ['shuf'],
+  macos: false,
+  instead: { macos: { '*': 'use sort -R, or jot -r for random numbers' } },
   infer({ name, args, set, output, errors }) {
     output('shuf writes its input lines, the -e arguments or the -i range, in random order.'); errors();
     const scan = scanOptions(args, { flags: 'erz', values: 'ino', longFlags: ['--echo', '--repeat', '--zero-terminated'],

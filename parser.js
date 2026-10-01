@@ -1,17 +1,20 @@
-import { inferUsage, substitutionUsage, fillReplacements } from './usage.js';
+import { inferUsage, substitutionUsage, fillReplacements, targetsOf, reaches } from './usage.js';
+
+export { targetsOf, reaches };
 
 /**
  * A deliberately limited shell parser. Input is never evaluated or executed.
  * Each token's span is where it sits in the text the viewer typed: at() maps an index in source
  * there, which differs for a parallel job's command, rebuilt from its quoted words.
  */
-function tokenize(source, start = 0, nested = false, at = i => i) {
+// comments is false for zsh, where # starts a comment only in scripts, not at an interactive prompt.
+function tokenize(source, start = 0, nested = false, at = i => i, comments = true) {
   const tokens = [];
   let i = start;
   while (i < source.length) {
     if (/[ \t\r]/.test(source[i])) { i++; continue; }
     if (source[i] === '\\' && source[i + 1] === '\n') { i += 2; continue; }
-    if (source[i] === '#') { while (i < source.length && source[i] !== '\n') i++; continue; }
+    if (comments && source[i] === '#') { while (i < source.length && source[i] !== '\n') i++; continue; }
     // A newline ends a command like ; does, so a short script of several lines can be pasted.
     if (source[i] === '\n') { tokens.push({ type: 'op', value: ';', newline: true, raw: '\n', start: i, end: i + 1, span: [at(i), at(i) + 1] }); i++; continue; }
     const begin = i;
@@ -22,7 +25,7 @@ function tokenize(source, start = 0, nested = false, at = i => i) {
           ? `Bash reads ${source[i - 1]}${source.slice(i, i + 2)}…) as an argument. Write ${source[i - 1]}${source[i]} ${source.slice(i, i + 2)}…) to redirect a descriptor.`
           : `Put a space before ${source.slice(i, i + 2)}…). Bash joins it to the neighbouring word.`);
       }
-      const inner = tokenize(source, i + 2, true, at);
+      const inner = tokenize(source, i + 2, true, at, comments);
       i = inner.end + 1;
       if (i < source.length && !/[\s|&;<>()]/.test(source[i])) throw new Error('Put a space after the closing ) of a process substitution. Bash joins adjacent text into one word.');
       if (!inner.tokens.length) throw new Error(`Add a command inside ${source[begin]}( ).`);
@@ -99,6 +102,17 @@ function addJob(cmd, context) {
 /**
  * Builds one pipeline. Process substitutions recurse with a snapshot of the owning
  * command's descriptors, taken when Bash expands the word (left to right).
+ *
+ * zsh (the macOS shell) differs in three ways that change the map:
+ * - MULTIOS: a descriptor keeps a list of targets. In a pipeline it starts with the pipe; otherwise
+ *   it is inherited from the shell. A redirect replaces an inherited descriptor and adds to any
+ *   other, and a copy (n>&m) adds whatever m points at. With two or more targets the command
+ *   writes to a pipe, and zsh copies the data to every target, like tee; for input it concatenates.
+ * - A process substitution used as an argument gets the shell's descriptors; one used as a
+ *   redirect target sees the pipeline's pipes but not the command's own redirects. zsh numbers
+ *   them from /dev/fd/11 up rather than down from 63.
+ * - Only a single digit can name a descriptor in a redirect, and a command line of only
+ *   redirects runs cat (for output) or more (for input).
  */
 // first numbers the commands on from earlier pipelines in a list, so every key stays unique.
 function buildPipeline(tokens, inherited, context, substitution, { first = 0, prefix: listPrefix = '' } = {}) {
@@ -124,14 +138,29 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
     const fds = { ...inherited, 0: index ? pipes[index - 1] : inherited[0], 1: pipes[index] || inherited[1] };
     const cmd = { index, key, substitution, fds, steps: [], substitutions: [], span: [tokens[0].span[0], tokens.at(-1).span[1]] };
     commands.push(cmd);
+    const zsh = context.platform === 'macos', initial = { ...fds };
+    // zsh target lists; a missing entry means the descriptor is still inherited from the shell.
+    const lists = {};
+    if (zsh && index) lists[0] = [pipes[index - 1]];
+    if (zsh && pipes[index]) lists[1] = [pipes[index]];
+    const assign = (fd, added) => {
+      if (!zsh) { fds[fd] = added[0]; return; }
+      lists[fd] = lists[fd]?.length ? [...lists[fd], ...added] : [...added];
+      if (lists[fd].length === 1) { fds[fd] = lists[fd][0]; return; }
+      const id = `multio-${key}-${fd}`;
+      fds[fd] = { id, type: 'multio', label: lists[fd].map(dest => dest.label).join(' + '), targets: lists[fd], direction: fd === 0 ? 'in' : 'out' };
+      context.endpoints.set(id, fds[fd]);
+    };
     const substitute = (token, place) => {
       if (cmd.substitutions.length >= letters.length) throw new Error('Use fewer process substitutions in one command.');
-      let fd = 63;
-      while (fd in fds) fd--;
+      let fd = zsh ? 11 : 63;
+      while (fd in fds) fd += zsh ? 1 : -1;
       const sub = { id: `sub-${context.substitutions.length}`, key: `${key}${letters[cmd.substitutions.length]}`, text: token.raw, direction: token.direction, owner: cmd, fd, place, span: token.span };
       sub.endpoint = context.endpoint(sub.id, 'procsub', token.raw, { direction: token.direction, owner: cmd, fd, substitution: sub });
-      // The child inherits the owner's current descriptors, except earlier substitution pipes.
-      const snapshot = Object.fromEntries(Object.entries(fds).filter(([n, dest]) => Number(n) <= 2 || dest.type !== 'procsub'));
+      // The child inherits the owner's current descriptors, except earlier substitution pipes. Under
+      // zsh, an argument gets the shell's descriptors, and a redirect target the pipeline's pipes.
+      const base = !zsh ? fds : place === 'argument' ? inherited : initial;
+      const snapshot = Object.fromEntries(Object.entries(base).filter(([n, dest]) => Number(n) <= 2 || dest.type !== 'procsub'));
       snapshot[token.direction === '>' ? 0 : 1] = sub.endpoint;
       cmd.substitutions.push(sub);
       context.substitutions.push(sub);
@@ -143,7 +172,7 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
     for (let i = 0; i < tokens.length; i++) {
       let token = tokens[i], fd;
       const first = token;
-      if (token.type === 'word' && /^\d+$/.test(token.raw) && tokens[i + 1]?.type === 'op' && /^[<>]/.test(tokens[i + 1].value) && token.end === tokens[i + 1].start) {
+      if (token.type === 'word' && (zsh ? /^\d$/ : /^\d+$/).test(token.raw) && tokens[i + 1]?.type === 'op' && /^[<>]/.test(tokens[i + 1].value) && token.end === tokens[i + 1].start) {
         fd = Number(token.value); token = tokens[++i];
       }
       if (token.type === 'word') { words.push(token.raw); argv.push(token); continue; }
@@ -195,22 +224,40 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
         const mode = op.includes('>>') ? 'append' : op === '<' ? 'read' : 'write';
         dest = context.endpoint(`file-${key}-${i}`, target.value === '/dev/null' ? 'null' : 'file', target.value, { mode });
       }
-      fds[fd] = dest;
-      if (op.startsWith('&')) fds[2] = dest;
-      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op}${op.endsWith('&') ? '' : ' '}${target.raw}`, fd, fds: op.startsWith('&') ? [1, 2] : [fd], destination: dest, span: [first.span[0], target.span[1]], description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}` });
+      // A copy, or a path such as /dev/stdout, adds every target of the descriptor it names under zsh.
+      const added = zsh && ((op === '>&' || op === '<&') && dest.type !== 'closed' || ['/dev/stdin', '/dev/stdout', '/dev/stderr'].includes(target.value)) ? targetsOf(dest) : [dest];
+      const touched = op.startsWith('&') ? [1, 2] : [fd];
+      for (const n of touched) {
+        if (dest.type === 'closed') { fds[n] = dest; lists[n] = []; } else assign(n, added);
+      }
+      const shared = touched.map(n => fds[n]).find(d => d.type === 'multio');
+      const copies = shared ? `; zsh copies it to all ${shared.targets.length}: ${shared.label}` : '';
+      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op}${op.endsWith('&') ? '' : ' '}${target.raw}`, fd, fds: touched, destination: dest, span: [first.span[0], target.span[1]], description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}${copies}` });
+    }
+    if (!words.length && zsh && cmd.steps.length) {
+      // zsh runs $NULLCMD (cat) for a line of only redirects, or $READNULLCMD (more) if all are input.
+      const name = cmd.steps.every(step => step.fds.every(n => n === 0)) ? 'more' : 'cat';
+      words.push(name); argv.push({ type: 'word', value: name, raw: name, dynamic: false });
+      cmd.implicit = name;
+      context.notes.push(name === 'cat'
+        ? 'zsh runs cat when a command has only redirects, so it copies stdin into the target until end-of-file. Bash would only create the file.'
+        : 'zsh runs more (less on macOS) when a command has only input redirects, so it pages the input to the terminal. Bash would only open the file.');
     }
     if (!words.length) throw new Error('Add a command before or after the redirects.');
     if (argv[0].procsub) throw new Error('Start each command with its name. A process substitution cannot be the command itself.');
     if (['if', 'then', 'for', 'while', 'until', 'case', 'function', '{', '}', '!', 'time', 'exec'].includes(words[0])) throw new Error('Shell control structures and exec are not supported. Try simple commands joined by pipes.');
     if (connectors[index] === '|&') {
-      fds[2] = fds[1];
-      cmd.steps.push({ text: '|&', fd: 2, fds: [2], destination: fds[1], span: connectorTokens[index].span, description: `stderr follows stdout → ${fds[1].label}` });
+      // |& is 2>&1 after the command's own redirects; under zsh it adds stdout's targets to stderr's.
+      const destination = fds[1];
+      assign(2, targetsOf(destination));
+      cmd.steps.push({ text: '|&', fd: 2, fds: [2], destination, span: connectorTokens[index].span, description: `stderr follows stdout → ${fds[2].label}` });
     }
     cmd.command = words.join(' ');
     // Redirects apply before the command runs, so /dev/fd/3 names whatever 3< <(…) opened.
     const substitutionPath = token => !token.dynamic && fds[token.value.match(/^\/(?:dev|proc\/self)\/fd\/(\d+)$/)?.[1]]?.type === 'procsub';
     const paths = argv.map(token => !token.procsub && substitutionPath(token) ? { ...token, procsub: true } : token);
-    cmd.usage = inferUsage(paths);
+    cmd.usage = inferUsage(paths, context.platform);
+    for (const note of [cmd.usage.missing, ...(cmd.usage.notes ?? [])]) if (note && !context.notes.includes(note)) context.notes.push(note);
     for (const sub of cmd.substitutions) {
       cmd.usage.fds[sub.fd] = substitutionUsage(cmd.usage.name, sub.direction, sub.fd, sub.place === 'argument');
       if (sub.place > 2 && fds[sub.place] === sub.endpoint && argv.some(token => substitutionPath(token) && token.value.endsWith(`/fd/${sub.place}`))) {
@@ -251,17 +298,17 @@ function splitList(tokens) {
   return list;
 }
 
-export function parsePipeline(input) {
+export function parsePipeline(input, { platform = 'linux' } = {}) {
   if (!input.trim()) throw new Error('Paste a command or pipeline to get started.');
   if (input.length > 12000) throw new Error('Try a pipeline shorter than 12,000 characters.');
   const lead = input.length - input.trimStart().length;
-  const { tokens } = tokenize(input.trim(), 0, false, i => i + lead);
+  const { tokens } = tokenize(input.trim(), 0, false, i => i + lead, platform !== 'macos');
   const endpoints = new Map();
   const endpoint = (id, type, label, extra = {}) => {
     if (!endpoints.has(id)) endpoints.set(id, { id, type, label, ...extra });
     return endpoints.get(id);
   };
-  const context = { endpoint, endpoints, substitutions: [], notes: [] };
+  const context = { endpoint, endpoints, substitutions: [], notes: [], platform };
   const terminal = { 0: endpoint('terminal-in', 'terminal', 'Terminal input'), 1: endpoint('terminal-out', 'terminal', 'Terminal output'), 2: endpoint('terminal-err', 'terminal', 'Terminal stderr') };
   const list = splitList(tokens);
   if (!list.length) throw new Error('Paste a command or pipeline to get started.');
@@ -280,8 +327,8 @@ export function parsePipeline(input) {
     for (const pipeline of [main, ...substitutions]) {
       for (const pipe of pipeline.pipes) {
         // A substitution holds copies of its owner's descriptors, so it can keep a pipe end open.
-        pipe.writers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.from]) && Object.values(cmd.fds).includes(pipe));
-        pipe.readers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.to]) && Object.values(cmd.fds).includes(pipe));
+        pipe.writers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.from]) && Object.values(cmd.fds).some(dest => reaches(dest, pipe)));
+        pipe.readers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.to]) && Object.values(cmd.fds).some(dest => reaches(dest, pipe)));
         const name = `${where}ipe ${pipe.from + 1}${pipeline === main ? '' : ` in ${pipeline.text}`}`;
         if (!pipe.writers.length) notes.push(`${name} has no writer after redirects; its reader receives end-of-file.`);
         if (!pipe.readers.length) notes.push(`${name} has no reader after redirects; writing to it can cause SIGPIPE.`);
@@ -301,6 +348,7 @@ export function parsePipeline(input) {
 }
 
 export function destinationLabel(dest, fd, commands, cmd) {
+  if (dest.type === 'multio') return `${dest.direction === 'in' ? 'zsh joins' : 'zsh copies to'}: ${dest.targets.map(target => destinationLabel(target, fd, commands, cmd)).join('; ')}`;
   if (dest.type === 'procsub') {
     if (!cmd || dest.owner === cmd) return `${dest.label} · /dev/fd/${dest.fd}`;
     return `${dest.direction === '>' ? 'Substitution input from' : 'Substitution output to'} ${dest.owner.command}`;

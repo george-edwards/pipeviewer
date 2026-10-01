@@ -1,11 +1,17 @@
-import { usage, unused, possible, unknownInput, descriptorPath, scanOptions } from './helpers.js';
+import { usage, unused, possible, unknownInput, descriptorPath, scanOptions, bsd } from './helpers.js';
+
+// macOS ships the BSD xargs: https://github.com/apple-oss-distributions/shell_cmds/blob/shell_cmds-326/xargs/xargs.c
+const macos = bsd('+0E:I:J:L:n:oP:pR:S:s:rtx', [
+  '--exit', '--interactive', '--max-args=', '--max-chars=', '--max-procs=', '--no-run-if-empty',
+  '--null', '--verbose',
+]);
 
 export default {
   names: ['xargs'],
-  infer({ name, args, set, output, errors, infer }) {
+  infer({ name, args, set, output, errors, infer, platform }) {
     output('xargs may write through the command it starts; the invoked command and input affect output.'); errors();
     set(2, usage('possible', 'may write', 'xargs and its invoked commands may write stderr, including prompts and diagnostics.'));
-    const scan = scanOptions(args, { flags: '0oprtx', values: 'aEdILnPs', longFlags: ['--null', '--open-tty', '--no-run-if-empty', '--interactive', '--verbose', '--exit'],
+    const scan = scanOptions(args, platform === 'macos' ? macos : { flags: '0oprtx', values: 'aEdILnPs', longFlags: ['--null', '--open-tty', '--no-run-if-empty', '--interactive', '--verbose', '--exit'],
       longValues: ['--arg-file', '--delimiter', '--eof', '--replace', '--max-lines', '--max-args', '--max-procs', '--max-chars'], stopAtOperand: true });
     if (scan.help) set(0, unused(0, 'xargs prints help or version information without reading stdin.'));
     else if (scan.valid) {

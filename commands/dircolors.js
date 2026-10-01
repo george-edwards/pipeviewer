@@ -2,6 +2,8 @@ import { unused, scanOptions, fileInput } from './helpers.js';
 
 export default {
   names: ['dircolors'],
+  macos: false,
+  instead: { macos: { '*': 'set LSCOLORS and use ls -G' } },
   infer({ name, args, set, output, errors }) {
     output('dircolors writes shell commands that set LS_COLORS, or with -p, its colour database.'); errors();
     const scan = scanOptions(args, { flags: 'bcp', longFlags: ['--sh', '--bourne-shell', '--csh', '--c-shell', '--print-database'] });

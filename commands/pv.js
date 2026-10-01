@@ -2,6 +2,8 @@ import { usage, unused, possible, stdoutPath, scanOptions, fileInput } from './h
 
 export default {
   names: ['pv'],
+  macos: false,
+  instead: { macos: { '*': 'use dd status=progress, or press Ctrl-T for progress from dd and cp' } },
   infer({ name, args, set, output, errors }) {
     errors();
     output('pv copies its input to stdout unchanged.');

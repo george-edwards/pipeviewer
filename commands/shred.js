@@ -2,6 +2,8 @@ import { usage, possible, fileAction } from './helpers.js';
 
 export default {
   names: ['shred'],
+  macos: false,
+  instead: { macos: { '*': 'on APFS and SSDs overwriting is not effective; rely on FileVault' } },
   infer(ctx) {
     const { set } = ctx;
     const scan = fileAction(ctx, { flags: 'fuvxz', values: 'ns', longFlags: ['--force', '--remove', '--verbose', '--exact', '--zero'],

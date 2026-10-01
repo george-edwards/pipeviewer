@@ -2,6 +2,8 @@ import { unused, scanOptions, runsCommand } from './helpers.js';
 
 export default {
   names: ['timeout'],
+  macos: false,
+  instead: { macos: { '*': 'install GNU coreutils with Homebrew, or use perl -e ‘alarm shift; exec @ARGV’ SECONDS COMMAND' } },
   infer(ctx) {
     // timeout DURATION COMMAND…
     const scan = scanOptions(ctx.args, { flags: 'v', values: 'ks', longFlags: ['--preserve-status', '--foreground', '--verbose'], longValues: ['--kill-after', '--signal'], stopAtOperand: true });

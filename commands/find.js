@@ -2,12 +2,18 @@ import { usage, unused, possible, stdoutPath } from './helpers.js';
 
 export default {
   names: ['find'],
-  infer({ args, set, output, errors, infer }) {
+  infer({ args, set, output, errors, infer, platform }) {
     errors();
     output('find may print matching paths to stdout.');
     // Bash leaves a bare {} alone; find replaces it with each path.
     const words = args.map(arg => arg.raw === '{}' ? { ...arg, dynamic: false } : arg);
     const values = words.map(arg => arg.value);
+    if (platform === 'macos') {
+      // BSD find needs a starting path, given first or with -f, and has no -printf or -fprint actions.
+      const start = values.findIndex(value => !/^-[EHLPXdsx]+$/.test(value));
+      const path = values.includes('-f') || (start !== -1 && !values[start].startsWith('-') && !['!', '('].includes(values[start]));
+      if (!path || values.some(value => /^-f(?:print0?|printf|ls)$|^-printf$/.test(value))) return;
+    }
     if (args.length === 1 && ['--help', '--version'].includes(values[0])) set(0, unused(0, 'find prints help or version information without reading stdin.'));
     else if (words.every(arg => !arg.dynamic)) {
       // Commands from -exec and -ok inherit find's stdin and stdout.

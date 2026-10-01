@@ -2,6 +2,8 @@ import { unused, scanOptions, runsCommand } from './helpers.js';
 
 export default {
   names: ['stdbuf'],
+  macos: false,
+  instead: { macos: { '*': 'use grep --line-buffered, sed -l or awk’s fflush() instead' } },
   infer(ctx) {
     const scan = scanOptions(ctx.args, { values: 'ioe', longValues: ['--input', '--output', '--error'], stopAtOperand: true });
     if (scan.help) {

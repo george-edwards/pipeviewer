@@ -1,5 +1,5 @@
-import { parsePipeline, destinationLabel } from './parser.js';
-import { portUsage, pipeActivity, commands } from './usage.js';
+import { parsePipeline, destinationLabel, targetsOf, reaches } from './parser.js';
+import { portUsage, pipeActivity, commands, ships } from './usage.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -69,6 +69,9 @@ function showVariations() {
 }
 let currentModel;
 let currentSource = '';
+// Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
+let platform = 'linux';
+try { if (localStorage.getItem('pipeviewer-platform') === 'macos') platform = 'macos'; } catch {}
 
 function destinationMarkup(dest, fd, commands, cmd) {
   if (dest.type === 'pipe') {
@@ -110,21 +113,34 @@ function substitutionInsights(model) {
   return model.substitutions.map(sub => {
     if (sub.kind === 'job') return jobInsight(sub);
     const owner = `<code>${escape(sub.owner.usage.name)}</code>`, text = `<code>${escape(sub.text)}</code>`;
-    const redirected = Object.keys(sub.owner.fds).map(Number).filter(fd => fd !== sub.fd && sub.owner.fds[fd] === sub.endpoint);
+    const redirected = Object.keys(sub.owner.fds).map(Number).filter(fd => fd !== sub.fd && reaches(sub.owner.fds[fd], sub.endpoint));
     const via = redirected.length ? `${owner}’s ${redirected.map(fd => names[fd] || `fd ${fd}`).join(' and ')}` : `${owner} (through the argument /dev/fd/${sub.fd})`;
     if (sub.direction === '<') {
-      return `<p class="usage-insight">Bash runs ${text} alongside ${owner} and connects its stdout to ${via}.</p>`;
+      return `<p class="usage-insight">${shellName()} runs ${text} alongside ${owner} and connects its stdout to ${via}.</p>`;
     }
     const last = sub.commands.at(-1), out = last.fds[1], inner = `<code>${escape(last.usage.name)}</code>`;
     if (out.type === 'pipe' && out.commands !== sub.commands) {
       const reader = out.commands[out.to], readerName = `<code>${escape(reader.usage.name)}</code>`;
-      const shared = sub.owner.fds[1] === out ? `, the same pipe as ${owner}’s stdout` : '';
-      const reads = reader.fds[0] === out && portUsage(reader, 0).state !== 'unused'
+      const shared = reaches(sub.owner.fds[1], out) ? `, the same pipe as ${owner}’s stdout` : '';
+      const reads = reaches(reader.fds[0], out) && portUsage(reader, 0).state !== 'unused'
         ? ` ${readerName} can read data from both, and it only gets end-of-file after every writer closes the pipe.` : '';
-      return `<p class="usage-insight">${text} receives ${via}. ${inner} inherited stdout when Bash expanded the substitution, so it writes to pipe ${out.from + 1}${shared}.${reads}</p>`;
+      return `<p class="usage-insight">${text} receives ${via}. ${inner} inherited stdout when ${shellName()} expanded the substitution, so it writes to pipe ${out.from + 1}${shared}.${reads}</p>`;
     }
-    return `<p class="usage-insight">${text} receives ${via}. Bash does not wait for process substitutions, so output from ${inner} can appear after the rest of the pipeline has finished.</p>`;
+    return `<p class="usage-insight">${text} receives ${via}. ${shellName()} does not wait for process substitutions, so output from ${inner} can appear after the rest of the pipeline has finished.</p>`;
   }).join('');
+}
+
+const shellName = () => platform === 'macos' ? 'zsh' : 'Bash';
+
+// zsh's MULTIOS sends one descriptor to several targets, where Bash keeps only the last.
+function multioInsights(model) {
+  return model.all.flatMap(cmd => Object.entries(cmd.fds).filter(([, dest]) => dest.type === 'multio').map(([fd, dest]) => {
+    const stream = names[fd] || `fd ${fd}`, owner = `<code>${escape(cmd.usage.name)}</code>`;
+    const list = dest.targets.map(target => `<code>${escape(destinationLabel(target, Number(fd), model.commands, cmd))}</code>`).join(', ');
+    return dest.direction === 'in'
+      ? `<p class="usage-insight">${owner}’s ${stream} reads ${dest.targets.length} inputs in turn: ${list}. zsh’s MULTIOS option, on by default, joins them through a pipe, like cat. In Bash only the last input would be read.</p>`
+      : `<p class="usage-insight">${owner}’s ${stream} goes to ${dest.targets.length} places: ${list}. zsh’s MULTIOS option, on by default, makes a later redirect add a destination instead of replacing the pipe or the earlier one. ${owner} writes into a pipe, and zsh copies the data to each, like tee. In Bash only the last redirect would get it.</p>`;
+  })).join('');
 }
 
 function usageMarkup(command, fd) {
@@ -143,13 +159,13 @@ function usageInsights(model) {
       const possibleBrokenPipe = activity.noWrites ? '' : ' The producer may still write; writes can fail once the pipe has no readers.';
       return `<p class="usage-insight">${noWrites}${targetName} ignores stdin, so it can produce output without waiting for data from ${sourceName}. The foreground shell still waits for all pipeline commands to finish.${possibleBrokenPipe}</p>`;
     }
-    if (source.usage.name === 'sleep' && activity.noWrites && target.fds[0] === pipe && portUsage(target, 0).state === 'possible') {
+    if (source.usage.name === 'sleep' && activity.noWrites && reaches(target.fds[0], pipe) && portUsage(target, 0).state === 'possible') {
       return `<p class="usage-insight">${sourceName} writes no data, but keeps the pipe open during its delay. ${targetName} reads stdin and can wait for end-of-file until ${sourceName} exits.</p>`;
     }
     // For example echo | sleep 2: the reader neither reads the pipe nor writes stdout.
     if (activity.notRead && !activity.noWrites && portUsage(target, 1).state === 'unused') {
       // When the producer's stdout was redirected away from the pipe, its output still goes there.
-      const stdout = source.fds[1] === pipe
+      const stdout = reaches(source.fds[1], pipe)
         ? `so data from ${sourceName} is discarded and the pipeline produces no output.`
         : `so anything ${sourceName} writes to the pipe is discarded. ${sourceName}’s stdout goes to ${escape(destinationLabel(source.fds[1], 1, model.commands, source))} instead of the pipe, so that output is not lost.`;
       return `<p class="usage-insight">${targetName} never reads the pipe and writes nothing to stdout, ${stdout} Writes that fit in the pipe buffer (typically 64 KiB on Linux) finish at once; a larger write waits until ${targetName} exits and then fails with SIGPIPE. The shell still waits for ${targetName} before the next prompt.</p>`;
@@ -234,12 +250,12 @@ function drawPipeline(model, palette, colors) {
   const extra = grid.rows * 200;
   const geometry = cmd => { const p = grid.place.get(cmd); return { x: 220 + (p.col + grid.shift) * 360, y: 101 + p.row * 200 }; };
   const used = new Map();
-  model.all.forEach(cmd => Object.entries(cmd.fds).forEach(([fd, dest]) => {
+  model.all.forEach(cmd => Object.entries(cmd.fds).forEach(([fd, value]) => targetsOf(value).forEach(dest => {
     if (Number(fd) > 2 || ['pipe', 'procsub', 'job'].includes(dest.type) || dest.job) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
     used.set(dest.id, dest);
-  }));
+  })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
   // Space for the terminal boxes is only kept when a stream uses them.
   const minX = used.has('terminal-in') ? 0 : 140;
@@ -263,8 +279,8 @@ function drawPipeline(model, palette, colors) {
   // A redirect such as 3< <(…) keeps its own number; arguments use Bash's /dev/fd number.
   const bottomFd = sub => {
     const { owner: cmd, endpoint } = sub;
-    if ([0, 1, 2].some(f => cmd.fds[f] === endpoint)) return null;
-    if (typeof sub.place === 'number' && cmd.fds[sub.place] === endpoint) return sub.place;
+    if ([0, 1, 2].some(f => reaches(cmd.fds[f], endpoint))) return null;
+    if (typeof sub.place === 'number' && reaches(cmd.fds[sub.place], endpoint)) return sub.place;
     return cmd.fds[sub.fd] === endpoint ? sub.fd : null;
   };
   const bottomSubs = cmd => cmd.substitutions.filter(sub => sub.kind !== 'job' && bottomFd(sub) !== null);
@@ -309,9 +325,15 @@ function drawPipeline(model, palette, colors) {
     const row = Math.min(3, grid.place.get(cmd).row);
     const fdsToDraw = [0, 1, 2, ...bottomSubs(cmd).map(bottomFd)];
     for (const fd of fdsToDraw) {
-      const dest = cmd.fds[fd], p = port(cmd, fd), here = `${cmd.key}:${fd}`;
+      const p = port(cmd, fd), here = `${cmd.key}:${fd}`;
       const usage = portUsage(cmd, fd);
       const inactive = inactiveState(usage.state);
+      // Under zsh's MULTIOS a port can feed several targets; each gets its own line.
+      if (cmd.fds[fd]?.type === 'multio') {
+        const count = cmd.fds[fd].targets.length;
+        paths.push(`<text x="${p.x + (fd === 0 ? -10 : 10)}" y="${p.y - 7}" text-anchor="${fd === 0 ? 'end' : 'start'}" fill="${palette.muted}" font-size="8"><title>${escape(destinationLabel(cmd.fds[fd], fd, model.commands, cmd))}</title>zsh ×${count}</text>`);
+      }
+      for (const dest of targetsOf(cmd.fds[fd])) {
       if (dest.type === 'procsub') {
         // The owner draws each link once, from a redirected port when there is one.
         const sub = dest.substitution;
@@ -334,13 +356,13 @@ function drawPipeline(model, palette, colors) {
       if (dest.type === 'pipe') {
         const activity = pipeActivity(dest.commands, dest);
         const producer = dest.commands[dest.from], next = dest.commands[dest.to];
-        if (fd === 0 && cmd === next && [1, 2].some(f => producer.fds[f] === dest)) continue;
+        if (fd === 0 && cmd === next && [1, 2].some(f => reaches(producer.fds[f], dest))) continue;
         const tagged = tag([here, `${next.key}:0`], dest);
-        if (fd !== 0 && cmd === producer && next.fds[0] === dest) {
+        if (fd !== 0 && cmd === producer && reaches(next.fds[0], dest)) {
           const q = port(next, 0);
           paths.push(path(`M ${p.x} ${p.y} C ${p.x + 50} ${p.y}, ${q.x - 50} ${q.y}, ${q.x - 5} ${q.y}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`, tagged));
-          if (fd === 1 || cmd.fds[1] !== dest) paths.push(`<text class="pipe-label"${tagged} x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
-        } else if (cmd.substitution && fd !== 0 && next.fds[0] === dest && geometry(next).y < geometry(cmd).y) {
+          if (fd === 1 || !reaches(cmd.fds[1], dest)) paths.push(`<text class="pipe-label"${tagged} x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
+        } else if (cmd.substitution && fd !== 0 && reaches(next.fds[0], dest) && geometry(next).y < geometry(cmd).y) {
           // An inherited pipe: run below the reader's card, then into its stdin.
           const q = port(next, 0), gapY = geometry(next).y + 178;
           paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x - 22} Q ${q.x - 30} ${gapY} ${q.x - 30} ${gapY - 8} V ${q.y + 8} Q ${q.x - 30} ${q.y} ${q.x - 22} ${q.y} H ${q.x - 4}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`, tagged));
@@ -362,6 +384,7 @@ function drawPipeline(model, palette, colors) {
         // Terminal boxes sit above the lanes, so routes to them rise; the rest drop to the bottom row.
         laneLinks.push({ input: false, fd, box, p, upper: p.x + 20 + fd * 7 + row * 16, lower: box.x + box.w / 2 + (fd === 2 ? 18 : -18),
           down: !['terminal-in', 'terminal-out'].includes(dest.id), dashed: dest.type === 'closed', inactive, reason: usage.reason, tagged });
+      }
       }
     }
   });
@@ -465,7 +488,7 @@ function inspectTargets(model) {
   for (const { commands, pipes } of [...model.pipelines, ...model.substitutions]) {
     for (const pipe of pipes) {
       const before = commands[pipe.from], after = commands[pipe.to];
-      const ports = [...Object.keys(before.fds).filter(fd => before.fds[fd] === pipe).map(fd => `${before.key}:${fd}`), `${after.key}:0`];
+      const ports = [...Object.keys(before.fds).filter(fd => reaches(before.fds[fd], pipe)).map(fd => `${before.key}:${fd}`), `${after.key}:0`];
       list.push({ kind: 'pipe', ref: pipe, span: [Math.min(pipe.span[0], before.span[1] + 1), Math.max(pipe.span[1], after.span[0] - 1)], strong: [], context: [before.key, after.key], ends: [], ports, dests: [pipe.id] });
     }
   }
@@ -589,7 +612,7 @@ function setZoom(level) {
 
 function render() {
   try {
-    currentModel = parsePipeline($('#pipeline').value);
+    currentModel = parsePipeline($('#pipeline').value, { platform });
     currentSource = $('#pipeline').value;
     targets = inspectTargets(currentModel);
     hovered = null;
@@ -605,7 +628,7 @@ function render() {
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>parallel</code> once per argument</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
-    $('#insights').innerHTML = listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
+    $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
     $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Open Descriptor details below to see the others.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
     showVariations();
@@ -654,6 +677,26 @@ systemTheme.addEventListener('change', event => {
 applyTheme(document.documentElement.dataset.theme);
 
 $('#pipeline').addEventListener('input', () => { fitEditor(); queueRender(); });
+function showPlatform() {
+  $('#platform').querySelectorAll('button').forEach(button => {
+    const active = button.dataset.platform === platform;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
+  // zsh's default prompt ends in %, Bash's in $.
+  $('.prompt').textContent = platform === 'macos' ? '%' : '$';
+  document.querySelectorAll('[data-platform-text]').forEach(element => { element.hidden = element.dataset.platformText !== platform; });
+}
+$('#platform').addEventListener('click', event => {
+  const button = event.target.closest('[data-platform]');
+  if (!button || button.dataset.platform === platform) return;
+  platform = button.dataset.platform;
+  try { localStorage.setItem('pipeviewer-platform', platform); } catch {}
+  showPlatform();
+  showKnown();
+  render();
+});
+showPlatform();
 document.addEventListener('selectionchange', () => inspect());
 for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
 $('#pipeline').addEventListener('scroll', () => { $('#editor-mirror').scrollTop = $('#pipeline').scrollTop; });
@@ -717,9 +760,12 @@ $('#variations').addEventListener('click', event => {
 });
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
 // The reference lists every modelled command alphabetically, so it never falls behind commands/.
-const known = commands.flatMap(rule => rule.names).sort((a, b) => a.replace(/^\W+/, '').localeCompare(b.replace(/^\W+/, '')));
-$('#known-count').textContent = known.length;
-$('#known-commands').innerHTML = known.map(name => `<li><code>${escape(name)}</code></li>`).join('');
+function showKnown() {
+  const known = commands.flatMap(rule => rule.names.filter(name => ships(rule, name, platform))).sort((a, b) => a.replace(/^\W+/, '').localeCompare(b.replace(/^\W+/, '')));
+  $('#known-count').textContent = known.length;
+  $('#known-commands').innerHTML = known.map(name => `<li><code>${escape(name)}</code></li>`).join('');
+}
+showKnown();
 $('#known-toggle').addEventListener('click', event => {
   const open = $('#known-commands').hidden;
   $('#known-commands').hidden = !open;

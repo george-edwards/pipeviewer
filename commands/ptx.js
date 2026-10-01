@@ -2,6 +2,8 @@ import { unused, fileInput, filterInput } from './helpers.js';
 
 export default {
   names: ['ptx'],
+  macos: false,
+  instead: { macos: { '*': 'install GNU coreutils with Homebrew' } },
   infer(ctx) {
     const scan = filterInput(ctx, { flags: 'AGRfrt', values: 'FMOSTWbgiow', longFlags: ['--auto-reference', '--traditional', '--right-side-refs', '--ignore-case', '--references', '--typeset-mode'],
       longValues: ['--flag-truncation', '--macro-name', '--format', '--sentence-regexp', '--word-regexp', '--break-file', '--gap-size', '--ignore-file', '--only-file', '--width'] }, { writes: 'ptx writes a permuted index of the words in its input.' });

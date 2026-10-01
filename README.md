@@ -38,9 +38,20 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - The diagram follows the editor caret, like a browser's element inspector: a command lights its card and streams, a redirect its port and destination, and `|` its pipe. Commands inside process substitutions and `parallel` jobs light up too. It works the other way too: hover part of the diagram to mark its text in the editor, and click to select it.
 - Quoted arguments and destinations, escapes, and additional descriptor bookkeeping.
 
+## macOS and zsh
+
+The **SHELL** switch above the editor maps a command line as macOS runs it: under zsh, the default macOS shell, with the BSD and Apple versions of the tools. The choice is remembered.
+
+- zsh's MULTIOS option is on by default, so a redirect adds a destination instead of replacing the pipe or an earlier redirect. `cmd > out | grep x` sends output to both, and `cmd 2>&1 > /dev/null | grep x` gives grep both streams. The diagram draws a line to each target.
+- Process substitutions are numbered from `/dev/fd/11`. One used as an argument gets the shell's own descriptors; one used as a redirect target sees the pipeline's pipes but not the command's redirects.
+- A line of only redirects runs `cat`, or `more` for input. `#` does not start a comment at an interactive prompt, and only single digits name descriptors.
+- Tools follow the macOS 15 builds: option strings come from Apple's sources (github.com/apple-oss-distributions), and the BSD tools stop reading options at the first file name. Many treat `-` as a file, `sed -i` takes a backup suffix, `base64` reads `-i FILE`, `date -f` is a parse format, and `zcat` wants `.Z` files (use `gzcat`). Commands macOS lacks, such as `tac`, `timeout` and `nproc`, show as unknown with the usual replacement. Mac tools such as `pbcopy`, `pbpaste`, `say`, `open`, `caffeinate`, `md5` and `sw_vers` are modelled.
+
+The zsh rules were checked against zsh 5.8; macOS ships 5.9, whose changelog lists no changes to them.
+
 ## Adding a command
 
-Each modelled command has a file in `commands/` that default-exports `{ names, infer(ctx) }`. `infer` reads the arguments in `ctx` and records what the command does with stdin, stdout, and stderr. `commands/index.js` describes `ctx` and lists every rule, and `commands/helpers.js` holds the shared option scanners and usage builders. To add a command, write its file, then import and list it in `commands/index.js`. The Quick reference picks the new name up from there, and `npm test` fails if a file in `commands/` is not listed.
+Each modelled command has a file in `commands/` that default-exports `{ names, infer(ctx) }`, plus optional `linux` and `macos` keys for where it ships. `ctx.platform` says which system is being mapped. `infer` reads the arguments in `ctx` and records what the command does with stdin, stdout, and stderr. `commands/index.js` describes `ctx` and lists every rule, and `commands/helpers.js` holds the shared option scanners and usage builders. To add a command, write its file, then import and list it in `commands/index.js`. The Quick reference picks the new name up from there, and `npm test` fails if a file in `commands/` is not listed.
 
 ## Scope
 

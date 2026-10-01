@@ -2,6 +2,8 @@ import { unused, possible, scanOptions, fileInput } from './helpers.js';
 
 export default {
   names: ['numfmt'],
+  macos: false,
+  instead: { macos: { '*': 'ls -h, du -h and df -h print human-readable sizes' } },
   infer({ name, args, set, output, errors }) {
     output('numfmt writes each number reformatted, for example 2000 as 2.0K.'); errors();
     const scan = scanOptions(args, { flags: 'z', values: 'd', longFlags: ['--debug', '--grouping', '--header', '--zero-terminated'],

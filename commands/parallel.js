@@ -2,6 +2,8 @@ import { usage, unused, possible, unknownInput, descriptorPath, hasReplacement, 
 
 export default {
   names: ['parallel'],
+  macos: false,
+  instead: { macos: { '*': 'use xargs -P, or install GNU parallel with Homebrew' } },
   infer({ name, args, set, output, errors, infer, setJob }) {
     errors();
     output('parallel passes each job’s stdout through to its own, one whole job at a time unless -u is given. --dry-run prints the commands instead.');

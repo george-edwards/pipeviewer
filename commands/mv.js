@@ -1,9 +1,12 @@
-import { possible, fileAction } from './helpers.js';
+import { possible, fileAction, bsd } from './helpers.js';
+
+// macOS ships the BSD mv: https://github.com/apple-oss-distributions/file_cmds/blob/file_cmds-457.140.3/mv/mv.c
+const macos = bsd('fhinv');
 
 export default {
   names: ['mv'],
   infer(ctx) {
-    const scan = fileAction(ctx, { flags: 'bfinTuvZ', values: 'St', longFlags: ['--backup', '--force', '--interactive', '--no-clobber', '--strip-trailing-slashes', '--no-target-directory', '--update', '--verbose', '--context'],
+    const scan = fileAction(ctx, ctx.platform === 'macos' ? macos : { flags: 'bfinTuvZ', values: 'St', longFlags: ['--backup', '--force', '--interactive', '--no-clobber', '--strip-trailing-slashes', '--no-target-directory', '--update', '--verbose', '--context'],
       longValues: ['--backup', '--suffix', '--target-directory'] }, { verbose: ['-v', '--verbose'], reports: 'reports each file it moves' });
     const has = (...keys) => keys.some(key => scan.options.has(key));
     if (!scan.valid || scan.help) return;

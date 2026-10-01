@@ -2,6 +2,8 @@ import { usage, unused, possible, unknownInput, descriptorPath, stdoutPath, leni
 
 export default {
   names: ['wget'],
+  macos: false,
+  instead: { macos: { '*': 'use curl -O' } },
   infer({ name, args, literalArgs, set, output, errors }) {
     errors();
     set(0, unknownInput(name));

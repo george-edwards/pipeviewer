@@ -13,6 +13,24 @@ const replacements = /\{(?:\d*(?:\.|\/|\/\/|\/\.)?|#|%)\}/g;
 export const hasReplacement = text => text.search(replacements) !== -1;
 export const fillReplacements = word => word.dynamic && !/[$*?[\]{}~]/.test(word.raw.replace(replacements, '')) ? { ...word, dynamic: false } : word;
 
+// A scanner spec from a BSD getopt string, as in Apple's sources: a letter followed by : takes a
+// value, and :: an optional attached one, which the scanner can only treat as a flag. Plain getopt
+// stops at the first operand, so options after a file are files; getopt_long, used by tools with
+// long options, reorders arguments as GNU does unless the string starts with +.
+export function bsd(getopt, long = []) {
+  const flags = [], values = [];
+  const letters = getopt.replace(/^[+-]+/, '');
+  for (let i = 0; i < letters.length; i++) {
+    if (letters[i] === ':') continue;
+    if (letters[i + 1] === ':' && letters[i + 2] !== ':') values.push(letters[i]); else flags.push(letters[i]);
+  }
+  return {
+    flags: flags.join(''), values: values.join(''),
+    longFlags: long.filter(option => !option.endsWith('=')), longValues: long.filter(option => option.endsWith('=')).map(option => option.slice(0, -1)),
+    stopAtOperand: getopt.startsWith('+') || !long.length,
+  };
+}
+
 // A small option scanner. It consumes known option values so they are not mistaken for files.
 export function scanOptions(args, { flags = '', values = '', longFlags = [], longValues = [], stopAtOperand = false } = {}) {
   const files = [], options = new Map();

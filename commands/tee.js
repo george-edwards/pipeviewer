@@ -1,10 +1,13 @@
-import { unused, possible, scanOptions } from './helpers.js';
+import { unused, possible, scanOptions, bsd } from './helpers.js';
+
+// macOS ships the BSD tee: https://github.com/apple-oss-distributions/shell_cmds/blob/shell_cmds-326/tee/tee.c
+const macos = bsd('ai');
 
 export default {
   names: ['tee'],
-  infer({ args, set, output, errors }) {
+  infer({ args, set, output, errors, platform }) {
     errors();
-    if (scanOptions(args, { flags: 'aip', longFlags: ['--append', '--ignore-interrupts', '--output-error'], longValues: ['--output-error'] }).help) {
+    if (scanOptions(args, platform === 'macos' ? macos : { flags: 'aip', longFlags: ['--append', '--ignore-interrupts', '--output-error'], longValues: ['--output-error'] }).help) {
       set(0, unused(0, 'tee prints help or version information without reading stdin.'));
       output('tee prints help or version information to stdout.');
     } else {

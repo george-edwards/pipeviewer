@@ -2,6 +2,8 @@ import { unused, possible } from './helpers.js';
 
 export default {
   names: ['factor'],
+  macos: false,
+  instead: { macos: { '*': 'install GNU coreutils with Homebrew' } },
   infer({ args, literalArgs, set, output, errors }) {
     output('factor writes each number followed by its prime factors.'); errors();
     const numbers = args.filter(arg => !['--', '-h', '--exponents'].includes(arg.value));
