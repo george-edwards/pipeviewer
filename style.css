@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=IBM+Plex+Mono:wght@400;450;500;600&display=swap');
 
 :root {
-  font-family: 'DM Sans', sans-serif;
+  --sans: 'DM Sans', sans-serif;
+  font-family: var(--sans);
   font-synthesis: none;
   color-scheme: light;
   --page: #f3f5f9;
@@ -19,6 +20,14 @@
   --error: #9b3025;
   --error-bg: #fff0eb;
   --focus: #8865df;
+  /* The command editor is a terminal in every theme, so it reads as the place to type. */
+  --term-bg: #1d2232;
+  --term-border: #1d2232;
+  --term-text: #eef1f8;
+  --term-muted: #a3adc2;
+  --term-prompt: #b9a7ff;
+  --term-caret: #62d8ba;
+  --term-mark: #4b4180;
   color: var(--text);
   background: var(--page);
   --content: 75rem;
@@ -40,7 +49,46 @@
   --error: #ffb3a6;
   --error-bg: #432925;
   --focus: #b9a7ff;
+  --term-bg: #0a0d13;
+  --term-border: #445169;
+  --term-text: #edf1f8;
+  --term-muted: #97a3b8;
+  --term-prompt: #b9a7ff;
+  --term-caret: #62d8ba;
+  --term-mark: #3b3266;
 }
+/* Phosphor green on black, all monospace. The three streams keep separate hues, as in ANSI colours. */
+:root[data-theme="terminal"] {
+  color-scheme: dark;
+  --sans: 'IBM Plex Mono', monospace;
+  --page: #020604;
+  --surface: #050d08;
+  --inset: #0a1a10;
+  --text: #b6f2c4;
+  --muted: #74c48a;
+  --border: #1f5532;
+  --purple: #d3a2ff;
+  --purple-bg: #2c1a40;
+  --green: #4dff88;
+  --green-bg: #0c3519;
+  --amber: #ffc247;
+  --amber-bg: #392a09;
+  --error: #ff8a80;
+  --error-bg: #3a100c;
+  --focus: #4dff88;
+  --term-bg: #000;
+  --term-border: #2b7a46;
+  --term-text: #c4ffd2;
+  --term-muted: #5fae75;
+  --term-prompt: #4dff88;
+  --term-caret: #4dff88;
+  --term-mark: #1f5532;
+}
+[data-theme="terminal"] body { text-shadow: 0 0 .35em rgb(77 255 136 / .22); }
+[data-theme="terminal"] *, [data-theme="terminal"] *::before, [data-theme="terminal"] *::after { border-radius: 0 !important; }
+[data-theme="terminal"] #diagram rect { rx: 1px; }
+/* Faint scanlines over the whole page, above everything but dialogs. */
+[data-theme="terminal"] body::after { content: ''; position: fixed; inset: 0; z-index: 2; pointer-events: none; background: repeating-linear-gradient(to bottom, rgb(0 0 0 / .16) 0 1px, transparent 1px 3px); }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, textarea { font: inherit; }
@@ -61,26 +109,29 @@ a { color: inherit; }
 .theme-toggle { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .5625rem .75rem; min-height: 2.5rem; border: 1px solid var(--border); border-radius: .4375rem; background: var(--surface); color: var(--text); font-size: .75rem; }
 .theme-toggle:hover { background: var(--inset); }
 .theme-toggle svg { width: 1.0625rem; height: 1.0625rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.sun-icon, [data-theme="dark"] .moon-icon { display: none; }
-[data-theme="dark"] .sun-icon { display: block; }
+/* The button names, and shows, the current theme. */
+.theme-toggle svg { display: none; }
+.theme-toggle[data-current="light"] .sun-icon, .theme-toggle[data-current="dark"] .moon-icon, .theme-toggle[data-current="terminal"] .terminal-icon { display: block; }
 main { max-width: var(--content); margin: auto; padding: 2rem 2.5rem 2.5rem; }
-.editor-panel { border: 1px solid var(--border); border-radius: .75rem; overflow: hidden; background: var(--surface); }
+.editor-panel { border: 1px solid var(--term-border); border-radius: .75rem; overflow: hidden; background: var(--term-bg); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
 .code-editor { position: relative; display: flex; gap: .9375rem; padding: .875rem 2.875rem .875rem 1.5rem; }
-.prompt { font: 1rem/1.7 'IBM Plex Mono', monospace; color: var(--purple); }
+.prompt { font: 600 1rem/1.7 'IBM Plex Mono', monospace; color: var(--term-prompt); }
+/* Names the shell the SHELL switch picks, like a terminal tab's title. */
+.shell-name { position: absolute; top: .4375rem; right: .875rem; font: .625rem 'IBM Plex Mono', monospace; letter-spacing: .06em; color: var(--term-muted); pointer-events: none; }
 /* The mirror sits under the textarea with identical text metrics, so a <mark> in it lines up with the typed text. */
 .editor-field { position: relative; flex: 1; min-width: 0; }
 textarea, .editor-mirror { padding: 0; font: .875rem/1.9 'IBM Plex Mono', monospace; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
-textarea { position: relative; display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; color: var(--text); }
+textarea { position: relative; display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; color: var(--term-text); caret-color: var(--term-caret); }
 .editor-mirror { position: absolute; top: 0; left: 0; overflow: hidden; color: transparent; pointer-events: none; }
-.editor-mirror mark { color: transparent; background: var(--purple-bg); border-radius: .1875rem; box-shadow: 0 0 0 .125rem var(--purple-bg); }
-textarea::placeholder { color: var(--muted); opacity: 1; }
+.editor-mirror mark { color: transparent; background: var(--term-mark); border-radius: .1875rem; box-shadow: 0 0 0 .125rem var(--term-mark); }
+textarea::placeholder { color: var(--term-muted); opacity: 1; }
 /* A large resize handle; the native grabber is small and cannot be restyled everywhere. */
-.resize-handle { position: absolute; right: .5rem; bottom: .5rem; width: 2.125rem; height: 2.125rem; display: grid; place-items: center; border-radius: .4375rem; color: var(--muted); cursor: ns-resize; touch-action: none; }
-.resize-handle:hover, .resize-handle.dragging { color: var(--purple); background: var(--purple-bg); }
+.resize-handle { position: absolute; right: .5rem; bottom: .5rem; width: 2.125rem; height: 2.125rem; display: grid; place-items: center; border-radius: .4375rem; color: var(--term-muted); cursor: ns-resize; touch-action: none; }
+.resize-handle:hover, .resize-handle.dragging { color: var(--term-text); background: rgb(255 255 255 / .08); }
 .resize-handle svg { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-.editor-panel:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px var(--purple-bg); }
+.editor-panel:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 /* One grid for every example row, so each row's first button starts in the same column. */
-.example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: .625rem 1.125rem; padding: 0 0 1rem; }
+.example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 1.125rem 1.125rem; padding: 0 0 1.25rem; }
 .example-row { display: contents; }
 .example-row[hidden] { display: none; }
 .row-label { font-size: .625rem; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
@@ -113,10 +164,10 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .diagram-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; padding: .75rem 1.1875rem 0; font: .6875rem 'IBM Plex Mono', monospace; color: var(--muted); }
 .diagram-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .625rem; }
 .diagram-summary > * { white-space: nowrap; }
-.diagram-summary .count { font-family: 'DM Sans', sans-serif; }
+.diagram-summary .count { font-family: var(--sans); }
 .count:empty { display: none; }
-.diagram-summary h2 { font-family: 'DM Sans', sans-serif; font-size: .875rem; color: var(--text); }
-.diagram-toolbar button { border: 0; background: transparent; font: .75rem 'DM Sans', sans-serif; color: var(--muted); display: flex; gap: .4375rem; align-items: center; }
+.diagram-summary h2 { font-family: var(--sans); font-size: .875rem; color: var(--text); }
+.diagram-toolbar button { border: 0; background: transparent; font: .75rem var(--sans); color: var(--muted); display: flex; gap: .4375rem; align-items: center; }
 .diagram-toolbar button:hover { color: var(--purple); }
 .diagram-toolbar button:disabled { opacity: .4; cursor: default; color: var(--muted); }
 .diagram-actions { display: flex; align-items: center; gap: 1.125rem; }
@@ -135,13 +186,14 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 #diagram svg { width: 100%; height: auto; min-height: 17.8125rem; max-height: 30rem; display: block; }
 /* Hover a stream to trace it: it thickens and the others fade. */
 #diagram .stream-link path { transition: stroke-width .12s, opacity .12s; }
-#diagram .stream-link:hover path:not(.link-hit) { stroke-width: 3.5; }
+#diagram .stream-link:hover path:not(.link-hit, .glyph *) { stroke-width: 3.5; }
 #diagram svg:has(.stream-link:hover) .stream-link:not(:hover) { opacity: .2; }
 /* The caret inspector: whatever the editor's caret is in stays lit and everything else fades. */
 #diagram :is([data-card], [data-dest]) { transition: opacity .12s; }
 #diagram svg.inspecting :is([data-card], [data-dest]):not(.lit) { opacity: .18; }
 #diagram .lit-card > .card-body { stroke: var(--focus); stroke-width: 2.5; filter: drop-shadow(0 0 .5rem color-mix(in srgb, var(--focus) 40%, transparent)); }
-#diagram svg.inspecting .stream-link.lit path:not(.link-hit) { stroke-width: 3.5; }
+#diagram svg.inspecting .stream-link.lit path:not(.link-hit, .glyph *) { stroke-width: 3.5; }
+#diagram svg.inspecting .file-tag.lit .tag-body { stroke: var(--focus); stroke-width: 1.5; }
 #diagram .lit-node > .node-body { stroke: var(--focus); stroke-width: 2; }
 #diagram .lit-port .port-dot { r: 6px; stroke-width: 2.5; }
 #diagram .lit-port .port-badge { stroke: var(--focus); stroke-width: 1.5; }
@@ -209,6 +261,10 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .ground-sample { --tag: var(--amber); --tag-bg: var(--amber-bg); }
 .ground-sample + .ground-sample { margin-left: .25rem; }
 .ground-sample b { padding: .0625rem .375rem; border: 1px solid var(--tag); border-radius: 1rem; background: var(--tag-bg); color: var(--tag); font-size: .5625rem; font-weight: 500; }
+/* Matches the diagram's file tag: a short arrow into a small box. */
+.file-sample { display: inline-flex; align-items: center; font-style: normal; }
+.file-sample::before { content: ''; width: .75rem; border-top: 2px solid var(--purple); }
+.file-sample b { padding: .0625rem .375rem; border: 1px solid var(--border); border-radius: .1875rem; background: var(--inset); color: var(--text); font: 500 .5625rem 'IBM Plex Mono', monospace; }
 .usage-insight { margin: .875rem 0 0; padding: .875rem max(1rem, calc(100% - 62.5rem)) .875rem 1rem; border-left: 3px solid var(--purple); background: var(--surface); color: var(--text); font-size: .8125rem; line-height: 1.7; }
 .usage-insight code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; color: var(--purple); }
 .reference-usage-heading { margin: 1.5rem 0 0; font-size: .875rem; }
@@ -279,8 +335,8 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
   .code-editor { padding: .75rem 2.75rem .75rem 1.0625rem; gap: .625rem; }
   textarea, .editor-mirror { font-size: .8125rem; }
   /* Stack each label above its buttons. */
-  .example-rows { grid-template-columns: minmax(0, 1fr); gap: .4375rem; }
-  .example-row + .example-row .row-label { margin-top: .4375rem; }
+  .example-rows { grid-template-columns: minmax(0, 1fr); gap: .5rem; }
+  .example-row + .example-row .row-label { margin-top: .875rem; }
   .example-buttons { gap: .4375rem; }
   .text-button { font-size: .75rem; }
   .talk-button { width: 2.5rem; justify-content: center; padding: 0; }

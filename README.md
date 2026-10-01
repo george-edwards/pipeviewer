@@ -23,10 +23,10 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Features
 
-- Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.
+- Light, dark and terminal themes. The terminal theme is phosphor green on black, all monospace. The page follows the system's light or dark theme until you pick one with the theme button, which shows the current theme, steps through the three, and remembers your choice. The command editor looks like a terminal in every theme and names the shell the **SHELL** switch picks.
 - Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
 - Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
-- Clickable examples, quick reference, and local persistence of the last pipeline. The **Redirects** switch shows any pipeline, an example or your own, in the explicit style (`0< file`, `1> file`, `1>&2`) or the common one (`< file`, `> file`, `>&2`).
+- Clickable examples, each with its related spellings under **Variations**, quick reference, and local persistence of the last pipeline. The **Redirects** switch shows any pipeline, an example or your own, in the explicit style (`0< file`, `1> file`, `1>&2`) or the common one (`< file`, `> file`, `>&2`).
 - Lists of pipelines joined by `&&`, `||`, `;`, or new lines, stacked in the order they run, each labelled with when it runs.
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.
 - `|`, `|&`, `<`, `>`, `>>`, `>|`, `n>&m`, `n<&m`, `&>`, `&>>`, and descriptor closing.
@@ -35,7 +35,8 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - GNU `parallel` job commands that parse as pipelines are drawn as a stacked job template below `parallel`. It runs once per argument, with stdin from `/dev/null` (or blocks from `parallel` with `--pipe`), and `parallel` collects its stdout and stderr. With `-u`, jobs write straight to `parallel`'s stdout and stderr. Commands without a replacement string such as `{}` have the arguments appended, as `parallel` does.
 - Redirects to `/dev/tty` reach the terminal: reads connect to terminal input, stderr to terminal stderr, and other writes to terminal output.
 - `/dev/stdin`, `/dev/stdout`, and `/dev/stderr` redirect to the current destination of 0, 1, or 2, like a descriptor copy. When that destination is a file, the step notes that Bash opens it again with a separate offset.
-- stdin from the terminal and stderr to the terminal, the defaults, end in a small **terminal** tag beside their ports instead of routes to shared boxes, much as circuit diagrams mark ground. Anything else, including stdout sent to the terminal's stderr with `>&2`, keeps its full route. The **Terminal tags** switch in the diagram toolbar brings the routes back.
+- stdin from the terminal and stderr to the terminal, the defaults, end in a small **terminal** tag beside their ports instead of routes to shared boxes, much as circuit diagrams mark ground. Anything else, including stdout sent to the terminal's stderr with `>&2`, keeps its full route.
+- A file that only one stream uses ends in a small tag beside that port, naming the file, when no card sits on that side; stderr's tag fits in the gap before the next card. A file two streams share, as in `make 1> build.log 2>&1`, keeps its box so the drawing shows both reaching it. `/dev/null`, `/dev/zero`, `/dev/full` (Linux only), `/dev/random` and `/dev/urandom` get their own glyphs and a word on what a read or a write does, in tags and boxes alike. The **Tags** switch in the diagram toolbar brings back the routes for both.
 - Each routed stream gets its own lane; hover a line to fade the others and trace it.
 - The **Highlight** button in the diagram toolbar turns the linking between the command and the diagram on or off, in both directions.
 - The diagram follows the editor caret, like a browser's element inspector: a command lights its card and streams, a redirect its port and destination, and `|` its pipe. Commands inside process substitutions and `parallel` jobs light up too. It works the other way too: hover part of the diagram to mark its text in the editor, and click to select it.
@@ -50,7 +51,7 @@ The **SHELL** switch above the editor maps a command line as macOS runs it: unde
 - A line of only redirects runs `cat`, or `more` for input. `#` does not start a comment at an interactive prompt, and only single digits name descriptors.
 - Tools follow the macOS 15 builds: option strings come from Apple's sources (github.com/apple-oss-distributions), and the BSD tools stop reading options at the first file name. Many treat `-` as a file, `sed -i` takes a backup suffix, `base64` reads `-i FILE`, `date -f` is a parse format, and `zcat` wants `.Z` files (use `gzcat`). Commands macOS lacks, such as `tac`, `timeout` and `nproc`, show as unknown with the usual replacement. Mac tools such as `pbcopy`, `pbpaste`, `say`, `open`, `caffeinate`, `md5` and `sw_vers` are modelled.
 
-The four Wiki examples use GNU parallel, wget, pv and mawk, which stock macOS lacks, so in macOS mode they load versions built on `xargs -P`, `curl -Z`, `gzcat` and `dd status=progress`. Flipping the switch with one loaded swaps it for the other system's version.
+The four Wiki pageviews variations use GNU parallel, wget, pv and mawk, which stock macOS lacks, so in macOS mode they load versions built on `xargs -P`, `curl -Z`, `gzcat` and `dd status=progress`. Flipping the switch with one loaded swaps it for the other system's version.
 
 The zsh rules were checked against zsh 5.8; macOS ships 5.9, whose changelog lists no changes to them.
 

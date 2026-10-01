@@ -10,77 +10,77 @@ const examples = {
   file: 'sort 0< names.txt | uniq -c 1> counts.txt',
   order: 'curl https://example.com 2>&1 1> response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
-  timing: 'sleep 2 | echo "hello, world"',
-  timingReverse: 'echo "hello, world" | sleep 2',
-  procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
   lists: 'sort names.txt 1> sorted.txt && wc -l 0< sorted.txt || echo "sort failed" 1>&2',
-  wikiWeek: String.raw`parallel "zcat {} \
-          | grep -E '^en |^en\.m ' \
-          | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
-| awk '{n+=$1} END {print n}' \
-| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
-  // Each job writes its own counts file, so output from concurrent jobs never mixes; the second
-  // pipeline merges them.
-  topPages: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> {}.counts' ::: *.gz &&
-cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
-    $1 == prev { sum += $2; next }
-    NR > 1 { print sum, prev }
-    { prev=$1; sum=$2 }
-    END { if (NR) print sum, prev }
-' | sort -rn | head -50 1> top-50-pages`,
-  weekDownload: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
-::: {14..20} ::: {00..23}`,
-  zcatSpeed: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b 1>/dev/null',
 };
-// Stock macOS has no parallel, wget, pv or mawk, and its zcat wants .Z files, so these examples
-// use xargs -P, curl, dd, awk and gzcat there. The rest run as written on both systems.
-const macExamples = {
-  weekDownload: String.raw`curl -Z --parallel-max 2 -C - --remote-name-all \
-  'https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609[14-20]-[00-23]0000.gz'`,
-  zcatSpeed: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 gzcat | dd of=/dev/null bs=1m status=progress`,
-  wikiWeek: String.raw`printf '%s\0' pageviews-*.gz \
-| xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{total+=\$3} END {print total}"' _ \
-| awk '{n+=$1} END {print n}' \
-| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
-  topPages: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> "$1.counts"' _ &&
-cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
-    $1 == prev { sum += $2; next }
-    NR > 1 { print sum, prev }
-    { prev=$1; sum=$2 }
-    END { if (NR) print sum, prev }
-' | sort -rn | head -50 1> top-50-pages`,
-};
-// Examples with several equivalent spellings, shown as toggles once one of them is loaded.
+// Examples with several equivalent or related spellings, shown as toggles once one of them is loaded.
+// A mac spelling replaces the source in macOS mode.
 const variations = {
+  merge: [
+    { label: 'short-hand', source: 'make &> build.log' },
+    { label: 'long-form', source: 'make 1> build.log 2>&1' },
+  ],
+  procsub: [
+    { label: 'Write to >( )', source: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l' },
+    { label: 'Read from <( )', source: 'cat <(head /etc/hosts) <(head /etc/shells) <(echo hello, world)' },
+    { label: 'Labelled lines', source: "cat <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    <(echo hello, world)" },
+    // Explicit redirects choose the descriptor numbers instead of Bash.
+    { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
+  ],
   palindromes: [
     { label: 'Pipe into paste -', source: "rev /usr/share/dict/words | paste /usr/share/dict/words - | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'One substitution', source: "paste /usr/share/dict/words <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Two substitutions', source: "paste <(cat /usr/share/dict/words) <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 \\\n  3< <(cat /usr/share/dict/words) \\\n  4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
   ],
-  procsubIn: [
-    { label: 'Plain', source: 'cat <(head /etc/hosts) <(head /etc/shells) <(echo hello, world)' },
-    { label: 'Labelled lines', source: "cat <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    <(echo hello, world)" },
-    // Explicit redirects choose the descriptor numbers instead of Bash.
-    { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
+  timing: [
+    { label: 'sleep 2 | echo', source: 'sleep 2 | echo "hello, world"' },
+    { label: 'echo | sleep 2', source: 'echo "hello, world" | sleep 2' },
+    { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
+  ],
+  // Stock macOS has no parallel, wget, pv or mawk, and its zcat wants .Z files, so these use
+  // xargs -P, curl, dd, awk and gzcat there.
+  wiki: [
+    { label: 'Fetch', source: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
+::: {14..20} ::: {00..23}`,
+      mac: String.raw`curl -Z --parallel-max 2 -C - --remote-name-all \
+  'https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609[14-20]-[00-23]0000.gz'` },
+    { label: 'Unpacked size', source: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b 1>/dev/null',
+      mac: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 gzcat | dd of=/dev/null bs=1m status=progress` },
+    // Each job writes its own counts file in Top 50 pages, so output from concurrent jobs never
+    // mixes; the second pipeline merges them.
+    { label: 'Total en views', source: String.raw`parallel "zcat {} \
+          | grep -E '^en |^en\.m ' \
+          | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
+| awk '{n+=$1} END {print n}' \
+| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
+      mac: String.raw`printf '%s\0' pageviews-*.gz \
+| xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{total+=\$3} END {print total}"' _ \
+| awk '{n+=$1} END {print n}' \
+| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"` },
+    { label: 'Top 50 pages', source: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> {}.counts' ::: *.gz &&
+cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
+    $1 == prev { sum += $2; next }
+    NR > 1 { print sum, prev }
+    { prev=$1; sum=$2 }
+    END { if (NR) print sum, prev }
+' | sort -rn | head -50 1> top-50-pages`,
+      mac: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> "$1.counts"' _ &&
+cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
+    $1 == prev { sum += $2; next }
+    NR > 1 { print sum, prev }
+    { prev=$1; sum=$2 }
+    END { if (NR) print sum, prev }
+' | sort -rn | head -50 1> top-50-pages` },
   ],
 };
-// Two ways to send both output streams to one file.
-variations.merge = [
-  { label: 'short-hand', source: 'make &> build.log' },
-  { label: 'long-form', source: 'make 1> build.log 2>&1' },
-];
-variations.timingReverse = [
-  { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
-  { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
-];
 for (const [key, list] of Object.entries(variations)) examples[key] = list[0].source;
 // Explicit writes the implied descriptors (0< file, 1> file); common leaves them out.
 let redirectStyle = 'explicit';
 try { if (localStorage.getItem('pipeviewer-redirects') === 'common') redirectStyle = 'common'; } catch {}
 const styled = source => restyle(source, redirectStyle, { platform });
 // Every spelling of an example as it reads on a platform, in the current redirect style.
-const exampleSources = (key, on = platform) => (variations[key]?.map(variation => variation.source) ?? [on === 'macos' ? macExamples[key] ?? examples[key] : examples[key]])
+const spelling = (variation, on = platform) => on === 'macos' ? variation.mac ?? variation.source : variation.source;
+const exampleSources = (key, on = platform) => (variations[key]?.map(variation => spelling(variation, on)) ?? [examples[key]])
   .map(source => restyle(source, redirectStyle, { platform: on }));
 
 function showVariations() {
@@ -88,8 +88,8 @@ function showVariations() {
   // The row and its label stay put; only the buttons come and go.
   if (!key) { $('#variation-buttons').innerHTML = ''; return; }
   $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
-    const active = styled(variation.source) === currentSource;
-    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(styled(variation.source))}">${escape(variation.label)}</button>`;
+    const source = styled(spelling(variation)), active = source === currentSource;
+    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(source)}">${escape(variation.label)}</button>`;
   }).join('');
 }
 let currentModel;
@@ -257,8 +257,11 @@ function diagram(model) {
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
   const defs = `<defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs>`;
   const describe = pipeline => pipeline.all.map(cmd => `${cmd.command}: ${[0, 1, 2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, pipeline.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. ');
-  const open = (viewBox, desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(desc)}</desc>${defs}`;
-  const parts = model.pipelines.map(pipeline => drawPipeline(pipeline, palette, colors));
+  // The terminal theme draws in monospace, like the rest of its page.
+  const mono = document.documentElement.dataset.theme === 'terminal';
+  const font = mono ? "'IBM Plex Mono',monospace" : "'DM Sans',Arial,sans-serif";
+  const open = (viewBox, desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" role="img" aria-labelledby="svg-title svg-desc" font-family="${font}"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(desc)}</desc>${defs}`;
+  const parts = model.pipelines.map(pipeline => drawPipeline(pipeline, palette, colors, mono));
   if (parts.length === 1) {
     const [{ minX, width, height, body }] = parts;
     return `${open(`${minX} 55 ${width - minX} ${height}`, describe(model))}<rect x="${minX}" y="55" width="${width - minX}" height="${height}" fill="${palette.surface}"/>${body}</svg>`;
@@ -277,14 +280,69 @@ function diagram(model) {
   return `${open(`0 0 ${total} ${y - 6}`, model.pipelines.map((pipeline, n) => `Pipeline ${n + 1}${pipeline.operator ? ` (${listJoins[pipeline.operator]})` : ''}: ${describe(pipeline)}`).join(' '))}<rect width="${total}" height="${y - 6}" fill="${palette.surface}"/>${blocks.join('')}</svg>`;
 }
 
+// Devices that behave the same on every system get their own glyph and a word on what they do,
+// for a read and for a write. macOS has no /dev/full.
+const devices = {
+  '/dev/null': { icon: 'hole', read: 'empty', write: 'discarded', about: 'reads as empty and swallows everything written to it' },
+  '/dev/zero': { icon: 'zero', read: 'endless zeros', write: 'discarded', about: 'reads as an endless run of zero bytes and discards writes' },
+  '/dev/full': { icon: 'full', read: 'endless zeros', write: 'always full', about: 'reads as zero bytes, and every write to it fails with “No space left on device”', linux: true },
+  '/dev/random': { icon: 'die', read: 'random bytes', write: 'entropy pool', about: 'reads as an endless stream of random bytes; writes are mixed into the kernel’s entropy pool' },
+};
+devices['/dev/urandom'] = devices['/dev/random'];
+const deviceOf = dest => { const device = devices[dest.label]; return device && !(device.linux && platform === 'macos') ? device : null; };
+// 12-unit glyphs for files and devices, drawn in the colour of their group.
+const glyphs = {
+  file: '<path d="M2.5 .5h5L10 3v8.5H2.5z M7.5 .5V3H10 M4.5 6h3.5 M4.5 8.5h3.5"/>',
+  hole: '<ellipse cx="6" cy="6" rx="5.6" ry="2.1" transform="rotate(-24 6 6)"/><circle cx="6" cy="6" r="2.7" fill="currentColor" stroke="none"/>',
+  zero: '<ellipse cx="6" cy="6" rx="3.3" ry="5.2"/><path d="M3.9 9.6 8.1 2.4"/>',
+  die: '<rect x="1" y="1" width="10" height="10" rx="2.5"/><g fill="currentColor" stroke="none"><circle cx="3.8" cy="3.8" r="1.05"/><circle cx="6" cy="6" r="1.05"/><circle cx="8.2" cy="8.2" r="1.05"/></g>',
+  full: '<path d="M1 1.2h10 M2.2 1.2v8.6a1.7 1.7 0 0 0 1.7 1.7h4.2a1.7 1.7 0 0 0 1.7-1.7V1.2"/><rect x="3.6" y="2.6" width="4.8" height="7.6" rx=".7" fill="currentColor" stroke="none"/>',
+};
+const glyph = (kind, x, y, color, scale = 1) => `<g class="glyph" transform="translate(${x} ${y}) scale(${scale})" color="${color}" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">${glyphs[kind]}</g>`;
+
 // Draws one pipeline, with its substitutions and destinations, in its own coordinates.
-function drawPipeline(model, palette, colors) {
+function drawPipeline(model, palette, colors, mono) {
   const grid = layout(model);
   const extra = grid.rows * 200;
   const geometry = cmd => { const p = grid.place.get(cmd); return { x: 220 + (p.col + grid.shift) * 360, y: 101 + p.row * 200 }; };
+  const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
+  const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+  // With tags on, a file or device that only one port uses ends in a small tag beside that port,
+  // as the terminal does. stdin's tag needs no card to its left and stdout's none to its right;
+  // stderr's fits in the gap before the next card. stdout and stderr sent to one file, as by &>
+  // or 1> file 2>&1, share one tag between their ports. A file shared any other way keeps its box,
+  // so the drawing still shows the streams reaching one place.
+  const fileTags = new Map();
+  const plan = (dest, room) => {
+    const device = deviceOf(dest), label = short(dest.label, Math.floor((room - 24) / 5.4));
+    const caption = device ? device[dest.mode === 'read' ? 'read' : 'write'] : dest.mode === 'append' ? 'append' : '';
+    return { dest, device, label, caption, w: Math.ceil(24 + label.length * 5.4) };
+  };
+  if (terminalTags) {
+    const occupied = new Set([...grid.place.values()].map(p => `${p.col},${p.row}`));
+    const sharers = new Map();
+    model.all.forEach(cmd => [0, 1, 2].forEach(fd => targetsOf(cmd.fds[fd]).forEach(dest => sharers.set(dest, (sharers.get(dest) ?? 0) + 1))));
+    // The terminal input box, when a stream still needs it, sits left of the first card.
+    const terminalBox = model.all.some(cmd => [1, 2].some(fd => targetsOf(cmd.fds[fd]).some(dest => dest.id === 'terminal-in')));
+    model.all.forEach(cmd => [0, 1, 2].forEach(fd => {
+      const dest = cmd.fds[fd], { col, row } = grid.place.get(cmd);
+      if (!['file', 'null'].includes(dest?.type) || fileTags.has(`${cmd.key}:${fd}`)) return;
+      const crowded = occupied.has(`${col + (fd === 0 ? -1 : 1)},${row}`), p = port(cmd, fd);
+      if (fd === 1 && cmd.fds[2] === dest && sharers.get(dest) === 2 && dest.mode !== 'read') {
+        const merged = { ...plan(dest, crowded ? 92 : 170), merged: true, x: p.x + 36, y: (p.y + port(cmd, 2).y) / 2 };
+        fileTags.set(`${cmd.key}:1`, merged).set(`${cmd.key}:2`, merged);
+        return;
+      }
+      if (sharers.get(dest) > 1 && !deviceOf(dest)) return;
+      if ((crowded && fd !== 2) || (fd === 0 && terminalBox && row === 0 && col + grid.shift === 0)) return;
+      const planned = plan(dest, crowded ? 92 : 170);
+      fileTags.set(`${cmd.key}:${fd}`, { ...planned, x: fd === 0 ? p.x - 36 - planned.w : p.x + 36 });
+    }));
+  }
   const used = new Map();
   model.all.forEach(cmd => Object.entries(cmd.fds).forEach(([fd, value]) => targetsOf(value).forEach(dest => {
     if (Number(fd) > 2 || ['pipe', 'procsub', 'job'].includes(dest.type) || dest.job) return;
+    if (fileTags.get(`${cmd.key}:${fd}`)?.dest === dest) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
     // With terminal tags, stdin from and stderr to the terminal end in a tag beside the port, with no box.
@@ -293,14 +351,16 @@ function drawPipeline(model, palette, colors) {
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
   // Space for the terminal boxes is only kept when a stream uses them.
-  const minX = used.has('terminal-in') ? 0 : terminalTags ? 120 : 140;
-  const width = Math.max(850, used.has('terminal-out') ? 240 + grid.cols * 360 + 175 : 180 + grid.cols * 360, 350 + bottom.length * 190);
+  // File tags can reach past the cards on either side, so the drawing widens to hold them.
+  const tagged = [...fileTags.values()];
+  const minX = Math.min(used.has('terminal-in') ? 0 : terminalTags ? 120 : 140, ...tagged.map(t => t.x - 16));
+  const width = Math.max(850, used.has('terminal-out') ? 240 + grid.cols * 360 + 175 : 180 + grid.cols * 360, 350 + bottom.length * 190,
+    ...tagged.map(t => t.x + t.w + (used.has('terminal-out') ? 195 : 20)));
   const positions = new Map();
   positions.set('terminal-in', { x: 20 + grid.shift * 360, y: 149, w: 155, h: 59 });
   positions.set('terminal-out', { x: width - 174, y: 149, w: 155, h: 59 });
   bottom.forEach((d, i) => positions.set(d.id, { x: 180 + i * (width - 350) / Math.max(1, bottom.length), y: 353 + extra, w: 168, h: 61 }));
   const paths = [];
-  const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
   // Tags name a link's ends (command key:fd) and destination, so the caret inspector can find it.
   const tag = (ends, dest) => ` data-ends="${ends.join(' ')}" data-dest="${escape(dest.id)}"`;
   const path = (d, fd, dashed = false, inactive = false, reason = '', tagged = '') => `<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(reason)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="2" ${dashed || inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`;
@@ -314,11 +374,34 @@ function drawPipeline(model, palette, colors) {
   // diagrams mark ground. stdin's tag sits to the left of its port, stderr's to the right.
   const ground = (p, fd, inactive, reason, tagged) => {
     const color = inactive ? palette.muted : colors[fd], fill = inactive ? palette.inset : palette[fd === 0 ? 'green-bg' : 'amber-bg'];
-    const [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 80] : [p.x, p.x + 36, p.x + 36];
+    // Monospace text, in the terminal theme, needs a wider tag.
+    const w = mono ? 50 : 44, [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
     const what = fd === 0 ? 'stdin comes from the terminal.' : 'stderr goes to the terminal.';
-    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + 44)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="44" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + 22}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
+    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
   };
-  const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
+  // A file tag looks like a small destination box: the file's glyph and name, with an arrow the way
+  // the data goes, and a word above it for appends and devices.
+  const tagBody = ({ device, label, caption, w, x }, y, h = 16) => `<rect class="tag-body node-body" x="${x}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${palette.inset}" stroke="${palette.border}"/>${glyph(device?.icon ?? 'file', x + 5, y - 5, palette.muted, 10 / 12)}<text x="${x + 19}" y="${y + 3.2}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="9">${escape(label)}</text>`
+    + `${caption ? `<text x="${x + w / 2}" y="${y - h / 2 - 5}" text-anchor="middle" fill="${palette.muted}" font-size="8.5">${escape(caption)}</text>` : ''}`;
+  const verb = dest => dest.mode === 'read' ? 'reads from' : dest.mode === 'append' ? 'appends to' : 'writes to';
+  const fileTag = (p, fd, planned, inactive, reason, tagged) => {
+    const { dest, device, w, x } = planned;
+    const color = inactive ? palette.muted : colors[fd], near = fd === 0 ? x + w : x, side = fd === 0 ? -1 : 1;
+    const [from, to] = dest.mode === 'read' ? [near, p.x + side * 4] : [p.x, near - side * 4];
+    const what = `${names[fd]} ${verb(dest)} ${dest.label}.${device ? ` ${dest.label} ${device.about}.` : ''}`;
+    paths.push(`<g class="stream-link file-tag${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(p.x, x)} ${p.y} H ${Math.max(p.x, x + w)}" fill="none" stroke="transparent" stroke-width="16"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/>${tagBody(planned, p.y)}</g>`);
+  };
+  // The shared tag for stdout and stderr sits between their ports. Each stream bends towards it and
+  // enters side by side, stdout above, so both colours reach the file. The tag is drawn once, after
+  // stderr's line, as the destination of both.
+  const mergedTag = (p, fd, planned, inactive, reason, tagged) => {
+    const { dest, device, x, y } = planned, color = inactive ? palette.muted : colors[fd];
+    const s = fd === 1 ? 1 : -1, end = y - s * 3.5, bend = p.x + 14;
+    const d = `M ${p.x} ${p.y} H ${bend - 6} Q ${bend} ${p.y} ${bend} ${p.y + s * 6} V ${end - s * 6} Q ${bend} ${end} ${bend + 6} ${end} H ${x - 4}`;
+    const what = `${names[fd]} ${verb(dest)} ${dest.label}, as ${names[fd === 1 ? 2 : 1]} does.${device ? ` ${dest.label} ${device.about}.` : ''}`;
+    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`);
+    if (fd === 2) paths.push(`<g data-dest="${escape(dest.id)}"><title>${escape(device ? `${dest.label} ${device.about}` : `stdout and stderr both ${verb(dest)} ${dest.label}`)}</title>${tagBody(planned, y, 18)}</g>`);
+  };
   // Substitutions not on 0–2 attach to the bottom edge: <(…) on the left, >(…) on the right.
   // A redirect such as 3< <(…) keeps its own number; arguments use Bash's /dev/fd number.
   const bottomFd = sub => {
@@ -390,6 +473,8 @@ function drawPipeline(model, palette, colors) {
         continue;
       }
       if (fd > 2) continue;
+      const fileTagged = fileTags.get(here);
+      if (fileTagged?.dest === dest) { (fileTagged.merged ? mergedTag : fileTag)(p, fd, fileTagged, inactive, usage.reason, tag([here], dest)); continue; }
       if (dest.type === 'job') {
         const { commands } = dest.job;
         if ((dest.direction === '>' && fd === 0 && cmd === commands[0]) || (dest.direction === '<' && fd === 1 && cmd === commands.at(-1))) jobLink(cmd, fd, dest);
@@ -461,9 +546,11 @@ function drawPipeline(model, palette, colors) {
   });
   const nodes = [...used.values()].map(dest => {
     const p = positions.get(dest.id);
-    const icon = dest.type === 'file' ? '▤' : dest.type === 'null' ? '∅' : dest.type === 'closed' ? '×' : '▣';
-    const subtitle = dest.type === 'file' ? dest.mode === 'read' ? 'INPUT FILE' : dest.mode === 'append' ? 'APPEND TO FILE' : 'OUTPUT FILE' : dest.type === 'null' ? dest.mode === 'read' ? 'END-OF-FILE' : 'DISCARDED' : dest.type === 'closed' ? 'DESCRIPTOR CLOSED' : 'TERMINAL';
-    return `<g data-dest="${escape(dest.id)}"><title>${escape(dest.label)}</title><rect class="node-body" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8" fill="${palette.inset}" stroke="${palette.border}"/><text x="${p.x + 15}" y="${p.y + 26}" fill="${palette.muted}" font-size="17">${icon}</text><text x="${p.x + 39}" y="${p.y + 25}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="10">${escape(short(dest.label, 18))}</text><text x="${p.x + 39}" y="${p.y + 43}" fill="${palette.muted}" font-size="9" letter-spacing="1">${subtitle}</text></g>`;
+    const device = ['file', 'null'].includes(dest.type) ? deviceOf(dest) : null;
+    const icon = device || dest.type === 'file' ? glyph(device?.icon ?? 'file', p.x + 15, p.y + 12, palette.muted, 16 / 12)
+      : `<text x="${p.x + 15}" y="${p.y + 26}" fill="${palette.muted}" font-size="17">${dest.type === 'closed' ? '×' : '▣'}</text>`;
+    const subtitle = device ? device[dest.mode === 'read' ? 'read' : 'write'].toUpperCase() : dest.type === 'file' ? dest.mode === 'read' ? 'INPUT FILE' : dest.mode === 'append' ? 'APPEND TO FILE' : 'OUTPUT FILE' : dest.type === 'closed' ? 'DESCRIPTOR CLOSED' : 'TERMINAL';
+    return `<g data-dest="${escape(dest.id)}"><title>${escape(device ? `${dest.label} ${device.about}` : dest.label)}</title><rect class="node-body" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8" fill="${palette.inset}" stroke="${palette.border}"/>${icon}<text x="${p.x + 39}" y="${p.y + 25}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="10">${escape(short(dest.label, 18))}</text><text x="${p.x + 39}" y="${p.y + 43}" fill="${palette.muted}" font-size="9" letter-spacing="1">${subtitle}</text></g>`;
   });
   const cards = model.all.map(cmd => {
     const { x, y } = geometry(cmd);
@@ -524,7 +611,8 @@ let targets = [], inspected = null, hovered = null, marked = null;
 // The Highlight switch turns the linking off in both directions.
 let highlighting = true;
 try { highlighting = localStorage.getItem('pipeviewer-highlight') !== 'off'; } catch {}
-// The Terminal tags switch draws terminal stdin and stderr as tags, or as routes to the terminal boxes.
+// The Tags switch draws terminal stdin and stderr, and files one port uses, as tags beside their ports,
+// or as routes to shared boxes.
 let terminalTags = true;
 try { terminalTags = localStorage.getItem('pipeviewer-terminal-tags') !== 'off'; } catch {}
 function inspectTargets(model) {
@@ -681,9 +769,9 @@ function render() {
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>${escape(cmd.substitution.owner.usage.name)}</code> once per ${cmd.substitution.tool === 'xargs' ? 'item' : 'argument'}</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
-    const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
+    const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && !['procsub', 'closed'].includes(dest.type)));
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
-    $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Open Descriptor details below to see the others.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
+    $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2, and this pipeline leaves others open. Open Descriptor details below to see where they point.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
     // Keep the chosen example visible in the scrolling strip.
     const chosen = $('#example-strip .active');
@@ -709,21 +797,25 @@ function queueRender() {
 
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
 let followsSystemTheme = true;
-try { followsSystemTheme = !['light', 'dark'].includes(localStorage.getItem('pipeviewer-theme')); } catch {}
+try { followsSystemTheme = !['light', 'dark', 'terminal'].includes(localStorage.getItem('pipeviewer-theme')); } catch {}
+// The theme button shows the current theme and steps to the next in this order.
+const nextTheme = { light: 'dark', dark: 'terminal', terminal: 'light' };
+const themeNames = { light: 'Light', dark: 'Dark', terminal: 'Terminal' };
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  const action = theme === 'dark' ? 'Light mode' : 'Dark mode';
-  $('#theme-label').textContent = action;
-  $('#theme-toggle').setAttribute('aria-label', `Switch to ${action.toLowerCase()}`);
-  $('#theme-toggle').title = `Switch to ${action.toLowerCase()}`;
+  const next = `Switch to ${themeNames[nextTheme[theme]].toLowerCase()} theme`;
+  $('#theme-toggle').dataset.current = theme;
+  $('#theme-label').textContent = themeNames[theme];
+  $('#theme-toggle').setAttribute('aria-label', `${themeNames[theme]} theme. ${next}`);
+  $('#theme-toggle').title = next;
   $('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--page').trim();
   // Recolour the existing diagram without submitting edits or closing details.
   if (currentModel) showDiagram();
 }
 
 $('#theme-toggle').addEventListener('click', () => {
-  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  const theme = nextTheme[document.documentElement.dataset.theme] ?? 'dark';
   followsSystemTheme = false;
   try { localStorage.setItem('pipeviewer-theme', theme); } catch {}
   applyTheme(theme);
@@ -742,6 +834,7 @@ function showPlatform() {
   });
   // zsh's default prompt ends in %, Bash's in $.
   $('.prompt').textContent = platform === 'macos' ? '%' : '$';
+  $('#shell-name').textContent = platform === 'macos' ? 'zsh' : 'bash';
   document.querySelectorAll('[data-platform-text]').forEach(element => { element.hidden = element.dataset.platformText !== platform; });
 }
 $('#platform').addEventListener('click', event => {
@@ -835,7 +928,7 @@ $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
   if (!button) return;
   const [key, i] = button.dataset.variation.split(':');
-  $('#pipeline').value = styled(variations[key][Number(i)].source);
+  $('#pipeline').value = styled(spelling(variations[key][Number(i)]));
   fitEditor();
   render();
 });
@@ -953,14 +1046,14 @@ $('#highlight-toggle').addEventListener('click', event => {
 showHighlighting();
 function showTerminalTags() {
   $('#tags-toggle').setAttribute('aria-checked', terminalTags);
-  $('#tags-key').hidden = !terminalTags;
+  $('#tags-key').hidden = $('#file-key').hidden = !terminalTags;
 }
 $('#tags-toggle').addEventListener('click', event => {
   terminalTags = !terminalTags;
   try { localStorage.setItem('pipeviewer-terminal-tags', terminalTags ? 'on' : 'off'); } catch {}
   showTerminalTags();
   replay(event.currentTarget, 'just-toggled');
-  $('#switch-status').textContent = `Terminal tags ${terminalTags ? 'on' : 'off'}`;
+  $('#switch-status').textContent = `Tags ${terminalTags ? 'on' : 'off'}`;
   if (currentModel) { showDiagram(); replay($('#diagram'), 'redrawn'); }
 });
 showTerminalTags();
