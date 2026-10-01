@@ -361,3 +361,17 @@ test('curl -C - resumes rather than reading stdin', () => {
   assert.equal(stdin("curl -C - -O https://x/a.gz"), 'unused');
   assert.equal(stdin("curl -T - https://x/up"), 'possible');
 });
+
+test('make runs recipes that may read stdin, except in dry-run and question modes', () => {
+  assert.equal(stdin('make'), 'unknown');
+  assert.equal(stdin('make -j 4 all'), 'unknown');
+  assert.equal(stdin('make -f - all'), 'possible');
+  assert.equal(stdin('make -n install'), 'unused');
+  assert.equal(stdin('make -q'), 'unused');
+  assert.equal(stdout('make -q'), 'unused');
+  assert.equal(stdout('make -s'), 'possible');
+  assert.equal(parsePipeline('make').commands[0].usage.recognised, true);
+  assert.match(parsePipeline('make', { platform: 'macos' }).notes.join(' '), /Command Line Tools/);
+  const merged = parsePipeline('make &> build.log').commands[0];
+  assert.equal(merged.fds[1], merged.fds[2]);
+});

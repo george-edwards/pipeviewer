@@ -60,6 +60,7 @@ import link from './link.js';
 import ln from './ln.js';
 import logname from './logname.js';
 import ls from './ls.js';
+import make from './make.js';
 import md5 from './md5.js';
 import md5sum from './md5sum.js';
 import mkdir from './mkdir.js';
@@ -136,8 +137,8 @@ export default [
   arch, awk, base64, basename, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
   cp, csplit, curl, cut, date, dd, df, dircolors, dirname, du, echo, env, expand, expr, factor,
   find, fmt, fold, grep, groups, head, hostid, hostname, id, install, join, kill, less, link, ln,
-  logname, ls, md5, md5sum, mkdir, mkfifo, mknod, mktemp, mv, nice, nl, nohup, nproc, numfmt, od,
-  open, parallel, paste, pathchk, pbcopy, pbpaste, pinky, pr, printenv, ptx, pv, pwd, readlink,
+  logname, ls, make, md5, md5sum, mkdir, mkfifo, mknod, mktemp, mv, nice, nl, nohup, nproc, numfmt,
+  od, open, parallel, paste, pathchk, pbcopy, pbpaste, pinky, pr, printenv, ptx, pv, pwd, readlink,
   realpath, rev, rm, rmdir, runcon, say, sed, seq, shasum, shred, shuf, sleep, sort, split, stat,
   stdbuf, stty, sum, sw_vers, sync, tac, tail, tee, test, time, timeout, touch, tr, truth,
   truncate, tsort, tty, uname, unexpand, uniq, unlink, uptime, users, wc, wget, who, whoami, xargs,

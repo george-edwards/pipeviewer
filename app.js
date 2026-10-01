@@ -67,8 +67,8 @@ const variations = {
 };
 // Two ways to send both output streams to one file.
 variations.merge = [
-  { label: 'short-hand', source: 'grep 0<access.log "404" &> errors.log' },
-  { label: 'long-form', source: 'grep 0<access.log "404" 1>errors.log 2>&1' },
+  { label: 'short-hand', source: 'make &> build.log' },
+  { label: 'long-form', source: 'make 1> build.log 2>&1' },
 ];
 variations.timingReverse = [
   { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
