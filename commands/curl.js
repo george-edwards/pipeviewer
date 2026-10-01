@@ -12,7 +12,8 @@ export default {
           '--proxy', '--max-time', '--connect-timeout', '--retry', '--cookie', '--cookie-jar', '--referer', '--range', '--cert', '--key', '--cacert', '--variable'] });
       // “-” and “@-” name stdin in data, form, upload and config values; for output options “-” is stdout.
       const writers = ['-o', '--output', '-D', '--dump-header', '--trace', '--trace-ascii', '--stderr', '-c', '--cookie-jar', '-w', '--write-out'];
-      const inputs = opts.options.filter(([key, value]) => typeof value === 'string' && !writers.includes(key)).map(([, value]) => value);
+      // -C - asks curl to work out where to resume; that “-” is not stdin.
+      const inputs = opts.options.filter(([key, value]) => typeof value === 'string' && !writers.includes(key) && !['-C', '--continue-at'].includes(key)).map(([, value]) => value);
       const uploads = opts.values('-T', '--upload-file');
       if (opts.has('-h', '--help', '-V', '--version')) set(0, unused(0, 'curl prints help or version information without reading stdin.'));
       else if (inputs.some(value => /(?:^|[@<])-$/.test(value)) || uploads.includes('.')) set(0, possible(0, 'curl reads upload data, form fields or its config from stdin when a value names “-”.'));

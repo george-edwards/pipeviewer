@@ -47,6 +47,8 @@ The **SHELL** switch above the editor maps a command line as macOS runs it: unde
 - A line of only redirects runs `cat`, or `more` for input. `#` does not start a comment at an interactive prompt, and only single digits name descriptors.
 - Tools follow the macOS 15 builds: option strings come from Apple's sources (github.com/apple-oss-distributions), and the BSD tools stop reading options at the first file name. Many treat `-` as a file, `sed -i` takes a backup suffix, `base64` reads `-i FILE`, `date -f` is a parse format, and `zcat` wants `.Z` files (use `gzcat`). Commands macOS lacks, such as `tac`, `timeout` and `nproc`, show as unknown with the usual replacement. Mac tools such as `pbcopy`, `pbpaste`, `say`, `open`, `caffeinate`, `md5` and `sw_vers` are modelled.
 
+The four Wiki examples use GNU parallel, wget, pv and mawk, which stock macOS lacks, so in macOS mode they load versions built on `xargs -P`, `curl -Z`, `gzcat` and `dd status=progress`. Flipping the switch with one loaded swaps it for the other system's version.
+
 The zsh rules were checked against zsh 5.8; macOS ships 5.9, whose changelog lists no changes to them.
 
 ## Adding a command

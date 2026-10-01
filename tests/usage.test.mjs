@@ -356,3 +356,8 @@ test('coreutils filters, printers and file actions', () => {
   }
   for (const source of ['cp -v a b', 'chmod -c 644 f', 'mkdir -v d', 'split --verbose big', 'csplit f 3', 'dd', 'stty', 'kill -l', 'seq 3']) assert.equal(stdout(source), 'possible', source);
 });
+
+test('curl -C - resumes rather than reading stdin', () => {
+  assert.equal(stdin("curl -C - -O https://x/a.gz"), 'unused');
+  assert.equal(stdin("curl -T - https://x/up"), 'possible');
+});

@@ -19,7 +19,10 @@ const examples = {
           | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
 | awk '{n+=$1} END {print n}' \
 | xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
-  topPages: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}"' ::: *.gz | LC_ALL=C sort -k1,1 | awk '
+  // Each job writes its own counts file, so output from concurrent jobs never mixes; the second
+  // pipeline merges them.
+  topPages: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> {}.counts' ::: *.gz &&
+cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
     $1 == prev { sum += $2; next }
     NR > 1 { print sum, prev }
     { prev=$1; sum=$2 }
@@ -28,6 +31,24 @@ const examples = {
   weekDownload: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
 ::: {14..20} ::: {00..23}`,
   zcatSpeed: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b 1>/dev/null',
+};
+// Stock macOS has no parallel, wget, pv or mawk, and its zcat wants .Z files, so these examples
+// use xargs -P, curl, dd, awk and gzcat there. The rest run as written on both systems.
+const macExamples = {
+  weekDownload: String.raw`curl -Z --parallel-max 2 -C - --remote-name-all \
+  'https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609[14-20]-[00-23]0000.gz'`,
+  zcatSpeed: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 gzcat | dd of=/dev/null bs=1m status=progress`,
+  wikiWeek: String.raw`printf '%s\0' pageviews-*.gz \
+| xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{total+=\$3} END {print total}"' _ \
+| awk '{n+=$1} END {print n}' \
+| xargs printf "\n%'d <-- total Wiki page views in 1 week\n"`,
+  topPages: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> "$1.counts"' _ &&
+cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
+    $1 == prev { sum += $2; next }
+    NR > 1 { print sum, prev }
+    { prev=$1; sum=$2 }
+    END { if (NR) print sum, prev }
+' | sort -rn | head -50 1> top-50-pages`,
 };
 // Examples with several equivalent spellings, shown as toggles once one of them is loaded.
 const variations = {
@@ -58,7 +79,9 @@ for (const [key, list] of Object.entries(variations)) examples[key] = list[0].so
 let redirectStyle = 'explicit';
 try { if (localStorage.getItem('pipeviewer-redirects') === 'common') redirectStyle = 'common'; } catch {}
 const styled = source => restyle(source, redirectStyle, { platform });
-const exampleSources = key => (variations[key]?.map(variation => variation.source) ?? [examples[key]]).map(styled);
+// Every spelling of an example as it reads on a platform, in the current redirect style.
+const exampleSources = (key, on = platform) => (variations[key]?.map(variation => variation.source) ?? [on === 'macos' ? macExamples[key] ?? examples[key] : examples[key]])
+  .map(source => restyle(source, redirectStyle, { platform: on }));
 
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
@@ -692,7 +715,10 @@ function showPlatform() {
 $('#platform').addEventListener('click', event => {
   const button = event.target.closest('[data-platform]');
   if (!button || button.dataset.platform === platform) return;
+  // An example in the editor switches to its spelling for the other system.
+  const loaded = Object.keys(examples).map(key => [key, exampleSources(key).indexOf($('#pipeline').value)]).find(([, i]) => i !== -1);
   platform = button.dataset.platform;
+  if (loaded) { $('#pipeline').value = exampleSources(loaded[0])[loaded[1]]; fitEditor(); }
   try { localStorage.setItem('pipeviewer-platform', platform); } catch {}
   showPlatform();
   showKnown();
@@ -770,7 +796,7 @@ $('#resize-handle').addEventListener('keydown', event => {
   resizeEditor($('#pipeline').offsetHeight + (event.key === 'ArrowDown' ? step : -step));
 });
 $('#resize-handle').addEventListener('dblclick', () => { chosenHeight = 0; fitEditor(); });
-function loadExample(key) { $('#pipeline').value = styled(examples[key]); fitEditor(); render(); }
+function loadExample(key) { $('#pipeline').value = exampleSources(key)[0]; fitEditor(); render(); }
 $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
   if (!button) return;
