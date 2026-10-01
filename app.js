@@ -400,15 +400,17 @@ function diagram(model) {
 // element inspector does for the page. Each target is a span of the editor's text and what it lights:
 // strong cards are outlined, context cards stay visible, and links light when an end or their
 // destination is listed. Ports name command key:fd.
-let targets = [], inspected = null;
+// It also runs the other way: hovering part of the diagram marks its text in the editor, and a
+// click selects that text. Hover lights the diagram as the caret would, and wins while it lasts.
+let targets = [], inspected = null, hovered = null, marked = null;
 function inspectTargets(model) {
   const portsOf = cmd => Object.keys(cmd.fds).map(fd => `${cmd.key}:${fd}`);
   const list = [];
   for (const cmd of model.all) {
-    list.push({ span: cmd.span, strong: [cmd.key], context: [], ends: portsOf(cmd), ports: [], dests: [] });
+    list.push({ kind: 'command', ref: cmd, span: cmd.span, strong: [cmd.key], context: [], ends: portsOf(cmd), ports: [], dests: [] });
     for (const step of cmd.steps) {
       const ports = step.fds.map(fd => `${cmd.key}:${fd}`);
-      list.push({ span: step.span, strong: [], context: [cmd.key], ends: ports, ports, dests: [step.destination.id] });
+      list.push({ kind: 'step', ref: step, span: step.span, strong: [], context: [cmd.key], ends: ports, ports, dests: [step.destination.id] });
     }
   }
   // A pipe's target also covers the spaces either side of |, so moving the caret along never goes dark.
@@ -416,25 +418,60 @@ function inspectTargets(model) {
     for (const pipe of pipes) {
       const before = commands[pipe.from], after = commands[pipe.to];
       const ports = [...Object.keys(before.fds).filter(fd => before.fds[fd] === pipe).map(fd => `${before.key}:${fd}`), `${after.key}:0`];
-      list.push({ span: [Math.min(pipe.span[0], before.span[1] + 1), Math.max(pipe.span[1], after.span[0] - 1)], strong: [], context: [before.key, after.key], ends: [], ports, dests: [pipe.id] });
+      list.push({ kind: 'pipe', ref: pipe, span: [Math.min(pipe.span[0], before.span[1] + 1), Math.max(pipe.span[1], after.span[0] - 1)], strong: [], context: [before.key, after.key], ends: [], ports, dests: [pipe.id] });
     }
   }
   for (const sub of model.substitutions) {
     if (!sub.span) continue;
     const inner = sub.commands.map(cmd => cmd.key);
     const dests = sub.kind === 'job' ? [`${sub.id}-in`, `${sub.id}-out`] : [sub.endpoint.id];
-    list.push({ span: sub.span, strong: inner, context: [sub.owner.key], ends: sub.commands.flatMap(portsOf), ports: [], dests });
+    list.push({ kind: 'substitution', ref: sub, span: sub.span, strong: inner, context: [sub.owner.key], ends: sub.commands.flatMap(portsOf), ports: [], dests });
   }
   return list;
+}
+// The target for a hovered diagram element: a card is its command; a port is the last redirect
+// that set it, else the pipe or substitution it joins, else its command; a line is its pipe or
+// substitution, else its starting port; a destination box is the last redirect to it.
+function targetFor(element) {
+  const find = (kind, ref) => targets.find(t => t.kind === kind && t.ref === ref);
+  const byKey = key => currentModel.all.find(cmd => cmd.key === key);
+  const joined = dest => dest?.type === 'pipe' ? find('pipe', dest) : dest?.type === 'procsub' ? find('substitution', dest.substitution) : dest?.type === 'job' ? find('substitution', dest.job) : null;
+  const portTarget = (key, fd) => {
+    const cmd = byKey(key);
+    if (!cmd) return null;
+    const step = cmd.steps.findLast(s => s.fds.includes(fd));
+    return step ? find('step', step) : joined(cmd.fds[fd]) ?? find('command', cmd);
+  };
+  const { card, command, fd, ends, dest: id } = element.dataset;
+  if (card) return find('command', byKey(card));
+  if (command) return portTarget(command, Number(fd));
+  const dest = currentModel.endpoints.find(d => d.id === id);
+  if (ends) { const [key, n] = ends.split(' ')[0].split(':'); return joined(dest) ?? portTarget(key, Number(n)); }
+  return targets.findLast(t => t.kind === 'step' && t.ref.destination === dest) ?? null;
+}
+const hoverable = '[data-card], [data-command], [data-dest]';
+// The editor cannot colour its own text, so a mirror behind it, with the same font and wrapping,
+// draws the mark. The textarea's background is transparent.
+function markSource(span) {
+  if (span === marked) return;
+  marked = span;
+  const editor = $('#pipeline'), mirror = $('#editor-mirror'), text = editor.value;
+  if (!span) { mirror.textContent = ''; return; }
+  mirror.style.width = `${editor.clientWidth}px`;
+  mirror.style.height = `${editor.clientHeight}px`;
+  mirror.innerHTML = `${escape(text.slice(0, span[0]))}<mark>${escape(text.slice(...span))}</mark>${escape(text.slice(span[1]))}​`;
+  mirror.scrollTop = editor.scrollTop;
 }
 function inspect(redrawn = false) {
   const editor = $('#pipeline'), svg = $('#diagram svg');
   // While a keystroke waits for its frame the old diagram stays lit, so typing does not flicker.
   if (editor.value !== currentSource && renderQueued) return;
   const caret = editor.selectionDirection === 'backward' ? editor.selectionStart : editor.selectionEnd;
-  const live = svg && document.activeElement === editor && editor.value === currentSource;
+  const live = svg && editor.value === currentSource;
   // The smallest span holding the caret wins; on a tie the later target, such as a pipe over |&.
-  const target = live ? targets.reduce((best, t) => t.span[0] <= caret && caret <= t.span[1] && (!best || t.span[1] - t.span[0] <= best.span[1] - best.span[0]) ? t : best, null) : null;
+  const atCaret = () => document.activeElement === editor ? targets.reduce((best, t) => t.span[0] <= caret && caret <= t.span[1] && (!best || t.span[1] - t.span[0] <= best.span[1] - best.span[0]) ? t : best, null) : null;
+  const target = live ? hovered ?? atCaret() : null;
+  markSource(live && hovered ? hovered.span : null);
   if (target === inspected && !redrawn) return;
   const moved = target !== inspected;
   inspected = target;
@@ -451,7 +488,8 @@ function inspect(redrawn = false) {
   // Only a redirect's own destination is outlined; others reached by lit links just stay visible.
   svg.querySelectorAll('[data-dest]:not([data-ends])').forEach(el => { if (dests.has(el.dataset.dest)) el.classList.add('lit', ...(target.dests.includes(el.dataset.dest) ? ['lit-node'] : [])); });
   // Bring a lit card into view when the caret moves to it in a diagram wider than the window.
-  const card = moved && svg.querySelector('.lit-card, [data-card].lit');
+  // Not on hover: the pointer is already on it.
+  const card = moved && !hovered && svg.querySelector('.lit-card, [data-card].lit');
   if (card) {
     const scroll = $('#diagram-scroll'), box = card.getBoundingClientRect(), view = scroll.getBoundingClientRect();
     if (box.left < view.left || box.right > view.right) scroll.scrollBy({ left: box.left + box.width / 2 - (view.left + view.width / 2), behavior: 'smooth' });
@@ -496,6 +534,7 @@ function render() {
     currentModel = parsePipeline($('#pipeline').value);
     currentSource = $('#pipeline').value;
     targets = inspectTargets(currentModel);
+    hovered = null;
     $('#error').hidden = true;
     $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
@@ -558,6 +597,23 @@ applyTheme(document.documentElement.dataset.theme);
 $('#pipeline').addEventListener('input', () => { fitEditor(); queueRender(); });
 document.addEventListener('selectionchange', () => inspect());
 for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
+$('#pipeline').addEventListener('scroll', () => { $('#editor-mirror').scrollTop = $('#pipeline').scrollTop; });
+$('#diagram').addEventListener('pointerover', event => {
+  const element = event.target.closest(hoverable);
+  const target = element && currentSource === $('#pipeline').value ? targetFor(element) : null;
+  if (target === hovered) return;
+  hovered = target;
+  inspect();
+});
+$('#diagram').addEventListener('pointerleave', () => { hovered = null; inspect(); });
+// A click selects the text, so the caret inspector carries on from there.
+$('#diagram').addEventListener('click', event => {
+  const element = event.target.closest(hoverable), target = element && hovered;
+  if (!target) return;
+  const editor = $('#pipeline');
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(...target.span);
+});
 // The editor grows with its content up to ten lines, then scrolls. A height the viewer drags
 // to acts as a minimum; CSS caps both.
 let chosenHeight = 0;

@@ -67,7 +67,12 @@ main { max-width: var(--content); margin: auto; padding: 2rem 2.5rem 2.5rem; }
 .editor-panel { border: 1px solid var(--border); border-radius: .75rem; overflow: hidden; background: var(--surface); }
 .code-editor { position: relative; display: flex; gap: .9375rem; padding: .875rem 2.875rem .875rem 1.5rem; }
 .prompt { font: 1rem/1.7 'IBM Plex Mono', monospace; color: var(--purple); }
-textarea { display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; font: .875rem/1.9 'IBM Plex Mono', monospace; color: var(--text); tab-size: 2; }
+/* The mirror sits under the textarea with identical text metrics, so a <mark> in it lines up with the typed text. */
+.editor-field { position: relative; flex: 1; min-width: 0; }
+textarea, .editor-mirror { padding: 0; font: .875rem/1.9 'IBM Plex Mono', monospace; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
+textarea { position: relative; display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; color: var(--text); }
+.editor-mirror { position: absolute; top: 0; left: 0; overflow: hidden; color: transparent; pointer-events: none; }
+.editor-mirror mark { color: transparent; background: var(--purple-bg); border-radius: .1875rem; box-shadow: 0 0 0 .125rem var(--purple-bg); }
 textarea::placeholder { color: var(--muted); opacity: 1; }
 /* A large resize handle; the native grabber is small and cannot be restyled everywhere. */
 .resize-handle { position: absolute; right: .5rem; bottom: .5rem; width: 2.125rem; height: 2.125rem; display: grid; place-items: center; border-radius: .4375rem; color: var(--muted); cursor: ns-resize; touch-action: none; }
@@ -134,6 +139,7 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 #diagram .lit-node > .node-body { stroke: var(--focus); stroke-width: 2; }
 #diagram .lit-port .port-dot { r: 6px; stroke-width: 2.5; }
 #diagram .lit-port .port-badge { stroke: var(--focus); stroke-width: 1.5; }
+#diagram :is([data-card], [data-command], [data-dest]) { cursor: pointer; }
 .details-section { margin-top: 1.8125rem; }
 .details-heading { display: flex; align-items: center; gap: .5625rem; width: fit-content; margin-bottom: .875rem; cursor: pointer; list-style: none; }
 .details-heading::-webkit-details-marker { display: none; }
@@ -231,7 +237,7 @@ dialog a { font-size: .75rem; color: var(--purple); }
   .legend { gap: .5625rem; }
   .legend b { display: none; }
   .code-editor { padding: .75rem 2.75rem .75rem 1.0625rem; gap: .625rem; }
-  textarea { font-size: .8125rem; }
+  textarea, .editor-mirror { font-size: .8125rem; }
   /* Stack each label above its buttons. */
   .example-rows { grid-template-columns: minmax(0, 1fr); gap: .4375rem; }
   .example-row + .example-row .row-label { margin-top: .4375rem; }
