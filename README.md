@@ -1,6 +1,6 @@
 # Pipeviewer
 
-A small, dependency-free web app that maps stdin (0), stdout (1), and stderr (2) through a Unix pipeline. Paste a command, choose **Visualise**, and follow the coloured connections. Nothing you paste is executed or sent to a server.
+A small, dependency-free web app that maps stdin (0), stdout (1), and stderr (2) through a Unix pipeline. Type or paste a command and follow the coloured connections. The diagram updates as you type. Nothing you paste is executed or sent to a server.
 
 ## Run
 

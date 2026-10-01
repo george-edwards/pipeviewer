@@ -65,28 +65,19 @@ a { color: inherit; }
 [data-theme="dark"] .sun-icon { display: block; }
 main { max-width: var(--content); margin: auto; padding: 2rem 2.5rem 2.5rem; }
 .editor-panel { border: 1px solid var(--border); border-radius: .75rem; overflow: hidden; background: var(--surface); }
-.panel-top { height: 2.9375rem; display: flex; align-items: center; justify-content: space-between; padding: 0 1.375rem; border-bottom: 1px solid var(--border); }
-.shell-label { font: .6875rem 'IBM Plex Mono', monospace; color: var(--muted); }
-.code-editor { position: relative; display: flex; gap: .9375rem; padding: 1.5625rem 2.875rem .625rem 1.5rem; }
+.code-editor { position: relative; display: flex; gap: .9375rem; padding: .875rem 2.875rem .875rem 1.5rem; }
 .prompt { font: 1rem/1.7 'IBM Plex Mono', monospace; color: var(--purple); }
-textarea { display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 4.0625rem; max-height: 70vh; outline: none; font: .875rem/1.9 'IBM Plex Mono', monospace; color: var(--text); tab-size: 2; }
+textarea { display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; font: .875rem/1.9 'IBM Plex Mono', monospace; color: var(--text); tab-size: 2; }
 textarea::placeholder { color: var(--muted); opacity: 1; }
 /* A large resize handle; the native grabber is small and cannot be restyled everywhere. */
-.resize-handle { position: absolute; right: .5rem; bottom: .25rem; width: 2.125rem; height: 2.125rem; display: grid; place-items: center; border-radius: .4375rem; color: var(--muted); cursor: ns-resize; touch-action: none; }
+.resize-handle { position: absolute; right: .5rem; bottom: .5rem; width: 2.125rem; height: 2.125rem; display: grid; place-items: center; border-radius: .4375rem; color: var(--muted); cursor: ns-resize; touch-action: none; }
 .resize-handle:hover, .resize-handle.dragging { color: var(--purple); background: var(--purple-bg); }
 .resize-handle svg { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .editor-panel:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px var(--purple-bg); }
-.editor-bottom { padding: .25rem 1.125rem 1rem 1.4375rem; display: flex; align-items: center; justify-content: flex-end; gap: .75rem; }
-.primary-button { display: flex; align-items: center; gap: 1.375rem; border: 1px solid #593cb6; background: #593cb6; color: #ffffff; border-radius: .4375rem; font-size: .8125rem; font-weight: 600; padding: .6875rem 1rem; }
-.primary-button:hover { background: #493096; }
-.primary-button kbd { font-family: inherit; font-size: .6875rem; font-weight: 400; color: #e2dcfa; white-space: nowrap; }
 /* One grid for every example row, so each row's first button starts in the same column. */
-.example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: .625rem 1.125rem; padding: .875rem 0 1.625rem; }
+.example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: .625rem 1.125rem; padding: 0 0 1rem; }
 .example-row { display: contents; }
 .example-row[hidden] { display: none; }
-/* Held back until the talk is given; delete these two rules to show the presentation examples and their variations. */
-.presentation-row { display: none; }
-#variations:has([data-variation^="palindromes:"], [data-variation^="timingReverse:"]) { display: none; }
 .row-label { font-size: .625rem; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
 .example-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .example-buttons button { background: var(--surface); border: 1px solid var(--border); border-radius: .3125rem; padding: .375rem .5625rem; color: var(--muted); font-size: .75rem; }
@@ -97,10 +88,7 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .variation-buttons button:hover { color: var(--text); }
 .variation-buttons button.active { background: var(--surface); color: var(--purple); font-weight: 550; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); }
 h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
-.section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.125rem; gap: .75rem; }
-.section-heading h2 { display: flex; align-items: center; gap: .625rem; }
 .count { font-size: .6875rem; letter-spacing: 0; font-weight: 450; padding: .25rem .4375rem; background: var(--inset); color: var(--muted); border-radius: .25rem; white-space: nowrap; }
-.section-heading p { margin: .4375rem 0 0; font-size: .75rem; color: var(--muted); }
 .legend { display: flex; gap: 1.0625rem; font-size: .75rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
 .legend span { display: flex; align-items: center; gap: .3125rem; }
 .legend b { font-family: 'DM Sans', sans-serif; font-weight: 500; }
@@ -108,18 +96,29 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .stdin { background: var(--green); }
 .stdout { background: var(--purple); }
 .stderr { background: var(--amber); }
-.diagram-panel { border: 1px solid var(--border); border-radius: .6875rem; background: var(--surface); overflow: hidden; }
-.diagram-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.1875rem 0; font: .6875rem 'IBM Plex Mono', monospace; color: var(--muted); }
+#results { margin-top: .625rem; }
+.diagram-panel { position: relative; border: 1px solid var(--border); border-radius: .6875rem; background: var(--surface); overflow: hidden; }
+.diagram-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; padding: .75rem 1.1875rem 0; font: .6875rem 'IBM Plex Mono', monospace; color: var(--muted); }
+.diagram-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .625rem; }
+.diagram-summary > * { white-space: nowrap; }
+.diagram-summary .count { font-family: 'DM Sans', sans-serif; }
+.count:empty { display: none; }
+.diagram-summary h2 { font-family: 'DM Sans', sans-serif; font-size: .875rem; color: var(--text); }
 .diagram-toolbar button { border: 0; background: transparent; font: .75rem 'DM Sans', sans-serif; color: var(--muted); display: flex; gap: .4375rem; align-items: center; }
 .diagram-toolbar button:hover { color: var(--purple); }
 .diagram-toolbar button:disabled { opacity: .4; cursor: default; color: var(--muted); }
 .diagram-actions { display: flex; align-items: center; gap: 1.125rem; }
+.diagram-actions .legend { margin-right: .375rem; }
 .zoom-controls { display: flex; align-items: center; border: 1px solid var(--border); border-radius: .375rem; overflow: hidden; }
 .zoom-controls button { min-width: 2rem; height: 1.75rem; justify-content: center; padding: 0 .375rem; font-variant-numeric: tabular-nums; }
 .zoom-controls button:hover:not(:disabled) { background: var(--inset); }
 .zoom-controls #zoom-out, .zoom-controls #zoom-in { font-size: 1rem; }
 .zoom-controls #zoom-reset { min-width: 3.125rem; border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-radius: 0; font-size: .6875rem; }
-#diagram-scroll { overflow-x: auto; margin-top: .625rem; }
+#diagram-scroll { overflow-x: auto; transition: opacity .16s; }
+/* While the pipeline does not parse, the last good diagram stays put, faded, under the message. */
+#results.stale #diagram-scroll, #results.stale #insights, #results.stale #notes, #results.stale .details { opacity: .35; }
+#results.empty #diagram-scroll { min-height: 8rem; }
+#results.empty .usage-key, #results.empty .details-section { display: none; }
 #diagram-scroll.panning { cursor: grabbing; user-select: none; }
 #diagram { min-width: 45rem; line-height: 0; }
 #diagram svg { width: 100%; height: auto; min-height: 17.8125rem; max-height: 30rem; display: block; }
@@ -169,7 +168,8 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .steps summary { cursor: pointer; color: var(--purple); }
 .steps ol { margin: .4375rem 0 0; padding-left: 1.125rem; }
 .steps code { font-family: 'IBM Plex Mono', monospace; font-size: .6875rem; color: var(--text); }
-.error { padding: .9375rem 1.125rem; border: 1px solid var(--error); background: var(--error-bg); color: var(--error); border-radius: .5rem; font-size: .8125rem; margin-bottom: 1.5625rem; }
+.error { position: absolute; z-index: 1; top: 3.25rem; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 2rem); padding: .625rem .875rem; border: 1px solid var(--error); background: var(--error-bg); color: var(--error); border-radius: .5rem; font-size: .8125rem; }
+.error.hint { border-color: var(--border); background: var(--inset); color: var(--muted); }
 .note { font-size: .75rem; color: var(--amber); background: var(--amber-bg); padding: .75rem max(1rem, calc(100% - 62.5rem)) .75rem 1rem; border-radius: .375rem; margin-top: .75rem; }
 dialog { border: 1px solid var(--border); border-radius: 1rem; width: min(35rem, calc(100% - 2rem)); padding: 1.75rem; box-shadow: 0 20px 100px #00000040; color: var(--text); background: var(--surface); }
 dialog::backdrop { background: #11151d99; backdrop-filter: blur(4px); }
@@ -188,7 +188,6 @@ dialog a { font-size: .75rem; color: var(--purple); }
 /* Narrow enough on short windows that the whole 16:9 frame, plus the chapter column, fits without scrolling. */
 .talk-dialog { --chapters: 14rem; width: min(78rem, calc(100% - 2rem), calc((100vh - 11rem) * 16 / 9 + var(--chapters) + 4.25rem)); padding: 1.25rem 1.5rem 1.5rem; }
 .talk-dialog h2 { margin: 0; }
-.talk-dialog .talk-meta { margin: .25rem 0 0; font-size: .75rem; }
 .talk-info { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin-top: 1rem; }
 .talk-dialog .talk-file { display: flex; flex-wrap: wrap; gap: .25rem .5rem; margin: 0; font: .6875rem/1.5 'IBM Plex Mono', monospace; }
 .talk-speed button { font-variant-numeric: tabular-nums; }
@@ -222,15 +221,11 @@ dialog a { font-size: .75rem; color: var(--purple); }
   #theme-label { display: none; }
   main { padding: 1.5rem 1.375rem 2rem; }
   .legend { gap: .5625rem; }
-  .section-heading { align-items: flex-end; }
   .legend b { display: none; }
-  .editor-bottom { align-items: flex-end; }
-  .primary-button { font-size: .75rem; gap: .625rem; padding: .625rem; }
-  .primary-button kbd { font-size: .625rem; }
-  .code-editor { padding: 1.5625rem .9375rem 2.5rem 1.0625rem; gap: .625rem; }
+  .code-editor { padding: .75rem 2.75rem .75rem 1.0625rem; gap: .625rem; }
   textarea { font-size: .8125rem; }
   /* Stack each label above its buttons. */
-  .example-rows { grid-template-columns: minmax(0, 1fr); gap: .4375rem; padding-bottom: 1.6875rem; }
+  .example-rows { grid-template-columns: minmax(0, 1fr); gap: .4375rem; }
   .example-row + .example-row .row-label { margin-top: .4375rem; }
   .example-buttons { gap: .4375rem; }
   .text-button { font-size: .75rem; }
@@ -238,7 +233,7 @@ dialog a { font-size: .75rem; color: var(--purple); }
   .talk-label { display: none; }
   .talk-dialog { padding: 1rem 1rem 1.125rem; }
   .talk-dialog .talk-file { flex-direction: column; }
-  .talk-file span { display: none; }
+  .talk-separator { display: none; }
   dl { grid-template-columns: 7.5rem 1fr; gap: .9375rem .625rem; }
   #diagram svg { min-height: 17.5rem; }
   .diagram-toolbar { gap: .625rem; }
@@ -259,7 +254,5 @@ dialog a { font-size: .75rem; color: var(--purple); }
   .brand-icon { margin-right: .375rem; }
   .header-actions { gap: .375rem; }
   .talk-button { width: 2.25rem; min-height: 2.25rem; }
-  .editor-bottom { flex-wrap: wrap; }
-  .primary-button { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

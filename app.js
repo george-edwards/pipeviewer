@@ -428,11 +428,10 @@ function render() {
     currentModel = parsePipeline($('#pipeline').value);
     currentSource = $('#pipeline').value;
     $('#error').hidden = true;
-    $('#results').hidden = false;
+    $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
     const subCount = currentModel.all.length - currentModel.commands.length - jobCount;
     $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in parallel jobs` : ''}`;
-    $('#flow-caption').hidden = true;
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
@@ -445,10 +444,20 @@ function render() {
     showVariations();
     try { localStorage.setItem('pipeviewer-pipeline', currentSource); } catch { /* Storage is optional. */ }
   } catch (error) {
+    // Half-typed pipelines rarely parse, so keep the last diagram and say what is missing.
     $('#error').textContent = error.message;
+    $('#error').classList.toggle('hint', !$('#pipeline').value.trim());
     $('#error').hidden = false;
-    $('#results').hidden = true;
+    $('#results').classList.add('stale');
+    $('#results').classList.toggle('empty', !currentModel);
   }
+}
+// Parsing and drawing take well under a frame, so the diagram follows every keystroke.
+let renderQueued = false;
+function queueRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
 }
 
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
@@ -477,17 +486,7 @@ systemTheme.addEventListener('change', event => {
 });
 applyTheme(document.documentElement.dataset.theme);
 
-const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgentData?.platform || navigator.platform);
-$('#shortcut-hint').textContent = isMac ? '⌘ Enter' : 'Ctrl+Enter';
-$('#shortcut-hint').setAttribute('aria-label', `${isMac ? 'Command' : 'Control'} plus Enter`);
-$('#pipeline').setAttribute('aria-keyshortcuts', isMac ? 'Meta+Enter' : 'Control+Enter');
-$('.primary-button').setAttribute('aria-keyshortcuts', isMac ? 'Meta+Enter' : 'Control+Enter');
-$('#pipeline-form').addEventListener('submit', event => { event.preventDefault(); render(); });
-$('#pipeline-form').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); render(); } });
-$('#pipeline').addEventListener('input', () => {
-  fitEditor();
-  $('#flow-caption').hidden = $('#pipeline').value === currentSource;
-});
+$('#pipeline').addEventListener('input', () => { fitEditor(); queueRender(); });
 // The editor grows with its content up to ten lines, then scrolls. A height the viewer drags
 // to acts as a minimum; CSS caps both.
 let chosenHeight = 0;
