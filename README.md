@@ -45,7 +45,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## macOS and zsh
 
-The **SHELL** switch above the editor, Tux for Linux and Bash and an apple for macOS and zsh, maps a command line as macOS runs it: under zsh, the default macOS shell, with the BSD and Apple versions of the tools. The choice is remembered.
+The **SHELL** switch above the editor, Tux for Linux and Bash and an apple for macOS and zsh, maps a command line as macOS runs it: under zsh, the default macOS shell, with the BSD and Apple versions of the tools. It starts on macOS on Apple devices and on Linux elsewhere, and remembers your choice once you pick one.
 
 - zsh's MULTIOS option is on by default, so a redirect adds a destination instead of replacing the pipe or an earlier redirect. `cmd > out | grep x` sends output to both, and `cmd 2>&1 > /dev/null | grep x` gives grep both streams. The diagram draws a line to each target.
 - Process substitutions are numbered from `/dev/fd/11`. One used as an argument gets the shell's own descriptors; one used as a redirect target sees the pipeline's pipes but not the command's redirects.

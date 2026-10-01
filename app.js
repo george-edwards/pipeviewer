@@ -20,8 +20,7 @@ const variations = {
     { label: 'long-form', source: 'make 1> build.log 2>&1' },
   ],
   procsub: [
-    { label: 'Write to >( )', source: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l' },
-    { label: 'Read from <( )', source: 'cat <(head /etc/hosts) <(head /etc/shells) <(echo hello, world)' },
+    { label: 'Plain', source: 'cat <(head /etc/hosts) <(head /etc/shells) <(echo hello, world)' },
     { label: 'Labelled lines', source: "cat <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    <(echo hello, world)" },
     // Explicit redirects choose the descriptor numbers instead of Bash.
     { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
@@ -95,8 +94,11 @@ function showVariations() {
 let currentModel;
 let currentSource = '';
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
-let platform = 'linux';
-try { if (localStorage.getItem('pipeviewer-platform') === 'macos') platform = 'macos'; } catch {}
+// Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
+// Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
+const appleDevice = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent);
+let platform = appleDevice ? 'macos' : 'linux';
+try { const saved = localStorage.getItem('pipeviewer-platform'); if (['linux', 'macos'].includes(saved)) platform = saved; } catch {}
 
 function destinationMarkup(dest, fd, commands, cmd) {
   if (dest.type === 'pipe') {
