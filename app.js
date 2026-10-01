@@ -26,6 +26,7 @@ const examples = {
 ' | sort -rn | head -50 > top-50-pages`,
   weekDownload: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
 ::: {14..20} ::: {00..23}`,
+  zcatSpeed: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b >/dev/null',
 };
 // Examples with several equivalent spellings, shown as toggles once one of them is loaded.
 const variations = {
