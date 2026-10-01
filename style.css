@@ -55,6 +55,9 @@ a { color: inherit; }
 .header-actions { display: flex; align-items: center; gap: 1.25rem; }
 .text-button { background: none; border: 0; color: var(--muted); font-size: .8125rem; font-weight: 500; padding: .625rem 0; }
 .text-button:hover { color: var(--purple); }
+.talk-button { display: flex; align-items: center; gap: .4375rem; min-height: 2.5rem; padding: .5rem .875rem .5rem .6875rem; border: 1px solid var(--purple-bg); border-radius: .4375rem; background: var(--purple-bg); color: var(--purple); font-size: .75rem; font-weight: 600; }
+.talk-button:hover { border-color: var(--purple); }
+.talk-button svg { width: 1rem; height: 1rem; fill: currentColor; }
 .theme-toggle { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .5625rem .75rem; min-height: 2.5rem; border: 1px solid var(--border); border-radius: .4375rem; background: var(--surface); color: var(--text); font-size: .75rem; }
 .theme-toggle:hover { background: var(--inset); }
 .theme-toggle svg { width: 1.0625rem; height: 1.0625rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -81,6 +84,9 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .example-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: .625rem 1.125rem; padding: .875rem 0 1.625rem; }
 .example-row { display: contents; }
 .example-row[hidden] { display: none; }
+/* Held back until the talk is given; delete these two rules to show the presentation examples and their variations. */
+.presentation-row { display: none; }
+#variations:has([data-variation^="palindromes:"], [data-variation^="timingReverse:"]) { display: none; }
 .row-label { font-size: .625rem; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
 .example-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .example-buttons button { background: var(--surface); border: 1px solid var(--border); border-radius: .3125rem; padding: .375rem .5625rem; color: var(--muted); font-size: .75rem; }
@@ -178,9 +184,33 @@ dt { font-family: 'IBM Plex Mono', monospace; color: var(--purple); font-size: .
 dd { margin: 0; line-height: 1.5; }
 .reference-limit { border-top: 1px solid var(--border); padding-top: 1rem; }
 dialog a { font-size: .75rem; color: var(--purple); }
+/* Narrow enough on short windows that the whole 16:9 frame, plus the chapter column, fits without scrolling. */
+.talk-dialog { --chapters: 14rem; width: min(78rem, calc(100% - 2rem), calc((100vh - 11rem) * 16 / 9 + var(--chapters) + 4.25rem)); padding: 1.25rem 1.5rem 1.5rem; }
+.talk-dialog h2 { margin: 0; }
+.talk-dialog .talk-meta { margin: .25rem 0 0; font-size: .75rem; }
+.talk-dialog .talk-file { display: flex; flex-wrap: wrap; gap: .25rem .5rem; margin: 1rem 0 0; font: .6875rem/1.5 'IBM Plex Mono', monospace; }
+.talk-file code { font: inherit; overflow-wrap: anywhere; }
+.talk-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--chapters); gap: 1.25rem; margin-top: .5rem; }
+.talk-frame { aspect-ratio: 16 / 9; border-radius: .625rem; overflow: hidden; background: #000; }
+.talk-frame video { display: block; width: 100%; height: 100%; }
+/* The list scrolls inside the video's height rather than stretching the row. */
+.talk-chapters { position: relative; min-height: 12rem; }
+.talk-chapters ol { position: absolute; inset: 1.375rem 0 0; overflow-y: auto; margin: 0; padding: 0 .25rem 0 0; list-style: none; }
+.talk-chapters .row-label { display: block; }
+.talk-chapters button { display: flex; gap: .75rem; width: 100%; padding: .4375rem .5625rem; border: 0; border-radius: .375rem; background: none; color: var(--muted); font-size: .8125rem; text-align: left; }
+.talk-chapters button:hover { background: var(--inset); color: var(--text); }
+.talk-chapters button.active { background: var(--purple-bg); color: var(--purple); font-weight: 550; }
+.chapter-time { min-width: 2.5rem; font: .75rem/1.6 'IBM Plex Mono', monospace; }
+.talk-frame p { margin: 0; padding: 1.5rem; color: #fff; }
 [hidden] { display: none !important; }
 /* Pipelines read left to right, so wide windows give the page their width instead of margins. */
 @media (min-width: 90.625em) { :root { --content: calc(100vw - 12rem); } main { padding: 2rem 0 2.5rem; } }
+@media (max-width: 60em) {
+  .talk-dialog { width: min(48rem, calc(100% - 2rem)); }
+  .talk-body { grid-template-columns: minmax(0, 1fr); }
+  .talk-chapters { min-height: 0; }
+  .talk-chapters ol { position: relative; inset: auto; max-height: 13rem; margin-top: .5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0 .5rem; }
+}
 @media (max-width: 47.5em) {
   .site-header { height: 4.375rem; padding: 0 1.25rem; }
   .brand { font-size: 1.3125rem; }
@@ -201,6 +231,11 @@ dialog a { font-size: .75rem; color: var(--purple); }
   .example-row + .example-row .row-label { margin-top: .4375rem; }
   .example-buttons { gap: .4375rem; }
   .text-button { font-size: .75rem; }
+  .talk-button { width: 2.5rem; justify-content: center; padding: 0; }
+  .talk-label { display: none; }
+  .talk-dialog { padding: 1rem 1rem 1.125rem; }
+  .talk-dialog .talk-file { flex-direction: column; }
+  .talk-file span { display: none; }
   dl { grid-template-columns: 7.5rem 1fr; gap: .9375rem .625rem; }
   #diagram svg { min-height: 17.5rem; }
   .diagram-toolbar { gap: .625rem; }
@@ -210,11 +245,17 @@ dialog a { font-size: .75rem; color: var(--purple); }
   .usage-assumption { margin-left: 0; flex-basis: 100%; }
   #diagram-scroll::after { content: 'Scroll horizontally →'; position: sticky; left: 0; display: block; width: 100%; text-align: center; font-size: .6875rem; color: var(--muted); padding: .375rem 0 .75rem; }
 }
+/* Phones: the header keeps every control on one line by shortening the reference label. */
+@media (max-width: 26.25em) {
+  .header-actions { gap: .625rem; }
+  .reference-quick { display: none; }
+}
 @media (max-width: 22.5em) {
   .site-header { padding: 0 .75rem; }
   .brand { font-size: 1.1875rem; }
   .brand-icon { margin-right: .375rem; }
-  .header-actions { gap: .5rem; }
+  .header-actions { gap: .375rem; }
+  .talk-button { width: 2.25rem; min-height: 2.25rem; }
   .editor-bottom { flex-wrap: wrap; }
   .primary-button { margin-left: auto; }
 }

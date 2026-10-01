@@ -19,6 +19,8 @@ npm run build # Static files in dist/
 
 Serve `dist/` with any static host. No build dependencies or backend are needed. The interface uses optional Google Fonts with local fallbacks.
 
+The **Tips & Tricks** button plays a recorded talk from `video/`, which is not in git. Put the `.webm` file there before building, and `npm run build` copies it to `dist/video/`. Your static host must support HTTP range requests so the player can seek. The dev server supports them.
+
 ## Features
 
 - Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.

@@ -532,7 +532,46 @@ $('#variations').addEventListener('click', event => {
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
-$('#reference').addEventListener('click', event => { if (event.target === $('#reference')) { const box = event.target.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.target.close(); } });
+// Chapter starts in seconds, marked by hand when the talk was first published.
+const chapters = [
+  [0, 'columns'], [28, '{} magic'], [128, '-x debugging'], [209, 'strace'], [261, 'signals'], [406, 'reset'],
+  [466, 'fg, bg'], [648, 'disown'], [724, 'bropages'], [865, 'Navigating directories'], [1035, 'Emergency space'],
+  [1184, 'alt+.'], [1236, 'history'], [1440, 'caret ^'], [1477, 'GNU-isms'], [1911, 'tmpfs'], [2080, 'free'],
+  [2116, 'Drop cache'], [2225, 'time / benchmarking'], [2288, '/dev/shm'], [2365, 'systemd?'],
+  [2441, 'Ramdisk benchmark'], [2562, '/dev/[u]random'],
+];
+// The talk is slow-paced, so it starts a little faster; the player's own menu can change it.
+$('#talk-video').defaultPlaybackRate = $('#talk-video').playbackRate = 1.25;
+const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+$('#talk-chapters').innerHTML = chapters.map(([time, label]) => `<li><button type="button" data-time="${time}"><span class="chapter-time">${clock(time)}</span><span>${escape(label)}</span></button></li>`).join('');
+$('#talk-chapters').addEventListener('click', event => {
+  const button = event.target.closest('[data-time]');
+  if (!button) return;
+  const video = $('#talk-video');
+  video.currentTime = Number(button.dataset.time);
+  video.play().catch(() => {});
+});
+let currentChapter = -1;
+$('#talk-video').addEventListener('timeupdate', () => {
+  const index = chapters.findLastIndex(([time]) => time <= $('#talk-video').currentTime);
+  if (index === currentChapter) return;
+  currentChapter = index;
+  $('#talk-chapters').querySelectorAll('button').forEach((button, i) => {
+    button.classList.toggle('active', i === index);
+    if (i === index) button.setAttribute('aria-current', 'true'); else button.removeAttribute('aria-current');
+  });
+  // Keep the current chapter in view by scrolling only the list, never the dialog around it.
+  const list = $('#talk-chapters'), item = list.children[index];
+  if (!item) return;
+  if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
+  else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+});
+$('#talk-button').addEventListener('click', () => { $('#talk').showModal(); $('#talk-video').play().catch(() => {}); });
+$('#close-talk').addEventListener('click', () => $('#talk').close());
+// Closing pauses the talk; reopening carries on from the same point.
+$('#talk').addEventListener('close', () => $('#talk-video').pause());
+// A click on the backdrop lands on the dialog itself, outside its box.
+for (const dialog of [$('#reference'), $('#talk')]) dialog.addEventListener('click', event => { if (event.target === dialog) { const box = dialog.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close(); } });
 // The details start collapsed; remember when a viewer opens them.
 try { $('#details-section').open = localStorage.getItem('pipeviewer-details') === 'open'; } catch {}
 $('#details-section').addEventListener('toggle', () => {
