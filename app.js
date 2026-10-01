@@ -67,8 +67,8 @@ const variations = {
 };
 // Two ways to send both output streams to one file.
 variations.merge = [
-  { label: '&>', source: 'grep 0<access.log "404" &> errors.log' },
-  { label: '2>&1', source: 'grep 0<access.log "404" 1>errors.log 2>&1' },
+  { label: 'short-hand', source: 'grep 0<access.log "404" &> errors.log' },
+  { label: 'long-form', source: 'grep 0<access.log "404" 1>errors.log 2>&1' },
 ];
 variations.timingReverse = [
   { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
@@ -85,8 +85,8 @@ const exampleSources = (key, on = platform) => (variations[key]?.map(variation =
 
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
-  $('#variations').hidden = !key;
-  if (!key) return;
+  // The row and its label stay put; only the buttons come and go.
+  if (!key) { $('#variation-buttons').innerHTML = ''; return; }
   $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
     const active = styled(variation.source) === currentSource;
     return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(styled(variation.source))}">${escape(variation.label)}</button>`;
@@ -287,13 +287,13 @@ function drawPipeline(model, palette, colors) {
     if (Number(fd) > 2 || ['pipe', 'procsub', 'job'].includes(dest.type) || dest.job) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
-    // stderr left on the terminal ends in a tag beside its port, so it needs no box.
-    if (Number(fd) === 2 && dest.id === 'terminal-err') return;
+    // With terminal tags, stdin from and stderr to the terminal end in a tag beside the port, with no box.
+    if (terminalTags && ((Number(fd) === 0 && dest.id === 'terminal-in') || (Number(fd) === 2 && dest.id === 'terminal-err'))) return;
     used.set(dest.id, dest);
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
   // Space for the terminal boxes is only kept when a stream uses them.
-  const minX = used.has('terminal-in') ? 0 : 140;
+  const minX = used.has('terminal-in') ? 0 : terminalTags ? 120 : 140;
   const width = Math.max(850, used.has('terminal-out') ? 240 + grid.cols * 360 + 175 : 180 + grid.cols * 360, 350 + bottom.length * 190);
   const positions = new Map();
   positions.set('terminal-in', { x: 20 + grid.shift * 360, y: 149, w: 155, h: 59 });
@@ -309,11 +309,14 @@ function drawPipeline(model, palette, colors) {
     paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason, tagged));
     paths.push(`<text${tagged} x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
   };
-  // stderr that stays on the terminal, the default, is drawn as a short line to a “terminal” tag
-  // rather than a route across the page to a shared box, much as circuit diagrams mark ground.
-  const ground = (p, inactive, reason, tagged) => {
-    const color = inactive ? palette.muted : colors[2], x = p.x + 36;
-    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`stderr goes to the terminal. ${reason}`)}</title><path class="link-hit" d="M ${p.x} ${p.y} H ${x + 44}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${p.x} ${p.y} H ${x}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="44" height="14" rx="7" fill="${inactive ? palette.inset : palette['amber-bg']}" stroke="${color}"/><text x="${x + 22}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
+  // With terminal tags, stdin from and stderr to the terminal, the defaults, are drawn as a short
+  // line to a “terminal” tag beside the port rather than a route to a shared box, much as circuit
+  // diagrams mark ground. stdin's tag sits to the left of its port, stderr's to the right.
+  const ground = (p, fd, inactive, reason, tagged) => {
+    const color = inactive ? palette.muted : colors[fd], fill = inactive ? palette.inset : palette[fd === 0 ? 'green-bg' : 'amber-bg'];
+    const [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 80] : [p.x, p.x + 36, p.x + 36];
+    const what = fd === 0 ? 'stdin comes from the terminal.' : 'stderr goes to the terminal.';
+    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + 44)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="44" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + 22}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
   };
   const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
   // Substitutions not on 0–2 attach to the bottom edge: <(…) on the left, >(…) on the right.
@@ -410,8 +413,8 @@ function drawPipeline(model, palette, colors) {
         } else stub(p, fd, `pipe ${dest.from + 1}`, inactive, usage.reason, tag([here], dest));
         continue;
       }
+      if (terminalTags && ((fd === 0 && dest.id === 'terminal-in') || (fd === 2 && dest.id === 'terminal-err'))) { ground(p, fd, inactive, usage.reason, tag([here], dest)); continue; }
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
-      if (fd === 2 && dest.id === 'terminal-err') { ground(p, inactive, usage.reason, tag([here], dest)); continue; }
       const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
         if (dest.id === 'terminal-in' && cmd.index > 0) {
@@ -502,7 +505,7 @@ function drawPipeline(model, palette, colors) {
       ${stack}<rect class="card-body" x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
-      <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
+      <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="12" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 24))}</text>
       ${ports}${argumentPorts}${jobPorts}</g>`;
   });
   // With stderr tagged in place, a pipeline often has nothing below its cards; end the drawing there.
@@ -521,6 +524,9 @@ let targets = [], inspected = null, hovered = null, marked = null;
 // The Highlight switch turns the linking off in both directions.
 let highlighting = true;
 try { highlighting = localStorage.getItem('pipeviewer-highlight') !== 'off'; } catch {}
+// The Terminal tags switch draws terminal stdin and stderr as tags, or as routes to the terminal boxes.
+let terminalTags = true;
+try { terminalTags = localStorage.getItem('pipeviewer-terminal-tags') !== 'off'; } catch {}
 function inspectTargets(model) {
   const portsOf = cmd => Object.keys(cmd.fds).map(fd => `${cmd.key}:${fd}`);
   const list = [];
@@ -941,10 +947,23 @@ $('#highlight-toggle').addEventListener('click', event => {
   replay(event.currentTarget, 'just-toggled');
   $('.diagram-panel').classList.remove('linking-on', 'linking-off');
   replay($('.diagram-panel'), highlighting ? 'linking-on' : 'linking-off');
-  $('#highlight-status').textContent = `Highlighting ${highlighting ? 'on' : 'off'}`;
+  $('#switch-status').textContent = `Highlighting ${highlighting ? 'on' : 'off'}`;
   inspect(true);
 });
 showHighlighting();
+function showTerminalTags() {
+  $('#tags-toggle').setAttribute('aria-checked', terminalTags);
+  $('#tags-key').hidden = !terminalTags;
+}
+$('#tags-toggle').addEventListener('click', event => {
+  terminalTags = !terminalTags;
+  try { localStorage.setItem('pipeviewer-terminal-tags', terminalTags ? 'on' : 'off'); } catch {}
+  showTerminalTags();
+  replay(event.currentTarget, 'just-toggled');
+  $('#switch-status').textContent = `Terminal tags ${terminalTags ? 'on' : 'off'}`;
+  if (currentModel) { showDiagram(); replay($('#diagram'), 'redrawn'); }
+});
+showTerminalTags();
 // The examples strip fades an edge while it can scroll that way, and a vertical wheel scrolls it
 // sideways until it reaches an end, after which the page scrolls as usual.
 function showStripEdges() {
