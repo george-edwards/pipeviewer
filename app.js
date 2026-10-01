@@ -308,8 +308,9 @@ function drawPipeline(model, palette, colors, mono) {
   const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
   const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
   // With tags on, a file or device that only one port uses ends in a small tag beside that port,
-  // as the terminal does. stdin's tag needs no card to its left and stdout's none to its right;
-  // stderr's fits in the gap before the next card. stdout and stderr sent to one file, as by &>
+  // as the terminal does. stderr's fits in the gap before the next card. Where a card sits beside
+  // stdin or stdout, their tag rises into the empty space above the pipe between the two cards,
+  // which one tag can use. stdout and stderr sent to one file, as by &>
   // or 1> file 2>&1, share one tag between their ports. A file shared any other way keeps its box,
   // so the drawing still shows the streams reaching one place.
   const fileTags = new Map();
@@ -324,6 +325,7 @@ function drawPipeline(model, palette, colors, mono) {
     model.all.forEach(cmd => [0, 1, 2].forEach(fd => targetsOf(cmd.fds[fd]).forEach(dest => sharers.set(dest, (sharers.get(dest) ?? 0) + 1))));
     // The terminal input box, when a stream still needs it, sits left of the first card.
     const terminalBox = model.all.some(cmd => [1, 2].some(fd => targetsOf(cmd.fds[fd]).some(dest => dest.id === 'terminal-in')));
+    const raised = new Set();
     model.all.forEach(cmd => [0, 1, 2].forEach(fd => {
       const dest = cmd.fds[fd], { col, row } = grid.place.get(cmd);
       if (!['file', 'null'].includes(dest?.type) || fileTags.has(`${cmd.key}:${fd}`)) return;
@@ -334,7 +336,15 @@ function drawPipeline(model, palette, colors, mono) {
         return;
       }
       if (sharers.get(dest) > 1 && !deviceOf(dest)) return;
-      if ((crowded && fd !== 2) || (fd === 0 && terminalBox && row === 0 && col + grid.shift === 0)) return;
+      if (crowded && fd !== 2) {
+        const gap = `${col - (fd === 0 ? 1 : 0)},${row}`;
+        if (raised.has(gap)) return;
+        raised.add(gap);
+        const planned = plan(dest, 116);
+        fileTags.set(`${cmd.key}:${fd}`, { ...planned, raised: true, x: fd === 0 ? p.x - 26 - planned.w : p.x + 26, y: p.y - 48 });
+        return;
+      }
+      if (fd === 0 && terminalBox && row === 0 && col + grid.shift === 0) return;
       const planned = plan(dest, crowded ? 92 : 170);
       fileTags.set(`${cmd.key}:${fd}`, { ...planned, x: fd === 0 ? p.x - 36 - planned.w : p.x + 36 });
     }));
@@ -384,12 +394,22 @@ function drawPipeline(model, palette, colors, mono) {
   const tagBody = ({ device, label, caption, w, x }, y, h = 16) => `<rect class="tag-body node-body" x="${x}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${palette.inset}" stroke="${palette.border}"/>${glyph(device?.icon ?? 'file', x + 5, y - 5, palette.muted, 10 / 12)}<text x="${x + 19}" y="${y + 3.2}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="9">${escape(label)}</text>`
     + `${caption ? `<text x="${x + w / 2}" y="${y - h / 2 - 5}" text-anchor="middle" fill="${palette.muted}" font-size="8.5">${escape(caption)}</text>` : ''}`;
   const verb = dest => dest.mode === 'read' ? 'reads from' : dest.mode === 'append' ? 'appends to' : 'writes to';
+  // A line through the given points, with rounded corners.
+  const elbow = (points, r = 6) => points.map(([x, y], i) => {
+    if (!i) return `M ${x} ${y}`;
+    if (i === points.length - 1) return `L ${x} ${y}`;
+    const toward = ([tx, ty]) => [x + Math.sign(tx - x) * r, y + Math.sign(ty - y) * r];
+    const [before, after] = [toward(points[i - 1]), toward(points[i + 1])];
+    return `L ${before[0]} ${before[1]} Q ${x} ${y} ${after[0]} ${after[1]}`;
+  }).join(' ');
   const fileTag = (p, fd, planned, inactive, reason, tagged) => {
-    const { dest, device, w, x } = planned;
-    const color = inactive ? palette.muted : colors[fd], near = fd === 0 ? x + w : x, side = fd === 0 ? -1 : 1;
-    const [from, to] = dest.mode === 'read' ? [near, p.x + side * 4] : [p.x, near - side * 4];
+    const { dest, device, w, x } = planned, y = planned.raised ? planned.y : p.y;
+    const color = inactive ? palette.muted : colors[fd], near = fd === 0 ? x + w : x, side = fd === 0 ? -1 : 1, bend = p.x + side * 14;
+    // A raised tag is reached by a line that turns up beside the port.
+    const points = planned.raised ? [[p.x, p.y], [bend, p.y], [bend, y], [near, y]] : [[p.x, p.y], [near, y]];
+    const d = elbow(dest.mode === 'read' ? [...points.reverse().slice(0, -1), [p.x + side * 4, p.y]] : [...points.slice(0, -1), [near - side * 4, y]]);
     const what = `${names[fd]} ${verb(dest)} ${dest.label}.${device ? ` ${dest.label} ${device.about}.` : ''}`;
-    paths.push(`<g class="stream-link file-tag${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(p.x, x)} ${p.y} H ${Math.max(p.x, x + w)}" fill="none" stroke="transparent" stroke-width="16"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/>${tagBody(planned, p.y)}</g>`);
+    paths.push(`<g class="stream-link file-tag${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="16"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/>${tagBody(planned, y)}</g>`);
   };
   // The shared tag for stdout and stderr sits between their ports. Each stream bends towards it and
   // enters side by side, stdout above, so both colours reach the file. The tag is drawn once, after
