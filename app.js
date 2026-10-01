@@ -411,6 +411,13 @@ function drawPipeline(model, palette, colors, mono) {
     return cmd.fds[sub.fd] === endpoint ? sub.fd : null;
   };
   const bottomSubs = cmd => cmd.substitutions.filter(sub => sub.kind !== 'job' && bottomFd(sub) !== null);
+  // Descriptors above 2 that stay open, other than substitutions, are drawn on their card.
+  const extraFds = cmd => Object.keys(cmd.fds).map(Number).filter(fd => fd > 2 && !['procsub', 'closed'].includes(targetsOf(cmd.fds[fd])[0]?.type));
+  const leaksPipe = (cmd, fd) => { const dest = targetsOf(cmd.fds[fd])[0]; return dest.type === 'pipe' && dest.commands[dest.from] === cmd; };
+  const extraPort = (cmd, fd) => {
+    const g = geometry(cmd), k = bottomSubs(cmd).filter(sub => sub.direction === '<').length + extraFds(cmd).filter(f => leaksPipe(cmd, f)).indexOf(fd);
+    return { x: g.x + 30 + k * 34, y: g.y + 156 };
+  };
   const argumentPort = (cmd, sub) => {
     const g = geometry(cmd), same = bottomSubs(cmd).filter(s => s.direction === sub.direction), k = same.indexOf(sub);
     return { x: g.x + (sub.direction === '<' ? 30 + k * 34 : 110 - k * 34), y: g.y + 156 };
@@ -518,6 +525,14 @@ function drawPipeline(model, palette, colors, mono) {
       }
     }
   });
+  // A second write end of the pipe to the next command, as 3>&1 leaves, gets a port on the card's
+  // bottom edge and runs into that command's stdin beside the pipe's own line.
+  model.all.forEach(cmd => extraFds(cmd).filter(fd => leaksPipe(cmd, fd)).forEach(fd => {
+    const dest = targetsOf(cmd.fds[fd])[0], p = extraPort(cmd, fd), next = dest.commands[dest.to], q = port(next, 0);
+    const low = geometry(cmd).y + 170, turn = q.x - 20;
+    const reason = `fd ${fd} also writes to the pipe to ${next.usage.name}, so the pipe stays open until ${cmd.usage.name} closes it too. ${portUsage(cmd, fd).reason}`;
+    paths.push(path(`M ${p.x} ${p.y} V ${low - 8} Q ${p.x} ${low} ${p.x + 8} ${low} H ${turn - 8} Q ${turn} ${low} ${turn} ${low - 8} V ${q.y + 8} Q ${turn} ${q.y} ${turn + 8} ${q.y} H ${q.x - 4}`, 3, false, false, reason, tag([`${cmd.key}:${fd}`, `${next.key}:0`], dest)));
+  }));
   // Each bottom route gets its own lane. A route must sit above another when that one's horizontal
   // would cross its vertical from the card, or its rise to a terminal; and below one it drops through.
   const spans = (link, x) => Math.min(link.upper, link.lower) + 1 < x && x < Math.max(link.upper, link.lower) - 1;
@@ -576,6 +591,25 @@ function drawPipeline(model, palette, colors, mono) {
         <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
         <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
     }).join('');
+    const extraPorts = extraFds(cmd).filter(fd => leaksPipe(cmd, fd)).map(fd => {
+      const p = extraPort(cmd, fd), usage = portUsage(cmd, fd);
+      return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(usage.reason)}</title>
+        <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
+        <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${usage.state === 'possible' ? colors[3] : palette.surface}" stroke="${colors[3]}" stroke-width="1.8" ${usage.state === 'unknown' ? 'stroke-dasharray="2 2"' : ''}/></g>`;
+    }).join('');
+    // The rest are listed in the card's empty lower-left corner, one line each: the descriptor, which
+    // way it goes, and where. Two lines fit above bottom-edge ports and three without; more are
+    // counted, and Descriptor details lists them all.
+    const listed = extraFds(cmd).filter(fd => !leaksPipe(cmd, fd)), room = extraPorts || bottomSubs(cmd).length ? 2 : 3;
+    const shown = listed.length > room ? listed.slice(0, room - 1) : listed;
+    const extraLines = shown.map((fd, i) => {
+      const dest = targetsOf(cmd.fds[fd])[0], ly = y + 115 + i * 13, usage = portUsage(cmd, fd);
+      const reads = dest.mode === 'read' || dest.id === 'terminal-in' || dest.type === 'pipe';
+      const file = ['file', 'null'].includes(dest.type), icon = file ? deviceOf(dest)?.icon ?? 'file' : null;
+      const where = dest.type === 'pipe' ? `pipe ${dest.from + 1}` : dest.type === 'job' ? dest.job.owner.usage.name : String(dest.id).startsWith('terminal') ? 'terminal' : short(dest.label, 13);
+      const lead = `fd ${fd} ${reads ? '←' : '→'}`, at = x + 16 + lead.length * 5.1 + 4;
+      return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(`fd ${fd}: ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)}. ${usage.reason}`)}</title><text class="extra-fd" x="${x + 16}" y="${ly}" fill="${palette.muted}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${escape(lead)}</text>${icon ? glyph(icon, at, ly - 7.5, palette.muted, 9 / 12) : ''}<text x="${at + (icon ? 12 : 0)}" y="${ly}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${escape(where)}</text></g>`;
+    }).join('') + (listed.length > shown.length ? `<text x="${x + 16}" y="${y + 115 + shown.length * 13}" fill="${palette.muted}" font-size="8.5"><title>Descriptor details lists every descriptor.</title>+${listed.length - shown.length} more</text>` : '');
     const jobPorts = cmd.substitutions.filter(sub => sub.kind === 'job').flatMap(job => [
       ...(job.input === 'blocks' ? [['>', 'blocks', palette.green]] : []), ...(job.ungroup ? [] : [['<', 'jobs', palette.purple]]),
     ].map(([direction, label, color]) => {
@@ -593,7 +627,7 @@ function drawPipeline(model, palette, colors, mono) {
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="12" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 24))}</text>
-      ${ports}${argumentPorts}${jobPorts}</g>`;
+      ${ports}${argumentPorts}${extraPorts}${extraLines}${jobPorts}</g>`;
   });
   // With stderr tagged in place, a pipeline often has nothing below its cards; end the drawing there.
   const cardsBottom = 101 + grid.rows * 200 + 156 + 34;
@@ -769,9 +803,8 @@ function render() {
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>${escape(cmd.substitution.owner.usage.name)}</code> once per ${cmd.substitution.tool === 'xargs' ? 'item' : 'argument'}</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
-    const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && !['procsub', 'closed'].includes(dest.type)));
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
-    $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2, and this pipeline leaves others open. Open Descriptor details below to see where they point.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
+    $('#notes').innerHTML = currentModel.notes.map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
     // Keep the chosen example visible in the scrolling strip.
     const chosen = $('#example-strip .active');
@@ -835,6 +868,7 @@ function showPlatform() {
   // zsh's default prompt ends in %, Bash's in $.
   $('.prompt').textContent = platform === 'macos' ? '%' : '$';
   $('#shell-name').textContent = platform === 'macos' ? 'zsh' : 'bash';
+  document.documentElement.dataset.platform = platform;
   document.querySelectorAll('[data-platform-text]').forEach(element => { element.hidden = element.dataset.platformText !== platform; });
 }
 $('#platform').addEventListener('click', event => {
