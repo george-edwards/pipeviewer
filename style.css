@@ -199,6 +199,14 @@ dt { font-family: 'IBM Plex Mono', monospace; color: var(--purple); font-size: .
 dd { margin: 0; line-height: 1.5; }
 .reference-limit { border-top: 1px solid var(--border); padding-top: 1rem; }
 dialog a { font-size: .75rem; color: var(--purple); }
+dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
+/* Reads as a link inside the sentence; the chevron shows whether the list is open. */
+.link-button { display: inline; padding: 0; border: 0; background: none; color: var(--purple); font: inherit; text-decoration: underline; text-underline-offset: .15em; }
+.link-button::after { content: ''; display: inline-block; margin: 0 .125rem 0 .3125rem; width: .375rem; height: .375rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-.15em) rotate(45deg); transition: transform .16s; }
+.link-button[aria-expanded="true"]::after { transform: translateY(.05em) rotate(-135deg); }
+.known-commands { columns: 6rem; column-gap: 1rem; margin: -.25rem 0 1rem; padding: .875rem 1rem; list-style: none; background: var(--inset); border-radius: .5rem; font: .75rem/1.75 'IBM Plex Mono', monospace; color: var(--text); }
+.known-commands li { break-inside: avoid; }
+.known-commands code { font: inherit; }
 /* Narrow enough on short windows that the whole 16:9 frame, plus the chapter column, fits without scrolling. */
 .talk-dialog { --chapters: 14rem; width: min(78rem, calc(100% - 2rem), calc((100vh - 11rem) * 16 / 9 + var(--chapters) + 4.25rem)); padding: 1.25rem 1.5rem 1.5rem; }
 .talk-dialog h2 { margin: 0; }
