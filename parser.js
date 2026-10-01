@@ -70,32 +70,37 @@ function tokenize(source, start = 0, nested = false, at = i => i, comments = tru
 }
 
 const letters = 'abcdefghijklmnopqrstuvwxyz';
-const fillAll = tokens => tokens.map(token => token.type === 'procsub' ? { ...token, tokens: fillAll(token.tokens) } : token.type === 'word' ? fillReplacements(token) : token);
+// fill turns placeholders the tool fills in, such as parallel's {}, into literal words.
+const fillAll = (tokens, fill = fillReplacements) => tokens.map(token => token.type === 'procsub' ? { ...token, tokens: fillAll(token.tokens, fill) } : token.type === 'word' ? fill(token) : token);
+// In a script run by sh -c, $1, $@ and the like are the items xargs passes, so they act like {}.
+const fillPositional = word => word.dynamic && !/[$*?[\]{}~]/.test(word.raw.replace(/\$(?:\{[0-9@*#]\}|[0-9@*#])/g, '')) ? { ...word, dynamic: false } : fillReplacements(word);
 
 /**
  * GNU parallel runs its command through a shell once per argument. When that command parses,
  * it becomes a job template below parallel. Jobs start after parallel's redirects apply. By
  * default parallel collects their output; with -u they write to its stdout and stderr directly.
  */
-function addJob(cmd, context) {
-  const { source, positions, input, ungroup } = cmd.usage.job;
+// The tool is parallel, or xargs running a shell script per item (xargs sh -c '…'). A job names
+// its own shell when it has one: sh -c scripts follow Bash's rules even under zsh.
+function addJob(cmd, context, shell) {
+  const { source, positions, input, ungroup, tool = 'parallel' } = cmd.usage.job;
   const saved = { substitutions: context.substitutions.length, owned: cmd.substitutions.length, endpoints: new Set(context.endpoints.keys()) };
   try {
-    const tokens = fillAll(tokenize(source, 0, false, i => positions[Math.min(i, positions.length - 1)]).tokens);
-    const job = { ...cmd.usage.job, id: `job-${context.substitutions.length}`, kind: 'job', key: `${cmd.key}j`, text: source, owner: cmd };
-    const collected = context.endpoint(`${job.id}-out`, 'job', 'parallel', { owner: cmd, job, direction: '<' });
-    const stdin = input === 'blocks' ? context.endpoint(`${job.id}-in`, 'job', 'parallel', { owner: cmd, job, direction: '>' })
+    const tokens = fillAll(tokenize(source, 0, false, i => positions[Math.min(i, positions.length - 1)]).tokens, tool === 'xargs' ? fillPositional : fillReplacements);
+    const job = { ...cmd.usage.job, tool, id: `job-${context.substitutions.length}`, kind: 'job', key: `${cmd.key}j`, text: source, owner: cmd };
+    const collected = ungroup ? null : context.endpoint(`${job.id}-out`, 'job', tool, { owner: cmd, job, direction: '<' });
+    const stdin = input === 'blocks' ? context.endpoint(`${job.id}-in`, 'job', tool, { owner: cmd, job, direction: '>' })
       : input === 'terminal' ? context.endpoint('terminal-in')
         : input === 'inherit' ? cmd.fds[0]
           : context.endpoint(`${job.id}-null`, 'null', '/dev/null', { mode: 'read', job });
     cmd.substitutions.push(job);
     context.substitutions.push(job);
-    Object.assign(job, buildPipeline(tokens, { 0: stdin, 1: ungroup ? cmd.fds[1] : collected, 2: ungroup ? cmd.fds[2] : collected }, context, job));
+    Object.assign(job, buildPipeline(tokens, { 0: stdin, 1: ungroup ? cmd.fds[1] : collected, 2: ungroup ? cmd.fds[2] : collected }, context, job, { shell: job.shell ?? shell }));
   } catch (error) {
     context.substitutions.length = saved.substitutions;
     cmd.substitutions.length = saved.owned;
     for (const id of [...context.endpoints.keys()]) if (!saved.endpoints.has(id)) context.endpoints.delete(id);
-    context.notes.push(`The parallel job command is shown as an argument. ${error.message}`);
+    context.notes.push(`The ${tool} job command is shown as an argument. ${error.message}`);
   }
 }
 
@@ -115,7 +120,8 @@ function addJob(cmd, context) {
  *   redirects runs cat (for output) or more (for input).
  */
 // first numbers the commands on from earlier pipelines in a list, so every key stays unique.
-function buildPipeline(tokens, inherited, context, substitution, { first = 0, prefix: listPrefix = '' } = {}) {
+// shell is 'bash' or 'zsh': whose redirect rules apply. Substitutions inherit it; jobs may name their own.
+function buildPipeline(tokens, inherited, context, substitution, { first = 0, prefix: listPrefix = '', shell = context.shell } = {}) {
   const groups = [], connectors = [], connectorTokens = [];
   let current = [];
   for (const token of tokens) {
@@ -138,7 +144,7 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
     const fds = { ...inherited, 0: index ? pipes[index - 1] : inherited[0], 1: pipes[index] || inherited[1] };
     const cmd = { index, key, substitution, fds, steps: [], substitutions: [], span: [tokens[0].span[0], tokens.at(-1).span[1]] };
     commands.push(cmd);
-    const zsh = context.platform === 'macos', initial = { ...fds };
+    const zsh = shell === 'zsh', initial = { ...fds };
     // zsh target lists; a missing entry means the descriptor is still inherited from the shell.
     const lists = {};
     if (zsh && index) lists[0] = [pipes[index - 1]];
@@ -164,7 +170,7 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
       snapshot[token.direction === '>' ? 0 : 1] = sub.endpoint;
       cmd.substitutions.push(sub);
       context.substitutions.push(sub);
-      Object.assign(sub, buildPipeline(token.tokens, snapshot, context, sub));
+      Object.assign(sub, buildPipeline(token.tokens, snapshot, context, sub, { shell }));
       fds[fd] = sub.endpoint;
       return sub;
     };
@@ -264,7 +270,7 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
         cmd.usage.fds[sub.place] = substitutionUsage(cmd.usage.name, sub.direction, sub.place, true);
       }
     }
-    if (cmd.usage.job) addJob(cmd, context);
+    if (cmd.usage.job) addJob(cmd, context, shell);
   });
   for (const pipe of pipes) pipe.commands = commands;
   return { commands, pipes };
@@ -308,7 +314,7 @@ export function parsePipeline(input, { platform = 'linux' } = {}) {
     if (!endpoints.has(id)) endpoints.set(id, { id, type, label, ...extra });
     return endpoints.get(id);
   };
-  const context = { endpoint, endpoints, substitutions: [], notes: [], platform };
+  const context = { endpoint, endpoints, substitutions: [], notes: [], platform, shell: platform === 'macos' ? 'zsh' : 'bash' };
   const terminal = { 0: endpoint('terminal-in', 'terminal', 'Terminal input'), 1: endpoint('terminal-out', 'terminal', 'Terminal output'), 2: endpoint('terminal-err', 'terminal', 'Terminal stderr') };
   const list = splitList(tokens);
   if (!list.length) throw new Error('Paste a command or pipeline to get started.');

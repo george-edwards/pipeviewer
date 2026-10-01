@@ -31,10 +31,12 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.
 - `|`, `|&`, `<`, `>`, `>>`, `>|`, `n>&m`, `n<&m`, `&>`, `&>>`, and descriptor closing.
 - Process substitution: `2> >(cmd)`, `< <(cmd)`, and `<(cmd)` or `>(cmd)` as arguments (passed as `/dev/fd/63`, `/dev/fd/62`, …). Substitutions can hold their own pipelines and redirects. They inherit the owning command's descriptors at their position in the left-to-right redirect order. For example, `cat` in `echo hi 2> >(cat) | xargs` writes to the same pipe as `echo`'s stdout.
+- `xargs` running a shell script per item (`xargs -P 8 sh -c '… "$1" …' _`) is drawn the same way. Its jobs read `/dev/null` and write straight to `xargs`'s stdout and stderr, and the script follows Bash's rules even on macOS, since `sh` is not zsh.
 - GNU `parallel` job commands that parse as pipelines are drawn as a stacked job template below `parallel`. It runs once per argument, with stdin from `/dev/null` (or blocks from `parallel` with `--pipe`), and `parallel` collects its stdout and stderr. With `-u`, jobs write straight to `parallel`'s stdout and stderr. Commands without a replacement string such as `{}` have the arguments appended, as `parallel` does.
 - Redirects to `/dev/tty` reach the terminal: reads connect to terminal input, stderr to terminal stderr, and other writes to terminal output.
 - `/dev/stdin`, `/dev/stdout`, and `/dev/stderr` redirect to the current destination of 0, 1, or 2, like a descriptor copy. When that destination is a file, the step notes that Bash opens it again with a separate offset.
 - Each routed stream gets its own lane; hover a line to fade the others and trace it.
+- The **Highlight** button in the diagram toolbar turns the linking between the command and the diagram on or off, in both directions.
 - The diagram follows the editor caret, like a browser's element inspector: a command lights its card and streams, a redirect its port and destination, and `|` its pipe. Commands inside process substitutions and `parallel` jobs light up too. It works the other way too: hover part of the diagram to mark its text in the editor, and click to select it.
 - Quoted arguments and destinations, escapes, and additional descriptor bookkeeping.
 

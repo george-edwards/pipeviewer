@@ -147,3 +147,22 @@ test('egrep and fgrep are modelled like grep', () => {
     assert.equal(parsePipeline(`${name} x file`).commands[0].usage.fds[0].state, 'unused');
   }
 });
+
+test('xargs running sh -c draws the script as a job template, like parallel', () => {
+  const model = parsePipeline(`printf '%s\\0' *.gz | xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | wc -l 1> "$1.count"' _`);
+  const job = model.substitutions.find(sub => sub.kind === 'job');
+  assert.equal(job.tool, 'xargs');
+  assert.deepEqual(job.commands.map(cmd => cmd.usage.name), ['gzcat', 'wc']);
+  // Jobs read /dev/null, $1 acts as a placeholder, and output is not collected.
+  assert.equal(job.commands[0].fds[0].label, '/dev/null');
+  assert.equal(job.commands[1].fds[1].label, '$1.count');
+  assert.equal(job.commands[0].fds[2], model.commands[1].fds[2]);
+  assert.equal(job.zeroth, true);
+  assert.equal(parsePipeline("xargs sh -c 'echo $0'").substitutions[0].zeroth, false);
+  // sh -c follows Bash's rules even under zsh, so no MULTIOS fan-out inside the job.
+  const mac = parsePipeline("xargs sh -c 'echo hi > a > b'", { platform: 'macos' });
+  assert.equal(mac.substitutions[0].commands[0].fds[1].label, 'b');
+  assert.equal(parsePipeline("xargs zsh -c 'echo hi > a > b'", { platform: 'macos' }).substitutions[0].commands[0].fds[1].type, 'multio');
+  // xargs -o gives each job the terminal.
+  assert.equal(parsePipeline("xargs -o sh -c 'vi \"$1\"' _").substitutions[0].commands[0].fds[0].id, 'terminal-in');
+});

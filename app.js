@@ -120,6 +120,14 @@ function detailOrder(model) {
 
 function jobInsight(job) {
   const owner = `<code>${escape(job.owner.usage.name)}</code>`, text = `<code>${escape(job.text)}</code>`;
+  if (job.tool === 'xargs') {
+    const items = job.perJob === '1' ? 'item' : job.perJob ? `${escape(job.perJob)} items` : 'batch of items';
+    const slots = Number(job.slots) > 1 ? `up to ${escape(job.slots)} at a time` : job.slots === '0' ? 'as many at a time as it can' : 'one at a time';
+    const input = { null: 'Each job’s stdin is /dev/null.', terminal: 'With -o, each job reads the terminal.', inherit: 'With -a, jobs inherit xargs’s stdin.' }[job.input];
+    const output = slots === 'one at a time' ? `Jobs write straight to ${owner}’s stdout and stderr.` : `Jobs write straight to ${owner}’s stdout and stderr, and nothing collects them, so output from concurrent jobs can mix mid-line; give each job its own file when its output is long.`;
+    const zeroth = job.zeroth ? '' : ` With no word after the script, the first item becomes <code>$0</code> rather than <code>$1</code>; add one, such as <code>_</code>.`;
+    return `<p class="usage-insight">${owner} runs ${text} through <code>${escape(job.shellName)}</code> once per ${items}, ${slots}.${zeroth} ${input} ${output}</p>`;
+  }
   const slots = job.slots ? `up to ${escape(job.slots)} jobs at a time` : 'by default one job per CPU core at a time';
   const appended = job.appended ? ` The command has no replacement string, so ${owner} appends each argument as <code>{}</code>.` : '';
   const input = {
@@ -374,7 +382,7 @@ function drawPipeline(model, palette, colors) {
       if (dest.type === 'job') {
         const { commands } = dest.job;
         if ((dest.direction === '>' && fd === 0 && cmd === commands[0]) || (dest.direction === '<' && fd === 1 && cmd === commands.at(-1))) jobLink(cmd, fd, dest);
-        else stub(p, fd, 'parallel', inactive, usage.reason, tag([here], dest));
+        else stub(p, fd, dest.job.owner.usage.name, inactive, usage.reason, tag([here], dest));
         continue;
       }
       if (dest.job) { stub(p, fd, '/dev/null', inactive, usage.reason, tag([here], dest)); continue; }
@@ -473,7 +481,7 @@ function drawPipeline(model, palette, colors) {
       ...(job.input === 'blocks' ? [['>', 'blocks', palette.green]] : []), ...(job.ungroup ? [] : [['<', 'jobs', palette.purple]]),
     ].map(([direction, label, color]) => {
       const p = jobPort(job, direction);
-      return `<g><title>${escape(direction === '>' ? 'parallel feeds a block of its input to each job.' : 'parallel collects each job’s output here.')}</title>
+      return `<g><title>${escape(direction === '>' ? `${job.owner.usage.name} feeds a block of its input to each job.` : `${job.owner.usage.name} collects each job’s output here.`)}</title>
         <text x="${p.x - 8}" y="${p.y + 14}" text-anchor="end" fill="${palette.muted}" font-size="9">${label}</text>
         <circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="${color}" stroke-width="1.8"/></g>`;
     })).join('');
@@ -481,7 +489,7 @@ function drawPipeline(model, palette, colors) {
     const title = job ? `IN EACH JOB · ${cmd.index + 1}` : cmd.substitution ? `SUBSTITUTION ${cmd.key}` : `COMMAND ${cmd.key}`;
     // A job template runs many times, so its cards are drawn as a stack.
     const stack = job ? [8, 4].map(d => `<rect x="${x + d}" y="${y + d}" width="220" height="156" rx="10" fill="${palette.inset}" stroke="${palette.border}"/>`).join('') : '';
-    return `<g data-card="${cmd.key}"><title>${escape(job ? `${cmd.command} · runs in each job started by parallel` : cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
+    return `<g data-card="${cmd.key}"><title>${escape(job ? `${cmd.command} · runs in each job started by ${cmd.substitution.owner.usage.name}` : cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
       ${stack}<rect class="card-body" x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
@@ -499,6 +507,9 @@ function drawPipeline(model, palette, colors) {
 // It also runs the other way: hovering part of the diagram marks its text in the editor, and a
 // click selects that text. Hover lights the diagram as the caret would, and wins while it lasts.
 let targets = [], inspected = null, hovered = null, marked = null;
+// The Highlight switch turns the linking off in both directions.
+let highlighting = true;
+try { highlighting = localStorage.getItem('pipeviewer-highlight') !== 'off'; } catch {}
 function inspectTargets(model) {
   const portsOf = cmd => Object.keys(cmd.fds).map(fd => `${cmd.key}:${fd}`);
   const list = [];
@@ -569,7 +580,7 @@ function inspect(redrawn = false) {
   // While a keystroke waits for its frame the old diagram stays lit, so typing does not flicker.
   if (editor.value !== currentSource && renderQueued) return;
   const caret = editor.selectionDirection === 'backward' ? editor.selectionStart : editor.selectionEnd;
-  const live = svg && editor.value === currentSource;
+  const live = highlighting && svg && editor.value === currentSource;
   // The smallest span holding the caret wins; on a tie the later target, such as a pipe over |&.
   const atCaret = () => document.activeElement === editor ? targets.reduce((best, t) => t.span[0] <= caret && caret <= t.span[1] && (!best || t.span[1] - t.span[0] <= best.span[1] - best.span[0]) ? t : best, null) : null;
   const target = live ? hovered ?? atCaret() : null;
@@ -646,11 +657,11 @@ function render() {
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
     const subCount = currentModel.all.length - currentModel.commands.length - jobCount;
     const lists = currentModel.pipelines.length;
-    $('#command-count').textContent = `${lists > 1 ? `${lists} pipelines · ` : ''}${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in parallel jobs` : ''}`;
+    $('#command-count').textContent = `${lists > 1 ? `${lists} pipelines · ` : ''}${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in jobs` : ''}`;
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
-    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>parallel</code> once per argument</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
+    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>${escape(cmd.substitution.owner.usage.name)}</code> once per ${cmd.substitution.tool === 'xargs' ? 'item' : 'argument'}</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
@@ -748,6 +759,7 @@ document.addEventListener('selectionchange', () => inspect());
 for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
 $('#pipeline').addEventListener('scroll', () => { $('#editor-mirror').scrollTop = $('#pipeline').scrollTop; });
 $('#diagram').addEventListener('pointerover', event => {
+  if (!highlighting) return;
   const element = event.target.closest(hoverable);
   const target = element && currentSource === $('#pipeline').value ? targetFor(element) : null;
   if (target === hovered) return;
@@ -757,6 +769,7 @@ $('#diagram').addEventListener('pointerover', event => {
 $('#diagram').addEventListener('pointerleave', () => { hovered = null; inspect(); });
 // A click selects the text, so the caret inspector carries on from there.
 $('#diagram').addEventListener('click', event => {
+  if (!highlighting) return;
   const element = event.target.closest(hoverable), target = element && hovered;
   if (!target) return;
   const editor = $('#pipeline');
@@ -899,6 +912,18 @@ $('#diagram-scroll').addEventListener('pointerdown', event => {
   scroll.addEventListener('pointerup', stop, { once: true });
   scroll.addEventListener('pointercancel', stop, { once: true });
 });
+function showHighlighting() {
+  $('#highlight-toggle').setAttribute('aria-pressed', highlighting);
+  $('#diagram-scroll').classList.toggle('no-highlight', !highlighting);
+}
+$('#highlight-toggle').addEventListener('click', () => {
+  highlighting = !highlighting;
+  hovered = null;
+  try { localStorage.setItem('pipeviewer-highlight', highlighting ? 'on' : 'off'); } catch {}
+  showHighlighting();
+  inspect(true);
+});
+showHighlighting();
 $('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => step > zoom) ?? zoom));
 $('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
 $('#zoom-reset').addEventListener('click', () => setZoom(1));

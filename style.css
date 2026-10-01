@@ -139,6 +139,9 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 #diagram .lit-port .port-dot { r: 6px; stroke-width: 2.5; }
 #diagram .lit-port .port-badge { stroke: var(--focus); stroke-width: 1.5; }
 #diagram :is([data-card], [data-command], [data-dest]) { cursor: pointer; }
+.no-highlight #diagram :is([data-card], [data-command], [data-dest]) { cursor: inherit; }
+#highlight-toggle svg { width: .9375rem; height: .9375rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+#highlight-toggle[aria-pressed="true"] { color: var(--purple); }
 .details-section { margin-top: 1.8125rem; }
 .details-heading { display: flex; align-items: center; gap: .5625rem; width: fit-content; margin-bottom: .875rem; cursor: pointer; list-style: none; }
 .details-heading::-webkit-details-marker { display: none; }
@@ -257,7 +260,7 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
   #diagram svg { min-height: 17.5rem; }
   .diagram-toolbar { gap: .625rem; }
   .diagram-actions { gap: .5rem; flex-shrink: 0; }
-  #download span { display: none; }
+  #download span, #highlight-toggle span { display: none; }
   .details { grid-template-columns: 1fr; }
   .usage-assumption { margin-left: 0; flex-basis: 100%; }
   #diagram-scroll::after { content: 'Scroll horizontally →'; position: sticky; left: 0; display: block; width: 100%; text-align: center; font-size: .6875rem; color: var(--muted); padding: .375rem 0 .75rem; }
