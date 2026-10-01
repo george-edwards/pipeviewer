@@ -196,6 +196,10 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .usage-assumption { margin-left: auto; }
 .connection-sample { width: 1.5rem; border-top: 2px solid var(--purple); }
 .connection-sample.unused { border-top: 2px dashed var(--muted); }
+/* Matches the diagram's tag for stderr left on the terminal. */
+.ground-sample { display: inline-flex; align-items: center; font-style: normal; }
+.ground-sample::before { content: ''; width: .75rem; border-top: 2px solid var(--amber); }
+.ground-sample b { padding: .0625rem .375rem; border: 1px solid var(--amber); border-radius: 1rem; background: var(--amber-bg); color: var(--amber); font-size: .5625rem; font-weight: 500; }
 .usage-insight { margin: .875rem 0 0; padding: .875rem max(1rem, calc(100% - 62.5rem)) .875rem 1rem; border-left: 3px solid var(--purple); background: var(--surface); color: var(--text); font-size: .8125rem; line-height: 1.7; }
 .usage-insight code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; color: var(--purple); }
 .reference-usage-heading { margin: 1.5rem 0 0; font-size: .875rem; }

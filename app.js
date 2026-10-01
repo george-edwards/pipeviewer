@@ -287,6 +287,8 @@ function drawPipeline(model, palette, colors) {
     if (Number(fd) > 2 || ['pipe', 'procsub', 'job'].includes(dest.type) || dest.job) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
+    // stderr left on the terminal ends in a tag beside its port, so it needs no box.
+    if (Number(fd) === 2 && dest.id === 'terminal-err') return;
     used.set(dest.id, dest);
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
@@ -306,6 +308,12 @@ function drawPipeline(model, palette, colors) {
     const endX = p.x + (fd === 0 ? -43 : 43);
     paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason, tagged));
     paths.push(`<text${tagged} x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
+  };
+  // stderr that stays on the terminal, the default, is drawn as a short line to a “terminal” tag
+  // rather than a route across the page to a shared box, much as circuit diagrams mark ground.
+  const ground = (p, inactive, reason, tagged) => {
+    const color = inactive ? palette.muted : colors[2], x = p.x + 36;
+    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`stderr goes to the terminal. ${reason}`)}</title><path class="link-hit" d="M ${p.x} ${p.y} H ${x + 44}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${p.x} ${p.y} H ${x}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="44" height="14" rx="7" fill="${inactive ? palette.inset : palette['amber-bg']}" stroke="${color}"/><text x="${x + 22}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
   };
   const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
   // Substitutions not on 0–2 attach to the bottom edge: <(…) on the left, >(…) on the right.
@@ -403,6 +411,7 @@ function drawPipeline(model, palette, colors) {
         continue;
       }
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
+      if (fd === 2 && dest.id === 'terminal-err') { ground(p, inactive, usage.reason, tag([here], dest)); continue; }
       const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
         if (dest.id === 'terminal-in' && cmd.index > 0) {
@@ -496,7 +505,9 @@ function drawPipeline(model, palette, colors) {
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
       ${ports}${argumentPorts}${jobPorts}</g>`;
   });
-  const height = 390 + (bottomY - 353);
+  // With stderr tagged in place, a pipeline often has nothing below its cards; end the drawing there.
+  const cardsBottom = 101 + grid.rows * 200 + 156 + 34;
+  const height = bottom.length || lanes.length ? 390 + (bottomY - 353) : cardsBottom - 55;
   return { minX, width, height, body: `${paths.join('')}${nodes.join('')}${cards.join('')}` };
 }
 
@@ -627,6 +638,7 @@ function showDiagram() {
   host.style.minWidth = `${Math.max(45, viewBox.width * .85 / 16)}rem`;
   // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
   svg.style.maxHeight = `${30 * viewBox.height / 390}rem`;
+  svg.style.minHeight = `${17.8125 * viewBox.height / 390}rem`;
   const box = zoom !== 1 && svg.getBoundingClientRect();
   if (box?.width) {
     const fitted = Math.min(box.width / viewBox.width, box.height / viewBox.height);
