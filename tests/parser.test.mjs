@@ -115,3 +115,12 @@ test('newlines separate commands unless a line ends with |, && or ||', () => {
   assert.equal(parsePipeline('a;').pipelines.length, 1);
   assert.throws(() => parsePipeline('cat <(a; b)'), /one pipeline inside a process substitution/);
 });
+test('restyle adds or drops the implied descriptor on redirects only', async () => {
+  const { restyle } = await import('../parser.js');
+  assert.equal(restyle('grep 0<access.log "404" 1>errors.log 2>&1', 'common'), 'grep <access.log "404" >errors.log 2>&1');
+  assert.equal(restyle('sort < in > out && echo no >&2 >> log', 'explicit'), 'sort 0< in 1> out && echo no 1>&2 1>> log');
+  // Quoted text, &> and other descriptors stay as written.
+  assert.equal(restyle("awk '$1>2' f \"a > b\" &> all 3>&1", 'explicit'), "awk '$1>2' f \"a > b\" &> all 3>&1");
+  assert.equal(restyle('cat < <(sort > x)', 'explicit'), 'cat 0< <(sort 1> x)');
+  assert.equal(restyle('cat "oops', 'common'), 'cat "oops');
+});

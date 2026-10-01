@@ -84,6 +84,9 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .example-row { display: contents; }
 .example-row[hidden] { display: none; }
 .row-label { font-size: .625rem; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
+/* Two switches share the SHELL row, the second with its own small label. */
+.row-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.125rem; }
+.inline-label { margin-left: .375rem; }
 .example-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .example-buttons button { background: var(--surface); border: 1px solid var(--border); border-radius: .3125rem; padding: .375rem .5625rem; color: var(--muted); font-size: .75rem; }
 .example-buttons button:hover, .example-buttons button.active { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }

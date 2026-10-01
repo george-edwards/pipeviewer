@@ -364,3 +364,29 @@ export function destinationLabel(dest, fd, commands, cmd) {
   if (dest.type === 'file') return `${dest.label} · ${dest.mode === 'read' ? 'read' : dest.mode === 'append' ? 'append' : 'overwrite'}`;
   return dest.label;
 }
+
+/**
+ * Rewrites the redirects in source in one of two styles: explicit, which writes the implied
+ * descriptor (0< file, 1> file, 1>&2), or common, which leaves it out (< file, > file, >&2).
+ * It works on the parser's tokens, so quoted text such as an awk program is never touched, and
+ * source that does not parse comes back unchanged.
+ */
+export function restyle(source, style, { platform = 'linux' } = {}) {
+  let tokens;
+  try { ({ tokens } = tokenize(source, 0, false, i => i, platform !== 'macos')); } catch { return source; }
+  const edits = [];
+  const walk = list => list.forEach((token, i) => {
+    if (token.type === 'procsub') { walk(token.tokens); return; }
+    if (token.type !== 'op') return;
+    const input = ['<', '<&', '<>'].includes(token.value), output = ['>', '>>', '>|', '>&'].includes(token.value);
+    if (!input && !output) return;
+    // >&word copies a descriptor only when word is a number or -; otherwise Bash reads it as &>word.
+    if (token.value.endsWith('&') && !/^(?:\d+|-)$/.test(list[i + 1]?.raw ?? '')) return;
+    const before = list[i - 1], implied = input ? '0' : '1';
+    const numbered = before?.type === 'word' && /^\d+$/.test(before.raw) && before.end === token.start;
+    if (style === 'explicit' && !numbered) edits.push([token.start, token.start, implied]);
+    if (style === 'common' && numbered && before.raw === implied) edits.push([before.start, before.end, '']);
+  });
+  walk(tokens);
+  return edits.sort((a, b) => b[0] - a[0]).reduce((text, [from, to, insert]) => text.slice(0, from) + insert + text.slice(to), source);
+}

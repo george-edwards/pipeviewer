@@ -1,19 +1,19 @@
-import { parsePipeline, destinationLabel, targetsOf, reaches } from './parser.js';
+import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './parser.js';
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const names = ['stdin', 'stdout', 'stderr'];
+// Examples are written in the explicit redirect style; the Explicit/Common switch restyles them.
 const examples = {
   simple: 'cat access.log | grep "404" | sort',
-  file: 'sort < names.txt | uniq -c 1> counts.txt',
-  merge: 'cat access.log | grep "404" 1> errors.log 2>&1',
+  file: 'sort 0< names.txt | uniq -c 1> counts.txt',
   order: 'curl https://example.com 2>&1 1> response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
   timing: 'sleep 2 | echo "hello, world"',
   timingReverse: 'echo "hello, world" | sleep 2',
   procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
-  lists: 'sort names.txt > sorted.txt && wc -l < sorted.txt || echo "sort failed" >&2',
+  lists: 'sort names.txt 1> sorted.txt && wc -l 0< sorted.txt || echo "sort failed" 1>&2',
   wikiWeek: String.raw`parallel "zcat {} \
           | grep -E '^en |^en\.m ' \
           | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
@@ -24,10 +24,10 @@ const examples = {
     NR > 1 { print sum, prev }
     { prev=$1; sum=$2 }
     END { if (NR) print sum, prev }
-' | sort -rn | head -50 > top-50-pages`,
+' | sort -rn | head -50 1> top-50-pages`,
   weekDownload: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
 ::: {14..20} ::: {00..23}`,
-  zcatSpeed: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b >/dev/null',
+  zcatSpeed: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b 1>/dev/null',
 };
 // Examples with several equivalent spellings, shown as toggles once one of them is loaded.
 const variations = {
@@ -44,27 +44,29 @@ const variations = {
     { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
   ],
 };
-// Explicit descriptor numbers first, then the shorthand Bash also accepts.
-for (const key of ['file', 'merge', 'order']) {
-  variations[key] = [
-    { label: 'Numbered (1>)', source: examples[key] },
-    { label: 'Shorthand (>)', source: examples[key].replace(/(^|\s)1>(?!&)/g, '$1>') },
-  ];
-}
+// Two ways to send both output streams to one file.
+variations.merge = [
+  { label: '&>', source: 'grep 0<access.log "404" &> errors.log' },
+  { label: '2>&1', source: 'grep 0<access.log "404" 1>errors.log 2>&1' },
+];
 variations.timingReverse = [
   { label: 'Plain pipe', source: 'echo "hello, world" | sleep 2' },
   { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
 ];
 for (const [key, list] of Object.entries(variations)) examples[key] = list[0].source;
-const exampleSources = key => variations[key]?.map(variation => variation.source) ?? [examples[key]];
+// Explicit writes the implied descriptors (0< file, 1> file); common leaves them out.
+let redirectStyle = 'explicit';
+try { if (localStorage.getItem('pipeviewer-redirects') === 'common') redirectStyle = 'common'; } catch {}
+const styled = source => restyle(source, redirectStyle, { platform });
+const exampleSources = key => (variations[key]?.map(variation => variation.source) ?? [examples[key]]).map(styled);
 
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
   $('#variations').hidden = !key;
   if (!key) return;
   $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
-    const active = variation.source === currentSource;
-    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(variation.source)}">${escape(variation.label)}</button>`;
+    const active = styled(variation.source) === currentSource;
+    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(styled(variation.source))}">${escape(variation.label)}</button>`;
   }).join('');
 }
 let currentModel;
@@ -697,6 +699,25 @@ $('#platform').addEventListener('click', event => {
   render();
 });
 showPlatform();
+function showRedirectStyle() {
+  $('#redirect-style').querySelectorAll('button').forEach(button => {
+    const active = button.dataset.style === redirectStyle;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
+}
+// The switch restyles whatever is in the editor, an example or the viewer's own pipeline.
+$('#redirect-style').addEventListener('click', event => {
+  const button = event.target.closest('[data-style]');
+  if (!button || button.dataset.style === redirectStyle) return;
+  redirectStyle = button.dataset.style;
+  try { localStorage.setItem('pipeviewer-redirects', redirectStyle); } catch {}
+  showRedirectStyle();
+  $('#pipeline').value = styled($('#pipeline').value);
+  fitEditor();
+  render();
+});
+showRedirectStyle();
 document.addEventListener('selectionchange', () => inspect());
 for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
 $('#pipeline').addEventListener('scroll', () => { $('#editor-mirror').scrollTop = $('#pipeline').scrollTop; });
@@ -749,12 +770,12 @@ $('#resize-handle').addEventListener('keydown', event => {
   resizeEditor($('#pipeline').offsetHeight + (event.key === 'ArrowDown' ? step : -step));
 });
 $('#resize-handle').addEventListener('dblclick', () => { chosenHeight = 0; fitEditor(); });
-function loadExample(key) { $('#pipeline').value = examples[key]; fitEditor(); render(); }
+function loadExample(key) { $('#pipeline').value = styled(examples[key]); fitEditor(); render(); }
 $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
   if (!button) return;
   const [key, i] = button.dataset.variation.split(':');
-  $('#pipeline').value = variations[key][Number(i)].source;
+  $('#pipeline').value = styled(variations[key][Number(i)].source);
   fitEditor();
   render();
 });

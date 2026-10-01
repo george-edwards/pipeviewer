@@ -26,7 +26,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.
 - Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
 - Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
-- Clickable examples, quick reference, and local persistence of the last pipeline.
+- Clickable examples, quick reference, and local persistence of the last pipeline. The **Redirects** switch shows any pipeline, an example or your own, in the explicit style (`0< file`, `1> file`, `1>&2`) or the common one (`< file`, `> file`, `>&2`).
 - Lists of pipelines joined by `&&`, `||`, `;`, or new lines, stacked in the order they run, each labelled with when it runs.
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.
 - `|`, `|&`, `<`, `>`, `>>`, `>|`, `n>&m`, `n<&m`, `&>`, `&>>`, and descriptor closing.
