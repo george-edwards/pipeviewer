@@ -657,8 +657,8 @@ $('#variations').addEventListener('click', event => {
   render();
 });
 document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => loadExample(button.dataset.example)));
-// The reference lists every modelled command, in registry order, so it never falls behind commands/.
-const known = commands.flatMap(rule => rule.names).map(name => `<code>${escape(name)}</code>`);
+// The reference lists every modelled command alphabetically, so it never falls behind commands/.
+const known = commands.flatMap(rule => rule.names).sort((a, b) => a.replace(/^\W+/, '').localeCompare(b.replace(/^\W+/, ''))).map(name => `<code>${escape(name)}</code>`);
 $('#known-commands').innerHTML = `${known.slice(0, -1).join(', ')}, and ${known.at(-1)}`;
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());

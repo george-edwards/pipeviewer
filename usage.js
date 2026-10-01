@@ -17,7 +17,8 @@ export function inferUsage(argv) {
   const result = { name, recognised: false, fds: Object.fromEntries(streamNames.map((stream, fd) => [fd,
     usage('unknown', 'usage unknown', `Usage of ${stream} is unknown for this command. A connection does not imply data transfer.`),
   ])) };
-  const rule = argv[0] && !argv[0].dynamic && rules.get(name);
+  // [ is a glob character to the parser, but alone it is the test command.
+  const rule = argv[0] && (!argv[0].dynamic || argv[0].raw === '[') && rules.get(name);
   if (!rule) return result;
   const set = (fd, value) => { result.fds[fd] = value; };
   result.recognised = true;

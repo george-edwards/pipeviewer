@@ -98,10 +98,44 @@ export function lenientOptions(args, { shortValues = '', longValues = [], stopAt
 }
 
 // A filter reads its named files, or stdin when none are named, and writes its result to stdout.
-// skip leaves leading arguments, such as head's obsolete -5, out of the option scan.
-export function filterInput({ name, args, set, output, errors }, spec, { skip = 0, dashMeansStdin = true, maxFiles = Infinity } = {}) {
-  output(); errors();
+// skip leaves leading arguments, such as head's obsolete -5, out of the option scan; writes describes stdout.
+export function filterInput({ name, args, set, output, errors }, spec, { skip = 0, dashMeansStdin = true, maxFiles = Infinity, writes } = {}) {
+  output(writes); errors();
   const scan = scanOptions(args.slice(skip), spec);
   set(0, fileInput(name, scan, { dashMeansStdin, maxFiles }));
   return scan;
+}
+
+// A program that reports on its arguments or the system, never reading stdin.
+export function printer({ set, output, errors }, input, writes) {
+  set(0, unused(0, `${input}; it does not read stdin.`));
+  output(writes); errors();
+}
+
+// A program that changes files and prints nothing unless asked to report each change.
+// Prompts that read stdin are left to the caller, which can see the returned scan.
+export function fileAction({ name, args, set, errors }, spec, { verbose = [], reports = 'reports each change' } = {}) {
+  errors();
+  const scan = scanOptions(args, spec);
+  if (scan.help) {
+    set(0, unused(0, `${name} prints help or version information without reading stdin.`));
+    set(1, possible(1, `${name} prints help or version information to stdout.`));
+  } else if (scan.valid) {
+    set(0, unused(0, `${name} works on the files in its arguments; it does not read stdin.`));
+    const given = verbose.filter(key => scan.options.has(key));
+    set(1, given.length ? possible(1, `With ${given[0]}, ${name} ${reports} on stdout.`) : unused(1, `${name} writes nothing to stdout${verbose.length ? ` without ${verbose[0]}` : ''}.`));
+  }
+  return scan;
+}
+
+// Wrappers such as nice and timeout run another command, which inherits their streams.
+// notes adds to a stream's reason, for wrappers such as nohup that can swap a stream.
+export function runsCommand({ name, set, infer }, argv, notes = {}) {
+  const child = infer(argv);
+  ['stdin', 'stdout', 'stderr'].forEach((stream, fd) => {
+    const inherited = child.fds[fd];
+    set(fd, usage(inherited.state, inherited.label, `${name} runs ${child.name}, which inherits ${stream}. ${inherited.reason}${notes[fd] ? ` ${notes[fd]}` : ''}`));
+  });
+  if (child.fds[2].state === 'unused') set(2, possible(2, `${name} may write diagnostics to stderr, even though ${child.name} does not.`));
+  return child;
 }

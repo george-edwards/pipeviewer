@@ -1,9 +1,10 @@
 import { unused } from './helpers.js';
 
 export default {
-  names: ['ls'],
-  infer({ set, output, errors }) {
-    set(0, unused(0, 'ls lists paths from arguments or the current directory; it does not read stdin.'));
-    output('ls may write directory entries or help text to stdout.'); errors();
+  // dir and vdir are ls with different default formats.
+  names: ['ls', 'dir', 'vdir'],
+  infer({ name, set, output, errors }) {
+    set(0, unused(0, `${name} lists paths from arguments or the current directory; it does not read stdin.`));
+    output(`${name} may write directory entries or help text to stdout.`); errors();
   },
 };

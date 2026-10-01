@@ -70,7 +70,7 @@ test('cat file arguments and explicit stdin operands affect only stdin usage', (
 });
 
 test('unknown commands and wrappers are not guessed from their names', () => {
-  for (const source of ['custom', './sleep 2', 'env sleep 2', 'sudo echo hello', '"$COMMAND" 2', 'VAR=value sleep 2']) {
+  for (const source of ['custom', './sleep 2', 'sudo echo hello', '"$COMMAND" 2', 'VAR=value sleep 2']) {
     const cmd = parsePipeline(source).commands[0];
     assert.equal(cmd.usage.recognised, false, source);
     for (const fd of [0, 1, 2]) assert.equal(cmd.usage.fds[fd].state, 'unknown', source);
@@ -263,11 +263,12 @@ test('wget saves to files unless -O - sends the document to stdout', () => {
 
 test('find ignores stdin and prints by default, unless its actions or commands say otherwise', () => {
   for (const source of ['find .', 'find . -name "*.log" -delete', 'find . -exec wc -l {} +', 'find src -type f -print0']) assert.equal(stdin(source), 'unused', source);
-  for (const source of ['find . -ok rm {} \\;', 'find . -exec cat \\;', 'find -files0-from -']) assert.equal(stdin(source), 'possible', source);
-  for (const source of ['find . -exec rm {} \\;', 'find . -name *.log']) assert.equal(stdin(source), 'unknown', source);
-  for (const source of ['find . -delete', 'find . -name "*.c" -exec grep -q main {} \\;', 'find . -fprint list']) assert.equal(stdout(source), 'unused', source);
+  // rm may prompt when stdin is a terminal, so find -exec rm may read it too.
+  for (const source of ['find . -ok rm {} \\;', 'find . -exec cat \\;', 'find -files0-from -', 'find . -exec rm {} \\;']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['find . -exec custom {} \\;', 'find . -name *.log']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['find . -delete', 'find . -name "*.c" -exec grep -q main {} \\;', 'find . -fprint list', 'find . -exec rm {} \\;']) assert.equal(stdout(source), 'unused', source);
   for (const source of ['find .', 'find . -delete -print', 'find . -exec wc -l {} +', 'find . -fprint /dev/stdout']) assert.equal(stdout(source), 'possible', source);
-  assert.equal(stdout('find . -exec rm {} \\;'), 'unknown');
+  assert.equal(stdout('find . -exec custom {} \\;'), 'unknown');
 });
 
 test('basenc reads one file or stdin with any encoding option', () => {
@@ -328,4 +329,30 @@ test('pv copies files or stdin to stdout and draws progress on stderr', () => {
   assert.equal(label('pv -q data.bin'), 'on error');
   assert.equal(label('pv -R 1234 -L 2m'), 'on error');
   assert.equal(parsePipeline('cat data.bin | pv -L 1m').commands[1].usage.fds[0].state, 'possible');
+});
+
+test('coreutils wrappers follow the command they run', () => {
+  for (const source of ['env sleep 2', 'env -i A=1 sleep 2', 'nice -n 5 sleep 2', 'nice -10 sleep 2', 'timeout 5 sleep 2', 'stdbuf -oL sleep 2', 'nohup sleep 2', 'chroot /srv sleep 2']) {
+    assert.equal(stdin(source), 'unused', source);
+    assert.equal(stdout(source), 'unused', source);
+  }
+  for (const source of ['timeout 5 cat', 'env grep x', 'stdbuf -oL tr a b']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['env -S "sleep 2"', 'timeout 5 custom']) assert.equal(stdin(source), 'unknown', source);
+  assert.equal(stdout('env'), 'possible');
+  assert.equal(stdin('env'), 'unused');
+});
+
+test('coreutils filters, printers and file actions', () => {
+  for (const source of ['tac', 'nl -ba', 'fold -w 40', 'fmt -72', 'od -c', 'sha256sum', 'b2sum -l 256', 'tr a-z A-Z', 'tee log', 'numfmt --to=si', 'factor', 'comm - b', 'split -l 2', 'csplit - 3', 'dd bs=1M', 'date -f -', 'shuf', 'pr -2', 'tsort']) {
+    assert.equal(stdin(source), 'possible', source);
+  }
+  for (const source of ['tac f', 'nl f', 'od -c f', 'sha256sum -c sums', 'tr --help', 'numfmt 2000', 'factor 12', 'comm a b', 'split big p', 'csplit f 3', 'dd if=f', 'date +%s', 'shuf -e a b', 'shuf -i 1-9', 'pr +2 f', 'seq 5', 'yes', 'pwd', 'whoami', 'df -h', 'du -sh .', 'stat f', 'tty', 'stty -a', 'test -f x', '[ -f x ]', 'cp a b', 'rm -f x', 'mv -f a b', 'chmod 644 f', 'mkdir -p d', 'kill 1']) {
+    assert.equal(stdin(source), 'unused', source);
+  }
+  for (const source of ['od -c +16', 'du --files0-from=/dev/stdin']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['rm x', 'rm -i x', 'mv a b', 'cp -i a b', 'ln -i a b']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['cp a b', 'rm -f x', 'chmod 644 f', 'mkdir d', 'touch f', 'test -f x', 'split big', 'dd of=out', 'shuf -o out', 'tty -s', 'stty -echo', 'kill 1', 'sha256sum -c --status sums', 'pathchk x']) {
+    assert.equal(stdout(source), 'unused', source);
+  }
+  for (const source of ['cp -v a b', 'chmod -c 644 f', 'mkdir -v d', 'split --verbose big', 'csplit f 3', 'dd', 'stty', 'kill -l', 'seq 3']) assert.equal(stdout(source), 'possible', source);
 });
