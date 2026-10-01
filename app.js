@@ -540,8 +540,22 @@ const chapters = [
   [2116, 'Drop cache'], [2225, 'time / benchmarking'], [2288, '/dev/shm'], [2365, 'systemd?'],
   [2441, 'Ramdisk benchmark'], [2562, '/dev/[u]random'],
 ];
-// The talk is slow-paced, so it starts a little faster; the player's own menu can change it.
+// The talk is slow-paced, so it starts a little faster. The switch also follows changes made in the browser's own player menu.
+function showSpeed() {
+  const rate = $('#talk-video').playbackRate;
+  $('#talk-speed').querySelectorAll('button').forEach(button => {
+    const active = Number(button.dataset.rate) === rate;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
+}
 $('#talk-video').defaultPlaybackRate = $('#talk-video').playbackRate = 1.25;
+showSpeed();
+$('#talk-video').addEventListener('ratechange', showSpeed);
+$('#talk-speed').addEventListener('click', event => {
+  const button = event.target.closest('[data-rate]');
+  if (button) $('#talk-video').defaultPlaybackRate = $('#talk-video').playbackRate = Number(button.dataset.rate);
+});
 const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 $('#talk-chapters').innerHTML = chapters.map(([time, label]) => `<li><button type="button" data-time="${time}"><span class="chapter-time">${clock(time)}</span><span>${escape(label)}</span></button></li>`).join('');
 $('#talk-chapters').addEventListener('click', event => {
