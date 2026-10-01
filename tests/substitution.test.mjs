@@ -138,7 +138,7 @@ test('parallel appends {} without a replacement string, and unreadable jobs stay
   const model = parsePipeline('parallel "make {} && echo done" ::: a b');
   assert.equal(model.substitutions.length, 0);
   assert.equal(model.endpoints.some(dest => dest.id.startsWith('job-')), false, 'a failed job leaves no endpoints behind');
-  assert.match(model.notes[0], /^The parallel job command is shown as an argument\. “&&” is not supported/);
+  assert.match(model.notes[0], /^The parallel job command is shown as an argument\. Use one pipeline inside a parallel job/);
 });
 
 test('egrep and fgrep are modelled like grep', () => {

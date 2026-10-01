@@ -13,6 +13,7 @@ const examples = {
   timing: 'sleep 2 | echo "hello, world"',
   timingReverse: 'echo "hello, world" | sleep 2',
   procsub: 'ls missing.txt . 2> >(sed "s/^/error: /") | wc -l',
+  lists: 'sort names.txt > sorted.txt && wc -l < sorted.txt || echo "sort failed" >&2',
   wikiWeek: String.raw`parallel "zcat {} \
           | grep -E '^en |^en\.m ' \
           | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
@@ -157,6 +158,22 @@ function usageInsights(model) {
   }).join('');
 }
 
+// A list runs its pipelines one after another. The useful consequence: a file an earlier pipeline
+// writes is complete before a later one reads it.
+function listInsights(model) {
+  if (model.pipelines.length < 2) return '';
+  const written = new Map(), handoffs = [];
+  model.pipelines.forEach((pipeline, n) => {
+    const files = pipeline.all.flatMap(cmd => Object.values(cmd.fds)).filter(dest => dest.type === 'file');
+    for (const dest of files) {
+      if (dest.mode === 'read' && written.has(dest.label) && !handoffs.some(h => h.label === dest.label)) handoffs.push({ label: dest.label, from: written.get(dest.label), to: n });
+    }
+    for (const dest of files) if (dest.mode !== 'read' && !written.has(dest.label)) written.set(dest.label, n);
+  });
+  const handoff = handoffs.map(({ label, from, to }) => ` <code>${escape(label)}</code> is written by pipeline ${from + 1} and read by pipeline ${to + 1}, which starts only after pipeline ${from + 1} has finished, so it reads the complete file.`).join('');
+  return `<p class="usage-insight">The shell runs these ${model.pipelines.length} pipelines one after another, not at the same time, and each starts with the shell’s own stdin, stdout and stderr.${handoff}</p>`;
+}
+
 // Main commands fill row 0. Substitutions go below their owner: >(…) to the right, <(…) to the left.
 // A parallel job template starts directly below parallel.
 function layout(model) {
@@ -174,6 +191,13 @@ function layout(model) {
   return { place, shift, cols: Math.max(...spots.map(p => p.col)) + shift + 1, rows: Math.max(...spots.map(p => p.row)) };
 }
 
+// When each pipeline in a list runs, after the one above it.
+const listJoins = {
+  '&&': 'runs only if the last pipeline that ran succeeded',
+  '||': 'runs only if the last pipeline that ran failed',
+  ';': 'runs after the one above finishes, whatever its exit status',
+};
+
 function diagram(model) {
   // Resolve theme colours to concrete values so exported SVGs remain standalone.
   const styles = getComputedStyle(document.documentElement);
@@ -181,6 +205,31 @@ function diagram(model) {
     .map(name => [name, styles.getPropertyValue(`--${name}`).trim()]));
   // Index 3 is for substitution descriptors passed as /dev/fd arguments.
   const colors = [palette.green, palette.purple, palette.amber, palette.text];
+  const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
+  const defs = `<defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs>`;
+  const describe = pipeline => pipeline.all.map(cmd => `${cmd.command}: ${[0, 1, 2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, pipeline.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. ');
+  const open = (viewBox, desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(desc)}</desc>${defs}`;
+  const parts = model.pipelines.map(pipeline => drawPipeline(pipeline, palette, colors));
+  if (parts.length === 1) {
+    const [{ minX, width, height, body }] = parts;
+    return `${open(`${minX} 55 ${width - minX} ${height}`, describe(model))}<rect x="${minX}" y="55" width="${width - minX}" height="${height}" fill="${palette.surface}"/>${body}</svg>`;
+  }
+  // A list stacks its pipelines top to bottom, because each runs after the one before. Each keeps
+  // its own drawing in a nested svg, under a label saying when it runs.
+  const total = Math.max(...parts.map(part => part.width - part.minX));
+  let y = 0;
+  const blocks = parts.map((part, n) => {
+    const pipeline = model.pipelines[n], w = part.width - part.minX, top = y;
+    y += part.height + 6;
+    const join = pipeline.operator ? ` · <tspan font-family="'IBM Plex Mono',monospace" font-weight="600" fill="${palette.purple}">${pipeline.newline ? 'newline' : escape(pipeline.operator)}</tspan> · ${listJoins[pipeline.operator]}` : '';
+    const rule = n ? `<path d="M 20 ${top} H ${total - 20}" stroke="${palette.border}" stroke-dasharray="4 4"/>` : '';
+    return `<g data-pipeline="${n}">${rule}<svg x="0" y="${top}" width="${w}" height="${part.height}" viewBox="${part.minX} 55 ${w} ${part.height}" overflow="visible">${part.body}</svg><text x="20" y="${top + 26}" fill="${palette.muted}" font-size="10" letter-spacing="1.2">PIPELINE ${n + 1}<tspan letter-spacing="0">${join}</tspan></text></g>`;
+  });
+  return `${open(`0 0 ${total} ${y - 6}`, model.pipelines.map((pipeline, n) => `Pipeline ${n + 1}${pipeline.operator ? ` (${listJoins[pipeline.operator]})` : ''}: ${describe(pipeline)}`).join(' '))}<rect width="${total}" height="${y - 6}" fill="${palette.surface}"/>${blocks.join('')}</svg>`;
+}
+
+// Draws one pipeline, with its substitutions and destinations, in its own coordinates.
+function drawPipeline(model, palette, colors) {
   const grid = layout(model);
   const extra = grid.rows * 200;
   const geometry = cmd => { const p = grid.place.get(cmd); return { x: 220 + (p.col + grid.shift) * 360, y: 101 + p.row * 200 }; };
@@ -391,9 +440,8 @@ function diagram(model) {
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
       ${ports}${argumentPorts}${jobPorts}</g>`;
   });
-  const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
   const height = 390 + (bottomY - 353);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} 55 ${width - minX} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="${minX}" y="55" width="${width - minX}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
+  return { minX, width, height, body: `${paths.join('')}${nodes.join('')}${cards.join('')}` };
 }
 
 // The caret inspector lights up the part of the diagram under the editor's caret, as a browser's
@@ -414,7 +462,7 @@ function inspectTargets(model) {
     }
   }
   // A pipe's target also covers the spaces either side of |, so moving the caret along never goes dark.
-  for (const { commands, pipes } of [model, ...model.substitutions]) {
+  for (const { commands, pipes } of [...model.pipelines, ...model.substitutions]) {
     for (const pipe of pipes) {
       const before = commands[pipe.from], after = commands[pipe.to];
       const ports = [...Object.keys(before.fds).filter(fd => before.fds[fd] === pipe).map(fd => `${before.key}:${fd}`), `${after.key}:0`];
@@ -427,6 +475,12 @@ function inspectTargets(model) {
     const dests = sub.kind === 'job' ? [`${sub.id}-in`, `${sub.id}-out`] : [sub.endpoint.id];
     list.push({ kind: 'substitution', ref: sub, span: sub.span, strong: inner, context: [sub.owner.key], ends: sub.commands.flatMap(portsOf), ports: [], dests });
   }
+  // &&, || or ; lights the pipelines on either side of it.
+  model.pipelines.forEach((pipeline, n) => {
+    if (!pipeline.operatorSpan) return;
+    const sides = [...model.pipelines[n - 1].all, ...pipeline.all];
+    list.push({ kind: 'join', ref: pipeline, span: pipeline.operatorSpan, strong: [], context: sides.map(cmd => cmd.key), ends: sides.flatMap(portsOf), ports: [], dests: [] });
+  });
   return list;
 }
 // The target for a hovered diagram element: a card is its command; a port is the last redirect
@@ -480,13 +534,17 @@ function inspect(redrawn = false) {
   svg.querySelectorAll('.lit').forEach(el => el.classList.remove('lit', 'lit-card', 'lit-port', 'lit-node'));
   if (!target) return;
   const ends = new Set(target.ends), dests = new Set(target.dests), ports = new Set(target.ports);
-  for (const key of [...target.strong, ...target.context]) svg.querySelector(`[data-card="${key}"]`)?.classList.add('lit', ...(target.strong.includes(key) ? ['lit-card'] : []));
+  const cards = [...target.strong, ...target.context].map(key => svg.querySelector(`[data-card="${key}"]`)).filter(Boolean);
+  cards.forEach(card => card.classList.add('lit', ...(target.strong.includes(card.dataset.card) ? ['lit-card'] : [])));
+  // Pipelines in a list share the terminal boxes' ids, so only the target's own pipelines light up.
+  const scopes = new Set(cards.map(card => card.closest('svg')));
+  const inScope = el => scopes.has(el.closest('svg'));
   svg.querySelectorAll('[data-command]').forEach(el => { if (ports.has(`${el.dataset.command}:${el.dataset.fd}`)) el.classList.add('lit', 'lit-port'); });
   svg.querySelectorAll('[data-ends]').forEach(el => {
-    if (dests.has(el.dataset.dest) || el.dataset.ends.split(' ').some(end => ends.has(end))) { el.classList.add('lit'); dests.add(el.dataset.dest); }
+    if (inScope(el) && (dests.has(el.dataset.dest) || el.dataset.ends.split(' ').some(end => ends.has(end)))) { el.classList.add('lit'); dests.add(el.dataset.dest); }
   });
   // Only a redirect's own destination is outlined; others reached by lit links just stay visible.
-  svg.querySelectorAll('[data-dest]:not([data-ends])').forEach(el => { if (dests.has(el.dataset.dest)) el.classList.add('lit', ...(target.dests.includes(el.dataset.dest) ? ['lit-node'] : [])); });
+  svg.querySelectorAll('[data-dest]:not([data-ends])').forEach(el => { if (inScope(el) && dests.has(el.dataset.dest)) el.classList.add('lit', ...(target.dests.includes(el.dataset.dest) ? ['lit-node'] : [])); });
   // Bring a lit card into view when the caret moves to it in a diagram wider than the window.
   // Not on hover: the pointer is already on it.
   const card = moved && !hovered && svg.querySelector('.lit-card, [data-card].lit');
@@ -539,14 +597,15 @@ function render() {
     $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
     const subCount = currentModel.all.length - currentModel.commands.length - jobCount;
-    $('#command-count').textContent = `${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in parallel jobs` : ''}`;
+    const lists = currentModel.pipelines.length;
+    $('#command-count').textContent = `${lists > 1 ? `${lists} pipelines · ` : ''}${currentModel.commands.length} command${currentModel.commands.length === 1 ? '' : 's'}${subCount ? ` + ${subCount} in substitutions` : ''}${jobCount ? ` + ${jobCount} in parallel jobs` : ''}`;
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
     $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>parallel</code> once per argument</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     const extra = currentModel.all.some(cmd => Object.entries(cmd.fds).some(([fd, dest]) => Number(fd) > 2 && dest.type !== 'procsub'));
-    $('#insights').innerHTML = usageInsights(currentModel) + substitutionInsights(currentModel);
+    $('#insights').innerHTML = listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
     $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Open Descriptor details below to see the others.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
     showVariations();

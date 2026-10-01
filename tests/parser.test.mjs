@@ -65,7 +65,7 @@ test('comments and line continuations', () => {
   assert.equal(parsePipeline('echo a#b').commands[0].command, 'echo a#b');
 });
 test('unsupported and incomplete syntax produces actionable errors', () => {
-  for (const source of ['', 'cmd |', '| cmd', 'cmd >', 'cmd "oops', 'cmd && other', 'cmd; other', 'cmd << EOF', 'echo $(whoami)', 'echo `pwd`', 'cmd > $HOME/out', 'cmd 2>&9', 'cmd 3>&- 2>&3', 'cmd > ""', 'cmd\nother']) {
+  for (const source of ['', 'cmd |', '| cmd', 'cmd >', 'cmd "oops', 'cmd &&', '&& cmd', 'cmd ;; other', 'cmd &', 'cmd << EOF', 'echo $(whoami)', 'echo `pwd`', 'cmd > $HOME/out', 'cmd 2>&9', 'cmd 3>&- 2>&3', 'cmd > ""']) {
     assert.throws(() => parsePipeline(source), Error, source);
   }
 });
@@ -98,4 +98,20 @@ test('/dev/stdout, /dev/stderr, and /dev/stdin reach the current destination of 
   const [d] = parsePipeline('cmd < in 3</dev/stdin').commands;
   assert.equal(d.fds[3].label, 'in');
   assert.throws(() => parsePipeline('cmd 1>&- 2>/dev/stdout'), /descriptor 1/);
+});
+test('&&, || and ; split a command line into pipelines that each start from the terminal', () => {
+  const model = parsePipeline('sort f > out && wc -l < out || echo failed; cat f | head');
+  assert.deepEqual(model.pipelines.map(p => p.operator), [null, '&&', '||', ';']);
+  assert.deepEqual(model.pipelines.map(p => p.commands.map(cmd => cmd.key)), [['1'], ['2'], ['3'], ['4', '5']]);
+  assert.equal(model.all.length, 5);
+  for (const pipeline of model.pipelines) assert.equal(pipeline.commands[0].fds[2].id, 'terminal-err');
+  assert.equal(model.pipelines[1].commands[0].fds[0].label, 'out');
+  // Pipe endpoints stay distinct between pipelines.
+  assert.notEqual(model.pipelines[3].pipes[0].id, 'pipe-0');
+  assert.equal(parsePipeline('cmd').pipelines.length, 1);
+});
+test('newlines separate commands unless a line ends with |, && or ||', () => {
+  assert.deepEqual(parsePipeline('a\n\nb |\n c\nd &&\n e').pipelines.map(p => [p.operator, p.commands.length]), [[null, 1], [';', 2], [';', 1], ['&&', 1]]);
+  assert.equal(parsePipeline('a;').pipelines.length, 1);
+  assert.throws(() => parsePipeline('cat <(a; b)'), /one pipeline inside a process substitution/);
 });

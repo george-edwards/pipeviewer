@@ -12,7 +12,8 @@ function tokenize(source, start = 0, nested = false, at = i => i) {
     if (/[ \t\r]/.test(source[i])) { i++; continue; }
     if (source[i] === '\\' && source[i + 1] === '\n') { i += 2; continue; }
     if (source[i] === '#') { while (i < source.length && source[i] !== '\n') i++; continue; }
-    if (source[i] === '\n') throw new Error('Enter one pipeline. Use a backslash to continue it onto another line.');
+    // A newline ends a command like ; does, so a short script of several lines can be pasted.
+    if (source[i] === '\n') { tokens.push({ type: 'op', value: ';', newline: true, raw: '\n', start: i, end: i + 1, span: [at(i), at(i) + 1] }); i++; continue; }
     const begin = i;
     if (/^[<>]\(/.test(source.slice(i, i + 2))) {
       // Bash joins adjacent text into one word, so 2>(cat) is an argument, not a redirect.
@@ -99,10 +100,14 @@ function addJob(cmd, context) {
  * Builds one pipeline. Process substitutions recurse with a snapshot of the owning
  * command's descriptors, taken when Bash expands the word (left to right).
  */
-function buildPipeline(tokens, inherited, context, substitution) {
+// first numbers the commands on from earlier pipelines in a list, so every key stays unique.
+function buildPipeline(tokens, inherited, context, substitution, { first = 0, prefix: listPrefix = '' } = {}) {
   const groups = [], connectors = [], connectorTokens = [];
   let current = [];
   for (const token of tokens) {
+    if (token.type === 'op' && ['&&', '||', ';'].includes(token.value)) {
+      throw new Error(`Use one pipeline inside ${substitution?.kind === 'job' ? 'a parallel job' : 'a process substitution'}; lists with &&, || and ; are only supported at the top level.`);
+    }
     if (token.type === 'op' && ['|', '|&'].includes(token.value)) {
       if (!current.length) throw new Error('Each side of a pipe needs a command.');
       groups.push(current); current = []; connectors.push(token.value); connectorTokens.push(token);
@@ -111,11 +116,11 @@ function buildPipeline(tokens, inherited, context, substitution) {
   if (!current.length) throw new Error('Each side of a pipe needs a command.');
   groups.push(current);
   if (!substitution && groups.length > 12) throw new Error('This view supports up to 12 commands in one pipeline.');
-  const prefix = substitution ? `${substitution.id}-` : '';
+  const prefix = substitution ? `${substitution.id}-` : listPrefix;
   const pipes = connectors.map((_, i) => context.endpoint(`${prefix}pipe-${i}`, 'pipe', `Pipe ${i + 1}`, { from: i, to: i + 1, span: connectorTokens[i].span }));
   const commands = [];
   groups.forEach((tokens, index) => {
-    const key = substitution ? (groups.length > 1 ? `${substitution.key}.${index + 1}` : substitution.key) : `${index + 1}`;
+    const key = substitution ? (groups.length > 1 ? `${substitution.key}.${index + 1}` : substitution.key) : `${first + index + 1}`;
     const fds = { ...inherited, 0: index ? pipes[index - 1] : inherited[0], 1: pipes[index] || inherited[1] };
     const cmd = { index, key, substitution, fds, steps: [], substitutions: [], span: [tokens[0].span[0], tokens.at(-1).span[1]] };
     commands.push(cmd);
@@ -150,6 +155,7 @@ function buildPipeline(tokens, inherited, context, substitution) {
         continue;
       }
       const op = token.value;
+      if (op === '&') throw new Error('Background jobs (&) are not supported yet. Use &&, || or ; to run commands one after another.');
       if (!['<', '>', '>>', '>|', '>&', '<&', '&>', '&>>'].includes(op)) {
         throw new Error(`“${op}” is not supported yet. Use simple commands, pipes, process substitutions, and file or descriptor redirects.`);
       }
@@ -223,6 +229,28 @@ const startedBy = (cmd, ancestor) => {
   return false;
 };
 
+// Splits a command line at &&, || and ; (or a newline) into the pipelines it runs one after
+// another. A newline after |, && or || continues the line, and blank lines are skipped.
+function splitList(tokens) {
+  const list = [];
+  let current = [], operator = null, operatorToken = null;
+  for (const token of tokens) {
+    const listOp = token.type === 'op' && ['&&', '||', ';'].includes(token.value);
+    if (!listOp) { current.push(token); continue; }
+    const last = current.at(-1);
+    if (token.newline && (!current.length || (last.type === 'op' && ['|', '|&'].includes(last.value)))) continue;
+    if (!current.length) {
+      if (token.newline || (operator === ';' && token.value === ';' && operatorToken?.newline)) continue;
+      throw new Error(token.value === ';' ? 'Put a command before ;.' : `Each side of ${token.value} needs a command.`);
+    }
+    list.push({ tokens: current, operator, operatorToken });
+    current = []; operator = token.value; operatorToken = token;
+  }
+  if (current.length) list.push({ tokens: current, operator, operatorToken });
+  else if (operator === '&&' || operator === '||') throw new Error(`Each side of ${operator} needs a command.`);
+  return list;
+}
+
 export function parsePipeline(input) {
   if (!input.trim()) throw new Error('Paste a command or pipeline to get started.');
   if (input.length > 12000) throw new Error('Try a pipeline shorter than 12,000 characters.');
@@ -235,21 +263,41 @@ export function parsePipeline(input) {
   };
   const context = { endpoint, endpoints, substitutions: [], notes: [] };
   const terminal = { 0: endpoint('terminal-in', 'terminal', 'Terminal input'), 1: endpoint('terminal-out', 'terminal', 'Terminal output'), 2: endpoint('terminal-err', 'terminal', 'Terminal stderr') };
-  const main = buildPipeline(tokens, terminal, context, null);
-  const all = [...main.commands, ...context.substitutions.flatMap(sub => sub.commands)];
-  if (all.length - main.commands.length > 12) throw new Error('This view supports up to 12 commands inside process substitutions and parallel jobs.');
-  const notes = [...context.notes];
-  for (const pipeline of [main, ...context.substitutions]) {
-    for (const pipe of pipeline.pipes) {
-      // A substitution holds copies of its owner's descriptors, so it can keep a pipe end open.
-      pipe.writers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.from]) && Object.values(cmd.fds).includes(pipe));
-      pipe.readers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.to]) && Object.values(cmd.fds).includes(pipe));
-      const name = `Pipe ${pipe.from + 1}${pipeline === main ? '' : ` in ${pipeline.text}`}`;
-      if (!pipe.writers.length) notes.push(`${name} has no writer after redirects; its reader receives end-of-file.`);
-      if (!pipe.readers.length) notes.push(`${name} has no reader after redirects; writing to it can cause SIGPIPE.`);
+  const list = splitList(tokens);
+  if (!list.length) throw new Error('Paste a command or pipeline to get started.');
+  if (list.length > 12) throw new Error('This view supports up to 12 pipelines joined by &&, || or ;.');
+  // Every pipeline starts from the shell's own descriptors, after the one before has finished.
+  let first = 0;
+  const pipelines = list.map(({ tokens: part, operator, operatorToken }, n) => {
+    const fromSub = context.substitutions.length, fromNote = context.notes.length;
+    const main = buildPipeline(part, terminal, context, null, { first, prefix: n ? `list-${n}-` : '' });
+    first += main.commands.length;
+    const substitutions = context.substitutions.slice(fromSub);
+    const all = [...main.commands, ...substitutions.flatMap(sub => sub.commands)];
+    if (all.length - main.commands.length > 12) throw new Error('This view supports up to 12 commands inside process substitutions and parallel jobs.');
+    const notes = context.notes.slice(fromNote);
+    const where = list.length > 1 ? `In pipeline ${n + 1}, p` : 'P';
+    for (const pipeline of [main, ...substitutions]) {
+      for (const pipe of pipeline.pipes) {
+        // A substitution holds copies of its owner's descriptors, so it can keep a pipe end open.
+        pipe.writers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.from]) && Object.values(cmd.fds).includes(pipe));
+        pipe.readers = all.filter(cmd => startedBy(cmd, pipeline.commands[pipe.to]) && Object.values(cmd.fds).includes(pipe));
+        const name = `${where}ipe ${pipe.from + 1}${pipeline === main ? '' : ` in ${pipeline.text}`}`;
+        if (!pipe.writers.length) notes.push(`${name} has no writer after redirects; its reader receives end-of-file.`);
+        if (!pipe.readers.length) notes.push(`${name} has no reader after redirects; writing to it can cause SIGPIPE.`);
+      }
     }
-  }
-  return { commands: main.commands, substitutions: context.substitutions, all, endpoints: [...endpoints.values()], pipes: main.pipes, notes };
+    const span = [part[0].span[0], part.at(-1).span[1]];
+    return { commands: main.commands, substitutions, all, pipes: main.pipes, notes, operator, newline: !!operatorToken?.newline, operatorSpan: operatorToken?.span, span, index: n };
+  });
+  const shared = { endpoints: [...endpoints.values()] };
+  pipelines.forEach(pipeline => Object.assign(pipeline, shared));
+  // A single pipeline is the model itself; a list also flattens its parts for counts and details.
+  if (pipelines.length === 1) return { ...pipelines[0], pipelines };
+  return {
+    commands: pipelines.flatMap(p => p.commands), substitutions: pipelines.flatMap(p => p.substitutions), all: pipelines.flatMap(p => p.all),
+    pipes: pipelines.flatMap(p => p.pipes), notes: pipelines.flatMap(p => p.notes), ...shared, pipelines,
+  };
 }
 
 export function destinationLabel(dest, fd, commands, cmd) {
