@@ -315,3 +315,17 @@ test('leading locale and timezone assignments do not name the command', () => {
   assert.equal(states('LC_ALL=C')[0], false);
   for (const source of ['PATH=/opt/bin sort', 'LD_PRELOAD=x.so sort', 'LC_ALL=C VAR=1 sort']) assert.equal(states(source)[0], false, source);
 });
+
+test('pv copies files or stdin to stdout and draws progress on stderr', () => {
+  const label = source => parsePipeline(source).commands.at(-1).usage.fds[2].label;
+  for (const source of ['pv', 'pv -', 'pv -pterb', 'pv -L 1m', 'pv -s 100M -N in', 'pv data.bin -', 'pv --rate-limit=1m']) assert.equal(stdin(source), 'possible', source);
+  for (const source of ['pv data.bin', 'pv -L 1m data.bin', 'pv -s 100M a b', 'pv -d 1234', 'pv -R 1234 -L 2m', 'pv --help']) assert.equal(stdin(source), 'unused', source);
+  for (const source of ['pv --frobnicate x', 'pv "$FILE"', 'pv /dev/stdin']) assert.equal(stdin(source), 'unknown', source);
+  for (const source of ['pv -X data.bin', 'pv -o copy.bin data.bin', 'pv --output=copy.bin', 'pv -d 1234']) assert.equal(stdout(source), 'unused', source);
+  for (const source of ['pv data.bin', 'pv -o - data.bin', 'pv -o /dev/stdout data.bin']) assert.equal(stdout(source), 'possible', source);
+  assert.equal(label('pv data.bin'), 'progress + errors');
+  assert.equal(label('pv -n data.bin'), 'progress + errors');
+  assert.equal(label('pv -q data.bin'), 'on error');
+  assert.equal(label('pv -R 1234 -L 2m'), 'on error');
+  assert.equal(parsePipeline('cat data.bin | pv -L 1m').commands[1].usage.fds[0].state, 'possible');
+});
