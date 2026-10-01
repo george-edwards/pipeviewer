@@ -418,7 +418,10 @@ export function inferUsage(argv) {
       const joined = words.map(word => word.value).join(' ');
       // Without a replacement string, parallel appends the arguments to the command.
       const appended = !pipe && !pipepart && !hasReplacement(joined);
-      result.job = { source: appended ? `${joined} {}` : joined, appended, ungroup: opts.has('-u', '--ungroup'),
+      // Where each character of the job's command was typed; a space or the appended {} borrows its neighbour's.
+      const positions = words.flatMap((word, k) => [...(k ? [word.span?.[0] ?? 0] : []), ...(word.positions ?? [])]);
+      if (appended) positions.push(...Array(3).fill((words.at(-1).span?.[1] ?? 1) - 1));
+      result.job = { source: appended ? `${joined} {}` : joined, positions, span: words[0].span && [words[0].span[0], words.at(-1).span[1]], appended, ungroup: opts.has('-u', '--ungroup'),
         input: pipe || pipepart ? 'blocks' : opts.has('--tty') ? 'terminal' : argFiles.length && argFiles.every(file => file.value !== '-') ? 'inherit' : 'null',
         slots: opts.values('-j', '--jobs', '-P', '--max-procs').at(-1) };
     }

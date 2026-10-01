@@ -126,6 +126,14 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 #diagram .stream-link path { transition: stroke-width .12s, opacity .12s; }
 #diagram .stream-link:hover path:not(.link-hit) { stroke-width: 3.5; }
 #diagram svg:has(.stream-link:hover) .stream-link:not(:hover) { opacity: .2; }
+/* The caret inspector: whatever the editor's caret is in stays lit and everything else fades. */
+#diagram :is([data-card], [data-dest]) { transition: opacity .12s; }
+#diagram svg.inspecting :is([data-card], [data-dest]):not(.lit) { opacity: .18; }
+#diagram .lit-card > .card-body { stroke: var(--focus); stroke-width: 2.5; filter: drop-shadow(0 0 .5rem color-mix(in srgb, var(--focus) 40%, transparent)); }
+#diagram svg.inspecting .stream-link.lit path:not(.link-hit) { stroke-width: 3.5; }
+#diagram .lit-node > .node-body { stroke: var(--focus); stroke-width: 2; }
+#diagram .lit-port .port-dot { r: 6px; stroke-width: 2.5; }
+#diagram .lit-port .port-badge { stroke: var(--focus); stroke-width: 1.5; }
 .details-section { margin-top: 1.8125rem; }
 .details-heading { display: flex; align-items: center; gap: .5625rem; width: fit-content; margin-bottom: .875rem; cursor: pointer; list-style: none; }
 .details-heading::-webkit-details-marker { display: none; }

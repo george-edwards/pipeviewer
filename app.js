@@ -201,11 +201,13 @@ function diagram(model) {
   bottom.forEach((d, i) => positions.set(d.id, { x: 180 + i * (width - 350) / Math.max(1, bottom.length), y: 353 + extra, w: 168, h: 61 }));
   const paths = [];
   const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
-  const path = (d, fd, dashed = false, inactive = false, reason = '') => `<g class="stream-link${inactive ? ' unused-link' : ''}"><title>${escape(reason)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="2" ${dashed || inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`;
-  const stub = (p, fd, label, inactive, reason) => {
+  // Tags name a link's ends (command key:fd) and destination, so the caret inspector can find it.
+  const tag = (ends, dest) => ` data-ends="${ends.join(' ')}" data-dest="${escape(dest.id)}"`;
+  const path = (d, fd, dashed = false, inactive = false, reason = '', tagged = '') => `<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(reason)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="2" ${dashed || inactive ? 'stroke-dasharray="5 5"' : ''} marker-end="url(#arrow-${inactive ? 'unused' : fd})"/></g>`;
+  const stub = (p, fd, label, inactive, reason, tagged) => {
     const endX = p.x + (fd === 0 ? -43 : 43);
-    paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason));
-    paths.push(`<text x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
+    paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason, tagged));
+    paths.push(`<text${tagged} x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
   };
   const port = (cmd, fd) => { const g = geometry(cmd); return { x: g.x + (fd === 0 ? 0 : 220), y: g.y + (fd === 2 ? 125 : 78) }; };
   // Substitutions not on 0–2 attach to the bottom edge: <(…) on the left, >(…) on the right.
@@ -226,12 +228,13 @@ function diagram(model) {
   const jobLink = (cmd, fd, dest) => {
     const p = port(cmd, fd), q = jobPort(dest.job, dest.direction), usage = portUsage(cmd, fd);
     const inactive = inactiveState(usage.state), gapY = geometry(dest.job.owner).y + (dest.direction === '>' ? 186 : 178);
+    const tagged = tag([`${cmd.key}:${fd}`], dest);
     if (dest.direction === '>') {
       const reason = `${dest.job.owner.usage.name} feeds a block of its input to each job. ${usage.reason}`;
-      paths.push(path(`M ${q.x} ${q.y} V ${gapY - 8} Q ${q.x} ${gapY} ${q.x - 8} ${gapY} H ${p.x - 22} Q ${p.x - 30} ${gapY} ${p.x - 30} ${gapY + 8} V ${p.y - 8} Q ${p.x - 30} ${p.y} ${p.x - 22} ${p.y} H ${p.x - 4}`, 0, false, inactive, reason));
+      paths.push(path(`M ${q.x} ${q.y} V ${gapY - 8} Q ${q.x} ${gapY} ${q.x - 8} ${gapY} H ${p.x - 22} Q ${p.x - 30} ${gapY} ${p.x - 30} ${gapY + 8} V ${p.y - 8} Q ${p.x - 30} ${p.y} ${p.x - 22} ${p.y} H ${p.x - 4}`, 0, false, inactive, reason, tagged));
     } else {
       const reason = `${dest.job.owner.usage.name} collects each job’s output and writes it to its own stdout. ${usage.reason}`;
-      paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x + 8} Q ${q.x} ${gapY} ${q.x} ${gapY - 8} V ${q.y + 5}`, 1, false, inactive, reason));
+      paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x + 8} Q ${q.x} ${gapY} ${q.x} ${gapY - 8} V ${q.y + 5}`, 1, false, inactive, reason, tagged));
     }
   };
   const inactiveState = state => ['unused', 'closed'].includes(state);
@@ -243,12 +246,13 @@ function diagram(model) {
     const inactive = inactiveState(writer.state) || inactiveState(reader.state);
     const connection = fd === sub.fd ? `through /dev/fd/${sub.fd}` : `to ${names[fd] || `fd ${fd}`}, opened from /dev/fd/${sub.fd}`;
     const reason = `${sub.text} is connected ${connection}. ${writer.reason} ${reader.reason}`;
+    const tagged = tag([`${cmd.key}:${fd}`, `${inner.key}:${sub.direction === '>' ? 0 : 1}`], sub.endpoint);
     if (sub.direction === '>') {
       const start = fd <= 2 ? `C ${s.x + 60} ${s.y}` : `C ${s.x} ${s.y + 60}`;
-      paths.push(path(`M ${s.x} ${s.y} ${start}, ${q.x - 60} ${q.y}, ${q.x - 5} ${q.y}`, fd <= 2 ? fd : 3, false, inactive, reason));
+      paths.push(path(`M ${s.x} ${s.y} ${start}, ${q.x - 60} ${q.y}, ${q.x - 5} ${q.y}`, fd <= 2 ? fd : 3, false, inactive, reason, tagged));
     } else {
       const end = fd <= 2 ? `${s.x - 60} ${s.y}, ${s.x - 5} ${s.y}` : `${s.x} ${s.y + 60}, ${s.x} ${s.y + 5}`;
-      paths.push(path(`M ${q.x} ${q.y} C ${q.x + 60} ${q.y}, ${end}`, 1, false, inactive, reason));
+      paths.push(path(`M ${q.x} ${q.y} C ${q.x + 60} ${q.y}, ${end}`, 1, false, inactive, reason, tagged));
     }
   };
   const laneLinks = [];
@@ -256,7 +260,7 @@ function diagram(model) {
     const row = Math.min(3, grid.place.get(cmd).row);
     const fdsToDraw = [0, 1, 2, ...bottomSubs(cmd).map(bottomFd)];
     for (const fd of fdsToDraw) {
-      const dest = cmd.fds[fd], p = port(cmd, fd);
+      const dest = cmd.fds[fd], p = port(cmd, fd), here = `${cmd.key}:${fd}`;
       const usage = portUsage(cmd, fd);
       const inactive = inactiveState(usage.state);
       if (dest.type === 'procsub') {
@@ -266,7 +270,7 @@ function diagram(model) {
           if (fd <= 2 || bottomFd(sub) === fd) substitutionLink(cmd, fd, sub);
         } else if (fd <= 2 && !(fd === 0 && cmd === sub.commands[0] && sub.direction === '>') && !(fd === 1 && cmd === sub.commands.at(-1) && sub.direction === '<')) {
           // An inherited copy of another substitution's pipe, such as stderr from a later >(…).
-          stub(p, fd, short(dest.label, 14), inactive, usage.reason);
+          stub(p, fd, short(dest.label, 14), inactive, usage.reason, tag([here], dest));
         }
         continue;
       }
@@ -274,40 +278,41 @@ function diagram(model) {
       if (dest.type === 'job') {
         const { commands } = dest.job;
         if ((dest.direction === '>' && fd === 0 && cmd === commands[0]) || (dest.direction === '<' && fd === 1 && cmd === commands.at(-1))) jobLink(cmd, fd, dest);
-        else stub(p, fd, 'parallel', inactive, usage.reason);
+        else stub(p, fd, 'parallel', inactive, usage.reason, tag([here], dest));
         continue;
       }
-      if (dest.job) { stub(p, fd, '/dev/null', inactive, usage.reason); continue; }
+      if (dest.job) { stub(p, fd, '/dev/null', inactive, usage.reason, tag([here], dest)); continue; }
       if (dest.type === 'pipe') {
         const activity = pipeActivity(dest.commands, dest);
         const producer = dest.commands[dest.from], next = dest.commands[dest.to];
         if (fd === 0 && cmd === next && [1, 2].some(f => producer.fds[f] === dest)) continue;
+        const tagged = tag([here, `${next.key}:0`], dest);
         if (fd !== 0 && cmd === producer && next.fds[0] === dest) {
           const q = port(next, 0);
-          paths.push(path(`M ${p.x} ${p.y} C ${p.x + 50} ${p.y}, ${q.x - 50} ${q.y}, ${q.x - 5} ${q.y}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`));
-          if (fd === 1 || cmd.fds[1] !== dest) paths.push(`<text class="pipe-label" x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
+          paths.push(path(`M ${p.x} ${p.y} C ${p.x + 50} ${p.y}, ${q.x - 50} ${q.y}, ${q.x - 5} ${q.y}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`, tagged));
+          if (fd === 1 || cmd.fds[1] !== dest) paths.push(`<text class="pipe-label"${tagged} x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
         } else if (cmd.substitution && fd !== 0 && next.fds[0] === dest && geometry(next).y < geometry(cmd).y) {
           // An inherited pipe: run below the reader's card, then into its stdin.
           const q = port(next, 0), gapY = geometry(next).y + 178;
-          paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x - 22} Q ${q.x - 30} ${gapY} ${q.x - 30} ${gapY - 8} V ${q.y + 8} Q ${q.x - 30} ${q.y} ${q.x - 22} ${q.y} H ${q.x - 4}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`));
-        } else stub(p, fd, `pipe ${dest.from + 1}`, inactive, usage.reason);
+          paths.push(path(`M ${p.x} ${p.y} H ${p.x + 4} Q ${p.x + 12} ${p.y} ${p.x + 12} ${p.y - 8} V ${gapY + 8} Q ${p.x + 12} ${gapY} ${p.x + 4} ${gapY} H ${q.x - 22} Q ${q.x - 30} ${gapY} ${q.x - 30} ${gapY - 8} V ${q.y + 8} Q ${q.x - 30} ${q.y} ${q.x - 22} ${q.y} H ${q.x - 4}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`, tagged));
+        } else stub(p, fd, `pipe ${dest.from + 1}`, inactive, usage.reason, tag([here], dest));
         continue;
       }
-      if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason); continue; }
-      const box = positions.get(dest.id);
+      if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
+      const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
         if (dest.id === 'terminal-in' && cmd.index > 0) {
           // A later command reading the terminal (< /dev/tty): pass above the earlier cards.
           const topX = box.x + box.w / 2;
-          paths.push(path(`M ${topX} ${box.y} V 92 Q ${topX} 80 ${topX + 12} 80 H ${p.x - 57} Q ${p.x - 45} 80 ${p.x - 45} 92 V ${p.y - 12} Q ${p.x - 45} ${p.y} ${p.x - 33} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason));
-        } else if (dest.id === 'terminal-in') paths.push(path(`M ${box.x + box.w} ${box.y + 30} C ${p.x - 25} ${box.y + 30}, ${p.x - 25} ${p.y}, ${p.x - 4} ${p.y}`, fd, false, inactive, usage.reason));
-        else laneLinks.push({ input: true, fd, box, p, upper: p.x - 45 - row * 10, lower: box.x + box.w / 2, down: true, dashed: false, inactive, reason: usage.reason });
+          paths.push(path(`M ${topX} ${box.y} V 92 Q ${topX} 80 ${topX + 12} 80 H ${p.x - 57} Q ${p.x - 45} 80 ${p.x - 45} 92 V ${p.y - 12} Q ${p.x - 45} ${p.y} ${p.x - 33} ${p.y} H ${p.x - 4}`, fd, false, inactive, usage.reason, tagged));
+        } else if (dest.id === 'terminal-in') paths.push(path(`M ${box.x + box.w} ${box.y + 30} C ${p.x - 25} ${box.y + 30}, ${p.x - 25} ${p.y}, ${p.x - 4} ${p.y}`, fd, false, inactive, usage.reason, tagged));
+        else laneLinks.push({ input: true, fd, box, p, upper: p.x - 45 - row * 10, lower: box.x + box.w / 2, down: true, dashed: false, inactive, reason: usage.reason, tagged });
       } else if (dest.id === 'terminal-out' && !cmd.substitution && cmd.index === model.commands.length - 1 && fd === 1) {
-        paths.push(path(`M ${p.x} ${p.y} H ${box.x - 4}`, fd, false, inactive, usage.reason));
+        paths.push(path(`M ${p.x} ${p.y} H ${box.x - 4}`, fd, false, inactive, usage.reason, tagged));
       } else {
         // Terminal boxes sit above the lanes, so routes to them rise; the rest drop to the bottom row.
         laneLinks.push({ input: false, fd, box, p, upper: p.x + 20 + fd * 7 + row * 16, lower: box.x + box.w / 2 + (fd === 2 ? 18 : -18),
-          down: !['terminal-in', 'terminal-out'].includes(dest.id), dashed: dest.type === 'closed', inactive, reason: usage.reason });
+          down: !['terminal-in', 'terminal-out'].includes(dest.id), dashed: dest.type === 'closed', inactive, reason: usage.reason, tagged });
       }
     }
   });
@@ -330,18 +335,18 @@ function diagram(model) {
     const r = Math.min(10, Math.abs(lower - upper) / 2);
     if (link.input) {
       const s = Math.sign(upper - lower) || 1;
-      paths.push(path(`M ${lower} ${box.y} V ${y + 10} Q ${lower} ${y} ${lower + s * r} ${y} H ${upper - s * r} Q ${upper} ${y} ${upper} ${y - 10} V ${p.y + 12} Q ${upper} ${p.y} ${upper + 12} ${p.y} H ${p.x - 4}`, link.fd, false, link.inactive, link.reason));
+      paths.push(path(`M ${lower} ${box.y} V ${y + 10} Q ${lower} ${y} ${lower + s * r} ${y} H ${upper - s * r} Q ${upper} ${y} ${upper} ${y - 10} V ${p.y + 12} Q ${upper} ${p.y} ${upper + 12} ${p.y} H ${p.x - 4}`, link.fd, false, link.inactive, link.reason, link.tagged));
     } else {
       const s = Math.sign(lower - upper) || 1;
       const end = link.down ? `Q ${lower} ${y} ${lower} ${y + 10} V ${box.y - 4}` : `Q ${lower} ${y} ${lower} ${y - 10} V ${box.y + box.h + 4}`;
-      paths.push(path(`M ${p.x} ${p.y} H ${upper - 10} Q ${upper} ${p.y} ${upper} ${p.y + 10} V ${y - 10} Q ${upper} ${y} ${upper + s * r} ${y} H ${lower - s * r} ${end}`, link.fd, link.dashed, link.inactive, link.reason));
+      paths.push(path(`M ${p.x} ${p.y} H ${upper - 10} Q ${upper} ${p.y} ${upper} ${p.y + 10} V ${y - 10} Q ${upper} ${y} ${upper + s * r} ${y} H ${lower - s * r} ${end}`, link.fd, link.dashed, link.inactive, link.reason, link.tagged));
     }
   });
   const nodes = [...used.values()].map(dest => {
     const p = positions.get(dest.id);
     const icon = dest.type === 'file' ? '▤' : dest.type === 'null' ? '∅' : dest.type === 'closed' ? '×' : '▣';
     const subtitle = dest.type === 'file' ? dest.mode === 'read' ? 'INPUT FILE' : dest.mode === 'append' ? 'APPEND TO FILE' : 'OUTPUT FILE' : dest.type === 'null' ? dest.mode === 'read' ? 'END-OF-FILE' : 'DISCARDED' : dest.type === 'closed' ? 'DESCRIPTOR CLOSED' : 'TERMINAL';
-    return `<g><title>${escape(dest.label)}</title><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8" fill="${palette.inset}" stroke="${palette.border}"/><text x="${p.x + 15}" y="${p.y + 26}" fill="${palette.muted}" font-size="17">${icon}</text><text x="${p.x + 39}" y="${p.y + 25}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="10">${escape(short(dest.label, 18))}</text><text x="${p.x + 39}" y="${p.y + 43}" fill="${palette.muted}" font-size="9" letter-spacing="1">${subtitle}</text></g>`;
+    return `<g data-dest="${escape(dest.id)}"><title>${escape(dest.label)}</title><rect class="node-body" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8" fill="${palette.inset}" stroke="${palette.border}"/><text x="${p.x + 15}" y="${p.y + 26}" fill="${palette.muted}" font-size="17">${icon}</text><text x="${p.x + 39}" y="${p.y + 25}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="10">${escape(short(dest.label, 18))}</text><text x="${p.x + 39}" y="${p.y + 43}" fill="${palette.muted}" font-size="9" letter-spacing="1">${subtitle}</text></g>`;
   });
   const cards = model.all.map(cmd => {
     const { x, y } = geometry(cmd);
@@ -354,18 +359,18 @@ function diagram(model) {
       const tint = [palette['green-bg'], palette['purple-bg'], palette['amber-bg']][fd];
       return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}">
         <title>${escape(usage.reason)}</title>
-        <rect x="${badgeX}" y="${p.y - 10}" width="19" height="18" rx="4" fill="${inactive ? palette.inset : tint}"/>
+        <rect class="port-badge" x="${badgeX}" y="${p.y - 10}" width="19" height="18" rx="4" fill="${inactive ? palette.inset : tint}"/>
         <text x="${badgeX + 9.5}" y="${p.y + 3}" text-anchor="middle" fill="${inactive ? palette.muted : colors[fd]}" font-size="10">${fd}</text>
         <text x="${labelX}" y="${p.y + 3}" text-anchor="${fd === 0 ? 'start' : 'end'}" fill="${palette.text}" font-size="10">${names[fd]}</text>
         <text x="${annotationX}" y="${p.y + 21}" text-anchor="${fd === 0 ? 'start' : 'end'}" fill="${palette.muted}" font-size="10">${usage.label}</text>
-        <circle cx="${p.x}" cy="${p.y}" r="4" fill="${usage.state === 'possible' ? colors[fd] : palette.surface}" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="1.8" ${usage.state === 'unknown' ? 'stroke-dasharray="2 2"' : ''}/>
+        <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${usage.state === 'possible' ? colors[fd] : palette.surface}" stroke="${inactive ? palette.muted : colors[fd]}" stroke-width="1.8" ${usage.state === 'unknown' ? 'stroke-dasharray="2 2"' : ''}/>
       </g>`;
     }).join('');
     const argumentPorts = bottomSubs(cmd).map(sub => {
       const fd = bottomFd(sub), p = argumentPort(cmd, sub), usage = portUsage(cmd, fd);
       return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(usage.reason)}</title>
         <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
-        <circle cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
+        <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
     }).join('');
     const jobPorts = cmd.substitutions.filter(sub => sub.kind === 'job').flatMap(job => [
       ...(job.input === 'blocks' ? [['>', 'blocks', palette.green]] : []), ...(job.ungroup ? [] : [['<', 'jobs', palette.purple]]),
@@ -379,8 +384,8 @@ function diagram(model) {
     const title = job ? `IN EACH JOB · ${cmd.index + 1}` : cmd.substitution ? `SUBSTITUTION ${cmd.key}` : `COMMAND ${cmd.key}`;
     // A job template runs many times, so its cards are drawn as a stack.
     const stack = job ? [8, 4].map(d => `<rect x="${x + d}" y="${y + d}" width="220" height="156" rx="10" fill="${palette.inset}" stroke="${palette.border}"/>`).join('') : '';
-    return `<g><title>${escape(job ? `${cmd.command} · runs in each job started by parallel` : cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
-      ${stack}<rect x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
+    return `<g data-card="${cmd.key}"><title>${escape(job ? `${cmd.command} · runs in each job started by parallel` : cmd.substitution ? `${cmd.command} · in ${cmd.substitution.text}` : cmd.command)}</title>
+      ${stack}<rect class="card-body" x="${x}" y="${y}" width="220" height="156" rx="10" fill="${palette.surface}" stroke="${palette.border}" ${cmd.substitution ? 'stroke-dasharray="5 3"' : ''}/>
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="16" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 19))}</text>
@@ -389,6 +394,68 @@ function diagram(model) {
   const markers = [...colors.map((color, fd) => [fd, color]), ['unused', palette.muted]];
   const height = 390 + (bottomY - 353);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} 55 ${width - minX} ${height}" role="img" aria-labelledby="svg-title svg-desc" font-family="'DM Sans',Arial,sans-serif"><title id="svg-title">Pipeline descriptor map</title><desc id="svg-desc">Usage is inferred for standard commands, not observed. ${escape(model.all.map(cmd => `${cmd.command}: ${[0,1,2].map(fd => `${names[fd]} ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)} (${portUsage(cmd, fd).label})`).join(', ')}`).join('. '))}</desc><defs>${markers.map(([id, color]) => `<marker id="arrow-${id}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="${color}" stroke-width="1.5"/></marker>`).join('')}</defs><rect x="${minX}" y="55" width="${width - minX}" height="${height}" fill="${palette.surface}"/>${paths.join('')}${nodes.join('')}${cards.join('')}</svg>`;
+}
+
+// The caret inspector lights up the part of the diagram under the editor's caret, as a browser's
+// element inspector does for the page. Each target is a span of the editor's text and what it lights:
+// strong cards are outlined, context cards stay visible, and links light when an end or their
+// destination is listed. Ports name command key:fd.
+let targets = [], inspected = null;
+function inspectTargets(model) {
+  const portsOf = cmd => Object.keys(cmd.fds).map(fd => `${cmd.key}:${fd}`);
+  const list = [];
+  for (const cmd of model.all) {
+    list.push({ span: cmd.span, strong: [cmd.key], context: [], ends: portsOf(cmd), ports: [], dests: [] });
+    for (const step of cmd.steps) {
+      const ports = step.fds.map(fd => `${cmd.key}:${fd}`);
+      list.push({ span: step.span, strong: [], context: [cmd.key], ends: ports, ports, dests: [step.destination.id] });
+    }
+  }
+  // A pipe's target also covers the spaces either side of |, so moving the caret along never goes dark.
+  for (const { commands, pipes } of [model, ...model.substitutions]) {
+    for (const pipe of pipes) {
+      const before = commands[pipe.from], after = commands[pipe.to];
+      const ports = [...Object.keys(before.fds).filter(fd => before.fds[fd] === pipe).map(fd => `${before.key}:${fd}`), `${after.key}:0`];
+      list.push({ span: [Math.min(pipe.span[0], before.span[1] + 1), Math.max(pipe.span[1], after.span[0] - 1)], strong: [], context: [before.key, after.key], ends: [], ports, dests: [pipe.id] });
+    }
+  }
+  for (const sub of model.substitutions) {
+    if (!sub.span) continue;
+    const inner = sub.commands.map(cmd => cmd.key);
+    const dests = sub.kind === 'job' ? [`${sub.id}-in`, `${sub.id}-out`] : [sub.endpoint.id];
+    list.push({ span: sub.span, strong: inner, context: [sub.owner.key], ends: sub.commands.flatMap(portsOf), ports: [], dests });
+  }
+  return list;
+}
+function inspect(redrawn = false) {
+  const editor = $('#pipeline'), svg = $('#diagram svg');
+  // While a keystroke waits for its frame the old diagram stays lit, so typing does not flicker.
+  if (editor.value !== currentSource && renderQueued) return;
+  const caret = editor.selectionDirection === 'backward' ? editor.selectionStart : editor.selectionEnd;
+  const live = svg && document.activeElement === editor && editor.value === currentSource;
+  // The smallest span holding the caret wins; on a tie the later target, such as a pipe over |&.
+  const target = live ? targets.reduce((best, t) => t.span[0] <= caret && caret <= t.span[1] && (!best || t.span[1] - t.span[0] <= best.span[1] - best.span[0]) ? t : best, null) : null;
+  if (target === inspected && !redrawn) return;
+  const moved = target !== inspected;
+  inspected = target;
+  if (!svg) return;
+  svg.classList.toggle('inspecting', !!target);
+  svg.querySelectorAll('.lit').forEach(el => el.classList.remove('lit', 'lit-card', 'lit-port', 'lit-node'));
+  if (!target) return;
+  const ends = new Set(target.ends), dests = new Set(target.dests), ports = new Set(target.ports);
+  for (const key of [...target.strong, ...target.context]) svg.querySelector(`[data-card="${key}"]`)?.classList.add('lit', ...(target.strong.includes(key) ? ['lit-card'] : []));
+  svg.querySelectorAll('[data-command]').forEach(el => { if (ports.has(`${el.dataset.command}:${el.dataset.fd}`)) el.classList.add('lit', 'lit-port'); });
+  svg.querySelectorAll('[data-ends]').forEach(el => {
+    if (dests.has(el.dataset.dest) || el.dataset.ends.split(' ').some(end => ends.has(end))) { el.classList.add('lit'); dests.add(el.dataset.dest); }
+  });
+  // Only a redirect's own destination is outlined; others reached by lit links just stay visible.
+  svg.querySelectorAll('[data-dest]:not([data-ends])').forEach(el => { if (dests.has(el.dataset.dest)) el.classList.add('lit', ...(target.dests.includes(el.dataset.dest) ? ['lit-node'] : [])); });
+  // Bring a lit card into view when the caret moves to it in a diagram wider than the window.
+  const card = moved && svg.querySelector('.lit-card, [data-card].lit');
+  if (card) {
+    const scroll = $('#diagram-scroll'), box = card.getBoundingClientRect(), view = scroll.getBoundingClientRect();
+    if (box.left < view.left || box.right > view.right) scroll.scrollBy({ left: box.left + box.width / 2 - (view.left + view.width / 2), behavior: 'smooth' });
+  }
 }
 
 const zoomSteps = [.5, .67, .8, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -413,6 +480,7 @@ function showDiagram() {
     svg.style.minHeight = '0';
     scroll.scrollLeft = centre * scroll.scrollWidth - scroll.clientWidth / 2;
   }
+  inspect(true);
   $('#zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
   $('#zoom-out').disabled = zoom === zoomSteps[0];
   $('#zoom-in').disabled = zoom === zoomSteps.at(-1);
@@ -427,6 +495,7 @@ function render() {
   try {
     currentModel = parsePipeline($('#pipeline').value);
     currentSource = $('#pipeline').value;
+    targets = inspectTargets(currentModel);
     $('#error').hidden = true;
     $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
@@ -487,6 +556,8 @@ systemTheme.addEventListener('change', event => {
 applyTheme(document.documentElement.dataset.theme);
 
 $('#pipeline').addEventListener('input', () => { fitEditor(); queueRender(); });
+document.addEventListener('selectionchange', () => inspect());
+for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
 // The editor grows with its content up to ten lines, then scrolls. A height the viewer drags
 // to acts as a minimum; CSS caps both.
 let chosenHeight = 0;

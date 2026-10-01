@@ -34,6 +34,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - Redirects to `/dev/tty` reach the terminal: reads connect to terminal input, stderr to terminal stderr, and other writes to terminal output.
 - `/dev/stdin`, `/dev/stdout`, and `/dev/stderr` redirect to the current destination of 0, 1, or 2, like a descriptor copy. When that destination is a file, the step notes that Bash opens it again with a separate offset.
 - Each routed stream gets its own lane; hover a line to fade the others and trace it.
+- The diagram follows the editor caret, like a browser's element inspector: a command lights its card and streams, a redirect its port and destination, and `|` its pipe. Commands inside process substitutions and `parallel` jobs light up too.
 - Quoted arguments and destinations, escapes, and additional descriptor bookkeeping.
 
 ## Scope

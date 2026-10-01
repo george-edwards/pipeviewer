@@ -1,7 +1,11 @@
 import { inferUsage, substitutionUsage, fillReplacements } from './usage.js';
 
-/** A deliberately limited shell parser. Input is never evaluated or executed. */
-function tokenize(source, start = 0, nested = false) {
+/**
+ * A deliberately limited shell parser. Input is never evaluated or executed.
+ * Each token's span is where it sits in the text the viewer typed: at() maps an index in source
+ * there, which differs for a parallel job's command, rebuilt from its quoted words.
+ */
+function tokenize(source, start = 0, nested = false, at = i => i) {
   const tokens = [];
   let i = start;
   while (i < source.length) {
@@ -17,29 +21,31 @@ function tokenize(source, start = 0, nested = false) {
           ? `Bash reads ${source[i - 1]}${source.slice(i, i + 2)}…) as an argument. Write ${source[i - 1]}${source[i]} ${source.slice(i, i + 2)}…) to redirect a descriptor.`
           : `Put a space before ${source.slice(i, i + 2)}…). Bash joins it to the neighbouring word.`);
       }
-      const inner = tokenize(source, i + 2, true);
+      const inner = tokenize(source, i + 2, true, at);
       i = inner.end + 1;
       if (i < source.length && !/[\s|&;<>()]/.test(source[i])) throw new Error('Put a space after the closing ) of a process substitution. Bash joins adjacent text into one word.');
       if (!inner.tokens.length) throw new Error(`Add a command inside ${source[begin]}( ).`);
-      tokens.push({ type: 'procsub', direction: source[begin], tokens: inner.tokens, raw: source.slice(begin, i), start: begin, end: i });
+      tokens.push({ type: 'procsub', direction: source[begin], tokens: inner.tokens, raw: source.slice(begin, i), start: begin, end: i, span: [at(begin), at(i - 1) + 1] });
       continue;
     }
     const operator = source.slice(i).match(/^(\|&|\|\||&&|&>>|&>|>>|>&|<&|<<<|<<|<>|>\||[|<>;&()])/);
     if (operator) {
       if (nested && operator[0] === ')') return { tokens, end: begin };
       i += operator[0].length;
-      tokens.push({ type: 'op', value: operator[0], raw: operator[0], start: begin, end: i });
+      tokens.push({ type: 'op', value: operator[0], raw: operator[0], start: begin, end: i, span: [at(begin), at(i - 1) + 1] });
       continue;
     }
+    // positions[k] is where value[k] came from, so a job's command can be traced back too.
     let value = '', quote = '', dynamic = false;
+    const positions = [];
     while (i < source.length) {
       const c = source[i];
       if (!quote && /[\s|<>;&()]/.test(c)) break;
       if (c === '\\' && quote !== "'") {
         if (i + 1 >= source.length) throw new Error('A trailing backslash needs another character.');
         const next = source[i + 1];
-        if (quote === '"' && !['$', '`', '"', '\\', '\n'].includes(next)) { value += c; i++; continue; }
-        if (next !== '\n') value += next;
+        if (quote === '"' && !['$', '`', '"', '\\', '\n'].includes(next)) { value += c; positions.push(at(i)); i++; continue; }
+        if (next !== '\n') { value += next; positions.push(at(i + 1)); }
         i += 2; continue;
       }
       if ((c === "'" || c === '"') && (!quote || quote === c)) {
@@ -50,10 +56,10 @@ function tokenize(source, start = 0, nested = false) {
       }
       if (quote !== "'" && c === '$') dynamic = true;
       if (!quote && /[*?\[\]{}~]/.test(c)) dynamic = true;
-      value += c; i++;
+      value += c; positions.push(at(i)); i++;
     }
     if (quote) throw new Error(`Close the ${quote === "'" ? 'single' : 'double'} quote to see your pipeline.`);
-    tokens.push({ type: 'word', value, raw: source.slice(begin, i), start: begin, end: i, dynamic });
+    tokens.push({ type: 'word', value, raw: source.slice(begin, i), start: begin, end: i, span: [at(begin), at(i - 1) + 1], positions, dynamic });
   }
   if (nested) throw new Error('Close the process substitution with ).');
   return { tokens, end: i };
@@ -68,10 +74,10 @@ const fillAll = tokens => tokens.map(token => token.type === 'procsub' ? { ...to
  * default parallel collects their output; with -u they write to its stdout and stderr directly.
  */
 function addJob(cmd, context) {
-  const { source, input, ungroup } = cmd.usage.job;
+  const { source, positions, input, ungroup } = cmd.usage.job;
   const saved = { substitutions: context.substitutions.length, owned: cmd.substitutions.length, endpoints: new Set(context.endpoints.keys()) };
   try {
-    const tokens = fillAll(tokenize(source).tokens);
+    const tokens = fillAll(tokenize(source, 0, false, i => positions[Math.min(i, positions.length - 1)]).tokens);
     const job = { ...cmd.usage.job, id: `job-${context.substitutions.length}`, kind: 'job', key: `${cmd.key}j`, text: source, owner: cmd };
     const collected = context.endpoint(`${job.id}-out`, 'job', 'parallel', { owner: cmd, job, direction: '<' });
     const stdin = input === 'blocks' ? context.endpoint(`${job.id}-in`, 'job', 'parallel', { owner: cmd, job, direction: '>' })
@@ -94,30 +100,30 @@ function addJob(cmd, context) {
  * command's descriptors, taken when Bash expands the word (left to right).
  */
 function buildPipeline(tokens, inherited, context, substitution) {
-  const groups = [], connectors = [];
+  const groups = [], connectors = [], connectorTokens = [];
   let current = [];
   for (const token of tokens) {
     if (token.type === 'op' && ['|', '|&'].includes(token.value)) {
       if (!current.length) throw new Error('Each side of a pipe needs a command.');
-      groups.push(current); current = []; connectors.push(token.value);
+      groups.push(current); current = []; connectors.push(token.value); connectorTokens.push(token);
     } else current.push(token);
   }
   if (!current.length) throw new Error('Each side of a pipe needs a command.');
   groups.push(current);
   if (!substitution && groups.length > 12) throw new Error('This view supports up to 12 commands in one pipeline.');
   const prefix = substitution ? `${substitution.id}-` : '';
-  const pipes = connectors.map((_, i) => context.endpoint(`${prefix}pipe-${i}`, 'pipe', `Pipe ${i + 1}`, { from: i, to: i + 1 }));
+  const pipes = connectors.map((_, i) => context.endpoint(`${prefix}pipe-${i}`, 'pipe', `Pipe ${i + 1}`, { from: i, to: i + 1, span: connectorTokens[i].span }));
   const commands = [];
   groups.forEach((tokens, index) => {
     const key = substitution ? (groups.length > 1 ? `${substitution.key}.${index + 1}` : substitution.key) : `${index + 1}`;
     const fds = { ...inherited, 0: index ? pipes[index - 1] : inherited[0], 1: pipes[index] || inherited[1] };
-    const cmd = { index, key, substitution, fds, steps: [], substitutions: [] };
+    const cmd = { index, key, substitution, fds, steps: [], substitutions: [], span: [tokens[0].span[0], tokens.at(-1).span[1]] };
     commands.push(cmd);
     const substitute = (token, place) => {
       if (cmd.substitutions.length >= letters.length) throw new Error('Use fewer process substitutions in one command.');
       let fd = 63;
       while (fd in fds) fd--;
-      const sub = { id: `sub-${context.substitutions.length}`, key: `${key}${letters[cmd.substitutions.length]}`, text: token.raw, direction: token.direction, owner: cmd, fd, place };
+      const sub = { id: `sub-${context.substitutions.length}`, key: `${key}${letters[cmd.substitutions.length]}`, text: token.raw, direction: token.direction, owner: cmd, fd, place, span: token.span };
       sub.endpoint = context.endpoint(sub.id, 'procsub', token.raw, { direction: token.direction, owner: cmd, fd, substitution: sub });
       // The child inherits the owner's current descriptors, except earlier substitution pipes.
       const snapshot = Object.fromEntries(Object.entries(fds).filter(([n, dest]) => Number(n) <= 2 || dest.type !== 'procsub'));
@@ -131,6 +137,7 @@ function buildPipeline(tokens, inherited, context, substitution) {
     const words = [], argv = [];
     for (let i = 0; i < tokens.length; i++) {
       let token = tokens[i], fd;
+      const first = token;
       if (token.type === 'word' && /^\d+$/.test(token.raw) && tokens[i + 1]?.type === 'op' && /^[<>]/.test(tokens[i + 1].value) && token.end === tokens[i + 1].start) {
         fd = Number(token.value); token = tokens[++i];
       }
@@ -184,14 +191,14 @@ function buildPipeline(tokens, inherited, context, substitution) {
       }
       fds[fd] = dest;
       if (op.startsWith('&')) fds[2] = dest;
-      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op}${op.endsWith('&') ? '' : ' '}${target.raw}`, fd, destination: dest, description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}` });
+      cmd.steps.push({ text: `${op.startsWith('&') ? '' : fd}${op}${op.endsWith('&') ? '' : ' '}${target.raw}`, fd, fds: op.startsWith('&') ? [1, 2] : [fd], destination: dest, span: [first.span[0], target.span[1]], description: `${op.startsWith('&') ? 'stdout and stderr' : fd} → ${dest.label}${via}` });
     }
     if (!words.length) throw new Error('Add a command before or after the redirects.');
     if (argv[0].procsub) throw new Error('Start each command with its name. A process substitution cannot be the command itself.');
     if (['if', 'then', 'for', 'while', 'until', 'case', 'function', '{', '}', '!', 'time', 'exec'].includes(words[0])) throw new Error('Shell control structures and exec are not supported. Try simple commands joined by pipes.');
     if (connectors[index] === '|&') {
       fds[2] = fds[1];
-      cmd.steps.push({ text: '|&', fd: 2, destination: fds[1], description: `stderr follows stdout → ${fds[1].label}` });
+      cmd.steps.push({ text: '|&', fd: 2, fds: [2], destination: fds[1], span: connectorTokens[index].span, description: `stderr follows stdout → ${fds[1].label}` });
     }
     cmd.command = words.join(' ');
     // Redirects apply before the command runs, so /dev/fd/3 names whatever 3< <(…) opened.
@@ -219,7 +226,8 @@ const startedBy = (cmd, ancestor) => {
 export function parsePipeline(input) {
   if (!input.trim()) throw new Error('Paste a command or pipeline to get started.');
   if (input.length > 12000) throw new Error('Try a pipeline shorter than 12,000 characters.');
-  const { tokens } = tokenize(input.trim());
+  const lead = input.length - input.trimStart().length;
+  const { tokens } = tokenize(input.trim(), 0, false, i => i + lead);
   const endpoints = new Map();
   const endpoint = (id, type, label, extra = {}) => {
     if (!endpoints.has(id)) endpoints.set(id, { id, type, label, ...extra });
