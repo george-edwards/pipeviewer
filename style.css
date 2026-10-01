@@ -89,6 +89,13 @@ textarea::placeholder { color: var(--muted); opacity: 1; }
 .inline-label { margin-left: .375rem; }
 .example-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .example-buttons button { background: var(--surface); border: 1px solid var(--border); border-radius: .3125rem; padding: .375rem .5625rem; color: var(--muted); font-size: .75rem; }
+/* The examples sit on one line that scrolls sideways; an edge fades only while there is more that way. */
+.example-strip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; --fade-left: 0rem; --fade-right: 0rem;
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-left), #000 calc(100% - var(--fade-right)), transparent); }
+.example-strip::-webkit-scrollbar { display: none; }
+.example-strip.more-left { --fade-left: 2.5rem; }
+.example-strip.more-right { --fade-right: 2.5rem; }
+.example-strip button { flex-shrink: 0; white-space: nowrap; }
 .example-buttons button:hover, .example-buttons button.active { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
 /* A segmented switch on a recessed track, so variations read as modes of one example rather than more examples. */
 .variation-buttons { display: flex; flex-wrap: wrap; gap: .125rem; width: fit-content; padding: .1875rem; background: var(--inset); border: 1px solid var(--border); border-radius: .5rem; }
@@ -140,8 +147,20 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 #diagram .lit-port .port-badge { stroke: var(--focus); stroke-width: 1.5; }
 #diagram :is([data-card], [data-command], [data-dest]) { cursor: pointer; }
 .no-highlight #diagram :is([data-card], [data-command], [data-dest]) { cursor: inherit; }
-#highlight-toggle svg { width: .9375rem; height: .9375rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-#highlight-toggle[aria-pressed="true"] { color: var(--purple); }
+/* The Highlight switch: the knob slides right and the track fills purple when the linking is on. */
+#highlight-toggle .switch-track { position: relative; width: 1.875rem; height: 1.0625rem; border-radius: 1rem; background: var(--inset); box-shadow: inset 0 0 0 1px var(--border); transition: background .2s, box-shadow .2s; }
+#highlight-toggle .switch-knob { position: absolute; top: .1875rem; left: .1875rem; width: .6875rem; height: .6875rem; border-radius: 50%; background: var(--muted); transition: transform .2s cubic-bezier(.3, 1.4, .5, 1), background .2s; }
+#highlight-toggle[aria-checked="true"] { color: var(--purple); }
+#highlight-toggle[aria-checked="true"] .switch-track { background: var(--purple); box-shadow: none; }
+#highlight-toggle[aria-checked="true"] .switch-knob { transform: translateX(.8125rem); background: var(--surface); }
+#highlight-toggle .switch-track::after { content: ''; position: absolute; inset: -.25rem; border-radius: 1rem; box-shadow: 0 0 0 0 var(--focus); opacity: 0; }
+#highlight-toggle.just-toggled .switch-track::after { animation: switch-pulse .6s ease-out; }
+@keyframes switch-pulse { from { opacity: .8; box-shadow: 0 0 0 0 var(--focus); } to { opacity: 0; box-shadow: 0 0 0 .5rem var(--focus); } }
+/* Feedback on the whole diagram: a purple glow when the linking comes on, a brief grey dim when it goes off. */
+.diagram-panel.linking-on { animation: linking-on .7s ease-out; }
+.diagram-panel.linking-off { animation: linking-off .7s ease-out; }
+@keyframes linking-on { 0% { box-shadow: 0 0 0 0 var(--purple-bg); border-color: var(--purple); } 40% { box-shadow: 0 0 0 .3125rem var(--purple-bg); border-color: var(--purple); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes linking-off { 0% { filter: none; } 35% { filter: grayscale(1) opacity(.75); } 100% { filter: none; } }
 .details-section { margin-top: 1.8125rem; }
 .details-heading { display: flex; align-items: center; gap: .5625rem; width: fit-content; margin-bottom: .875rem; cursor: pointer; list-style: none; }
 .details-heading::-webkit-details-marker { display: none; }
@@ -260,7 +279,7 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
   #diagram svg { min-height: 17.5rem; }
   .diagram-toolbar { gap: .625rem; }
   .diagram-actions { gap: .5rem; flex-shrink: 0; }
-  #download span, #highlight-toggle span { display: none; }
+  #download span, #highlight-toggle .switch-label { display: none; }
   .details { grid-template-columns: 1fr; }
   .usage-assumption { margin-left: 0; flex-basis: 100%; }
   #diagram-scroll::after { content: 'Scroll horizontally →'; position: sticky; left: 0; display: block; width: 100%; text-align: center; font-size: .6875rem; color: var(--muted); padding: .375rem 0 .75rem; }
@@ -277,4 +296,4 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
   .header-actions { gap: .375rem; }
   .talk-button { width: 2.25rem; min-height: 2.25rem; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

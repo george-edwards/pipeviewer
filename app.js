@@ -667,6 +667,9 @@ function render() {
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
     $('#notes').innerHTML = [...currentModel.notes, ...(extra ? ['The diagram shows descriptors 0, 1, and 2. Open Descriptor details below to see the others.'] : [])].map(note => `<div class="note">${escape(note)}</div>`).join('');
     document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
+    // Keep the chosen example visible in the scrolling strip.
+    const chosen = $('#example-strip .active');
+    if (chosen) { const strip = $('#example-strip'); if (chosen.offsetLeft < strip.scrollLeft || chosen.offsetLeft + chosen.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = chosen.offsetLeft - strip.clientWidth / 2 + chosen.offsetWidth / 2; }
     showVariations();
     try { localStorage.setItem('pipeviewer-pipeline', currentSource); } catch { /* Storage is optional. */ }
   } catch (error) {
@@ -913,17 +916,41 @@ $('#diagram-scroll').addEventListener('pointerdown', event => {
   scroll.addEventListener('pointercancel', stop, { once: true });
 });
 function showHighlighting() {
-  $('#highlight-toggle').setAttribute('aria-pressed', highlighting);
+  $('#highlight-toggle').setAttribute('aria-checked', highlighting);
   $('#diagram-scroll').classList.toggle('no-highlight', !highlighting);
 }
-$('#highlight-toggle').addEventListener('click', () => {
+// Restarting a CSS animation needs the class removed and the element reflowed first.
+const replay = (element, className) => { element.classList.remove(className); void element.offsetWidth; element.classList.add(className); };
+$('#highlight-toggle').addEventListener('click', event => {
   highlighting = !highlighting;
   hovered = null;
   try { localStorage.setItem('pipeviewer-highlight', highlighting ? 'on' : 'off'); } catch {}
   showHighlighting();
+  replay(event.currentTarget, 'just-toggled');
+  $('.diagram-panel').classList.remove('linking-on', 'linking-off');
+  replay($('.diagram-panel'), highlighting ? 'linking-on' : 'linking-off');
+  $('#highlight-status').textContent = `Highlighting ${highlighting ? 'on' : 'off'}`;
   inspect(true);
 });
 showHighlighting();
+// The examples strip fades an edge while it can scroll that way, and a vertical wheel scrolls it
+// sideways until it reaches an end, after which the page scrolls as usual.
+function showStripEdges() {
+  const strip = $('#example-strip');
+  strip.classList.toggle('more-left', strip.scrollLeft > 1);
+  strip.classList.toggle('more-right', strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1);
+}
+$('#example-strip').addEventListener('scroll', showStripEdges, { passive: true });
+$('#example-strip').addEventListener('wheel', event => {
+  const strip = event.currentTarget;
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+  const room = event.deltaY > 0 ? strip.scrollWidth - strip.clientWidth - strip.scrollLeft : strip.scrollLeft;
+  if (room <= 1) return;
+  event.preventDefault();
+  strip.scrollLeft += event.deltaY;
+}, { passive: false });
+addEventListener('resize', showStripEdges);
+showStripEdges();
 $('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => step > zoom) ?? zoom));
 $('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
 $('#zoom-reset').addEventListener('click', () => setZoom(1));
