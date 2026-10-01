@@ -592,6 +592,26 @@ try { $('#details-section').open = localStorage.getItem('pipeviewer-details') ==
 $('#details-section').addEventListener('toggle', () => {
   try { localStorage.setItem('pipeviewer-details', $('#details-section').open ? 'open' : 'closed'); } catch {}
 });
+// Middle-click and drag pans the diagram sideways and the page up and down, for mice
+// without a horizontal scroll gesture. Blocking mousedown stops the browser's autoscroll.
+$('#diagram-scroll').addEventListener('mousedown', event => { if (event.button === 1) event.preventDefault(); });
+$('#diagram-scroll').addEventListener('pointerdown', event => {
+  if (event.button !== 1) return;
+  event.preventDefault();
+  const scroll = event.currentTarget;
+  let x = event.clientX, y = event.clientY;
+  scroll.setPointerCapture(event.pointerId);
+  scroll.classList.add('panning');
+  const move = moved => {
+    scroll.scrollLeft -= moved.clientX - x;
+    scrollBy(0, y - moved.clientY);
+    x = moved.clientX; y = moved.clientY;
+  };
+  const stop = () => { scroll.classList.remove('panning'); scroll.removeEventListener('pointermove', move); };
+  scroll.addEventListener('pointermove', move);
+  scroll.addEventListener('pointerup', stop, { once: true });
+  scroll.addEventListener('pointercancel', stop, { once: true });
+});
 $('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => step > zoom) ?? zoom));
 $('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
 $('#zoom-reset').addEventListener('click', () => setZoom(1));

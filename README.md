@@ -24,7 +24,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 ## Features
 
 - Light and dark themes with higher-contrast text and stream colours. Follows the system theme until you choose a mode, then remembers your choice.
-- Coloured stream diagram with zoom controls, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
+- Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
 - Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
 - Clickable examples, quick reference, and local persistence of the last pipeline.
 - Left-to-right redirects, including descriptor snapshots and pipe overrides.

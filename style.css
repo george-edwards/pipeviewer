@@ -120,6 +120,7 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .zoom-controls #zoom-out, .zoom-controls #zoom-in { font-size: 1rem; }
 .zoom-controls #zoom-reset { min-width: 3.125rem; border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-radius: 0; font-size: .6875rem; }
 #diagram-scroll { overflow-x: auto; margin-top: .625rem; }
+#diagram-scroll.panning { cursor: grabbing; user-select: none; }
 #diagram { min-width: 45rem; line-height: 0; }
 #diagram svg { width: 100%; height: auto; min-height: 17.8125rem; max-height: 30rem; display: block; }
 /* Hover a stream to trace it: it thickens and the others fade. */
