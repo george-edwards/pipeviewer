@@ -1,5 +1,7 @@
 import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './parser.js';
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
+import { compare, starsFor } from './training.js';
+import { lessons } from './lessons.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -108,6 +110,10 @@ function showVariations() {
 }
 let currentModel;
 let currentSource = '';
+// Training mode: the level being played, the target's model, how the student's picture differs from
+// it (null while there is nothing to compare), and the hints taken. Viewer is what the editor held
+// before training started, put back on the way out.
+const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '' };
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
 // Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
 // Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
@@ -853,6 +859,31 @@ function inspect(redrawn = false) {
   }
 }
 
+// Sizes are in rem so the drawing, and its text, grows with the viewer's font size. Training crops
+// its drawings to what they hold, so it drops the minimum width meant for a full pipeline.
+function fit(host, svg) {
+  const viewBox = svg.viewBox.baseVal;
+  host.style.width = '';
+  host.style.minWidth = `${training.active ? viewBox.width * .85 / 16 : Math.max(45, viewBox.width * .85 / 16)}rem`;
+  // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
+  svg.style.maxHeight = `${30 * viewBox.height / 390}rem`;
+  svg.style.minHeight = `${17.8125 * viewBox.height / 390}rem`;
+}
+// Training crops the target's drawing and the student's to one frame around both, so the two sit
+// side by side at one scale and a card in one lines up with the same card in the other.
+function frame() {
+  const drawings = [$('#diagram svg'), $('#target-diagram svg')].filter(Boolean);
+  if (!training.active || !drawings.length) return;
+  const boxes = drawings.flatMap(svg => [...svg.children].filter((el, i) => el instanceof SVGGraphicsElement && !(i && el === svg.querySelector(':scope > rect'))).map(el => el.getBBox())).filter(box => box.width);
+  if (!boxes.length) return;
+  const pad = 18, left = Math.min(...boxes.map(b => b.x)) - pad, top = Math.min(...boxes.map(b => b.y)) - pad;
+  const right = Math.max(...boxes.map(b => b.x + b.width)) + pad, bottom = Math.max(...boxes.map(b => b.y + b.height)) + pad;
+  for (const svg of drawings) {
+    svg.setAttribute('viewBox', `${left} ${top} ${right - left} ${bottom - top}`);
+    fit(svg.parentElement, svg);
+  }
+}
+
 const zoomSteps = [.5, .67, .8, 1, 1.25, 1.5, 2, 2.5, 3];
 let zoom = 1;
 
@@ -862,13 +893,10 @@ function showDiagram() {
   const centre = scroll.scrollWidth ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0;
   host.innerHTML = diagram(currentModel);
   const svg = $('#diagram svg'), viewBox = svg.viewBox.baseVal;
-  host.style.width = '';
-  // Sizes are in rem so the drawing, and its text, grows with the viewer's font size.
-  host.style.minWidth = `${Math.max(45, viewBox.width * .85 / 16)}rem`;
-  // Substitution rows add height; grow the cap with them so the drawing is not shrunk to fit.
-  svg.style.maxHeight = `${30 * viewBox.height / 390}rem`;
-  svg.style.minHeight = `${17.8125 * viewBox.height / 390}rem`;
-  const box = zoom !== 1 && svg.getBoundingClientRect();
+  fit(host, svg);
+  frame();
+  // Training fits its drawings to their frame, and hides the zoom controls.
+  const box = zoom !== 1 && !training.active && svg.getBoundingClientRect();
   if (box?.width) {
     const fitted = Math.min(box.width / viewBox.width, box.height / viewBox.height);
     host.style.width = host.style.minWidth = `${viewBox.width * fitted * zoom}px`;
@@ -876,6 +904,7 @@ function showDiagram() {
     svg.style.minHeight = '0';
     scroll.scrollLeft = centre * scroll.scrollWidth - scroll.clientWidth / 2;
   }
+  markDifferences();
   inspect(true);
   $('#zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
   $('#zoom-out').disabled = zoom === zoomSteps[0];
@@ -901,6 +930,8 @@ function render() {
     showExamples();
     showVariations();
     showRedirectStyle();
+    training.differences = null;
+    showTraining();
     return;
   }
   try {
@@ -908,6 +939,7 @@ function render() {
     currentSource = $('#pipeline').value;
     targets = inspectTargets(currentModel);
     hovered = null;
+    training.differences = training.active && training.model ? compare(training.model, currentModel) : null;
     $('#error').hidden = true;
     $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
@@ -927,12 +959,16 @@ function render() {
     if (chosen) { const strip = $('#example-strip'); if (chosen.offsetLeft < strip.scrollLeft || chosen.offsetLeft + chosen.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = chosen.offsetLeft - strip.clientWidth / 2 + chosen.offsetWidth / 2; }
     showVariations();
     showRedirectStyle();
+    showTraining();
   } catch (error) {
     // Half-typed pipelines rarely parse, so keep the last diagram and say what is missing.
     $('#error').textContent = error.message;
     $('#error').hidden = false;
     $('#results').classList.add('stale');
     $('#results').classList.toggle('empty', !currentModel);
+    // A half-typed command matches nothing, even when the faded diagram above it did.
+    training.differences = null;
+    showTraining();
   }
 }
 // Parsing and drawing take well under a frame, so the diagram follows every keystroke.
@@ -960,6 +996,7 @@ function applyTheme(theme) {
   $('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--page').trim();
   // Recolour the existing diagram without submitting edits or closing details.
   if (currentModel) showDiagram();
+  showTarget();
 }
 
 $('#theme-toggle').addEventListener('click', () => {
@@ -1214,6 +1251,7 @@ $('#tags-toggle').addEventListener('click', event => {
   replay(event.currentTarget, 'just-toggled');
   $('#switch-status').textContent = `Tags ${terminalTags ? 'on' : 'off'}`;
   if (currentModel) { showDiagram(); replay($('#diagram'), 'redrawn'); }
+  if (training.active) { showTarget(); replay($('#target-diagram'), 'redrawn'); }
 });
 showTerminalTags();
 // The examples strip fades an edge while it can scroll that way, and a vertical wheel scrolls it
@@ -1242,13 +1280,228 @@ $('#download').addEventListener('click', () => {
   // Export without on-page sizing so the file scales to wherever it is opened.
   const copy = $('#diagram svg').cloneNode(true);
   copy.removeAttribute('style');
+  copy.querySelectorAll('.diff-ring').forEach(ring => ring.remove());
+  copy.classList.remove('flowing');
   const svg = copy.outerHTML;
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = 'pipeline.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+// Training: each level shows the picture of a command the student cannot see, and they edit their
+// own command until its picture matches. Their diagram is the usual one under the editor; the
+// target's is drawn above the editor, or beside theirs on wide screens. Best stars per level are
+// kept under the level's id.
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem('pipeviewer-training')) ?? {}; } catch {}
+const lessonStart = i => lessons[i].start ?? lessons[i - 1].target;
+// Lesson text sets `backticks` as code.
+const prose = text => escape(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6L12 17l-5.38 2.85 1.03-6L3.3 9.6l6-.9z"/></svg>`;
+const stars = n => [0, 1, 2].map(i => star(i < n)).join('');
+const cheers = ['Nailed it.', 'Spot on.', 'Clean pipes.', 'Exactly right.', 'Plumbing works.'];
+
+// The target gets ids of its own, so arrowheads and titles in one drawing never resolve to the other.
+function showTarget() {
+  if (!training.active) return;
+  const host = $('#target-diagram');
+  try { training.model = parsePipeline(lessons[training.level].target, { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
+  host.innerHTML = diagram(training.model).replace(/\b(svg-title|svg-desc)\b/g, 'target-$1').replace(/(id="|url\(#)arrow-/g, '$1target-arrow-');
+  fit(host, host.querySelector('svg'));
+  frame();
+  markDifferences();
+}
+
+// A ring marks each port whose stream goes somewhere else in the target, in both drawings, and a
+// dashed outline each card whose words differ. Matching drawings set their streams flowing.
+function markDifferences() {
+  for (const svg of [$('#diagram svg'), $('#target-diagram svg')]) {
+    if (!svg) continue;
+    svg.querySelectorAll('.diff-ring').forEach(ring => ring.remove());
+    svg.querySelectorAll('.diff-card').forEach(card => card.classList.remove('diff-card'));
+    svg.classList.toggle('flowing', training.active && training.matched);
+    if (!training.active) continue;
+    for (const difference of training.differences ?? []) {
+      if (difference.kind === 'stream') {
+        const dot = svg.querySelector(`[data-command="${difference.key}"][data-fd="${difference.fd}"] .port-dot`);
+        dot?.insertAdjacentHTML('afterend', `<circle class="diff-ring" cx="${dot.getAttribute('cx')}" cy="${dot.getAttribute('cy')}" r="10" fill="none"/>`);
+      } else if (difference.kind !== 'shape') svg.querySelector(`[data-card="${difference.key}"]`)?.classList.add('diff-card');
+    }
+  }
+}
+
+function showLevels() {
+  $('#levels').innerHTML = lessons.map((lesson, i) => {
+    const earned = progress[lesson.id] ?? 0, active = i === training.level;
+    return `<button type="button" data-level="${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="Level ${i + 1}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number">${i + 1}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
+  }).join('');
+  const total = lessons.reduce((sum, lesson) => sum + (progress[lesson.id] ?? 0), 0);
+  $('#star-total').innerHTML = `${star(true)}<span>${total}<span class="star-of"> / ${lessons.length * 3}</span></span><span class="sr-only"> stars</span>`;
+}
+
+// The stars still on offer, and which hints are showing.
+function showHints() {
+  $('#worth').innerHTML = `<span class="worth-label" aria-hidden="true">worth</span>${stars(starsFor(training.hints))}<span class="sr-only">Worth ${starsFor(training.hints)} stars</span>`;
+  $('#hint-buttons').querySelectorAll('[data-hint]').forEach(button => {
+    const shown = Number(button.dataset.hint) <= training.hints;
+    button.classList.toggle('active', shown);
+    button.setAttribute('aria-pressed', shown);
+    button.disabled = training.matched;
+  });
+}
+
+function differenceMarkup(difference) {
+  if (difference.kind === 'shape') return `<li class="diff-shape">${escape(difference.text)}</li>`;
+  if (difference.kind === 'command') return `<li><span class="fd-badge">card</span><span>Card ${escape(difference.key)}</span><span>Target: <code>${escape(difference.target)}</code></span><span>Yours: <code>${escape(difference.yours)}</code></span></li>`;
+  if (difference.kind === 'opens') return `<li><span class="fd-badge">${escape(difference.command)}</span><span>opens</span><span>Target: <strong>${escape(difference.target)}</strong></span><span>Yours: <strong>${escape(difference.yours)}</strong></span></li>`;
+  const arrow = difference.fd === 0 ? '←' : '→';
+  return `<li class="fd-${difference.fd}"><span class="fd-badge">${difference.fd}</span><span>${escape(difference.name)} ${arrow}</span><span>Target: <strong>${escape(difference.target)}</strong></span><span>Yours: <strong>${escape(difference.yours)}</strong></span></li>`;
+}
+
+// The coach, under the brief, holds the hints taken so far, or the result once the pictures match.
+// Its frame is rebuilt only when that changes, so its animations do not restart on every keystroke.
+function showCoach() {
+  const lesson = lessons[training.level], coach = $('#coach'), source = $('#pipeline').value.trim();
+  const key = training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints}`;
+  if (key !== training.coach) {
+    training.coach = key;
+    if (training.matched) {
+      const last = training.level === lessons.length - 1, total = lessons.reduce((sum, l) => sum + (progress[l.id] ?? 0), 0);
+      // Stream numbers burst out of the stars in their stream's colour, once, when the level is solved.
+      const sparks = training.burst ? Array.from({ length: 18 }, (_, i) => {
+        const angle = (i / 18) * 2 * Math.PI, reach = 46 + (i * 37 % 30);
+        return `<span class="spark fd-${i % 3}" style="--dx: ${(Math.cos(angle) * reach * 1.6).toFixed(1)}px; --dy: ${(Math.sin(angle) * reach - 8).toFixed(1)}px; --delay: ${(i % 5) * 0.03}s" aria-hidden="true">${i % 3}</span>`;
+      }).join('') : '';
+      training.burst = false;
+      const next = last
+        ? `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`
+        : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${training.level + 2}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
+      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${training.level + 1} solved.</p><p>${prose(lesson.learned)}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+    } else {
+      const parts = [
+        `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
+        `<div class="hint"><span class="row-label">HOW</span><p>${prose(lesson.how)}</p></div>`,
+        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">Type it in to see the pictures match.</span></p></div>`,
+      ];
+      // The first level says how training works until a hint is taken.
+      const intro = training.level ? '' : '<p class="how-it-works"><strong>How it works:</strong> edit the command until your picture matches the target’s. Rings mark where they differ. Each hint costs a star.</p>';
+      coach.innerHTML = training.hints ? `<div class="hints">${parts.slice(0, training.hints).join('')}</div>` : intro;
+    }
+  }
+  // The parts that follow the editor update in place.
+  const spelling = $('#solved-spelling');
+  if (spelling) {
+    const same = source.replace(/\s+/g, ' ') === lesson.target;
+    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(lesson.target)}</code>, which draws the same picture.`;
+  }
+  const list = $('#diff-list');
+  if (list) list.innerHTML = training.differences ? training.differences.map(differenceMarkup).join('') : `<li class="diff-shape">${source ? 'Finish the command to compare it with the target.' : 'Type a command to compare it with the target.'}</li>`;
+}
+
+// Called after each render: compare, mark the drawings, and celebrate a fresh match.
+function showTraining() {
+  if (!training.active) return;
+  const differences = training.differences, matched = !!differences && !differences.length;
+  if (matched && !training.matched) {
+    const lesson = lessons[training.level];
+    training.earned = starsFor(training.hints);
+    if (!(progress[lesson.id] >= training.earned)) {
+      progress[lesson.id] = training.earned;
+      try { localStorage.setItem('pipeviewer-training', JSON.stringify(progress)); } catch {}
+    }
+    training.burst = true;
+    replay($('.diagram-panel'), 'matched-glow');
+  }
+  training.matched = matched;
+  // Once solved, the target's own command is shown with its picture.
+  $('#target-panel .panel-hint').innerHTML = matched ? `<code>${escape(lessons[training.level].target)}</code>` : 'Make yours match this picture';
+  const status = $('#match-status');
+  status.classList.toggle('matched', matched);
+  status.classList.toggle('differs', !!differences?.length);
+  status.textContent = matched ? '✓ Matches the target' : differences ? `${differences.length} difference${differences.length === 1 ? '' : 's'}` : $('#pipeline').value.trim() ? 'Keep typing…' : 'Type a command';
+  markDifferences();
+  showLevels();
+  showHints();
+  showCoach();
+}
+
+function loadLesson(i, { keep = false } = {}) {
+  const lesson = lessons[i];
+  Object.assign(training, { level: i, hints: 0, matched: false, coach: '' });
+  $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i + 1}</span> ${escape(lesson.title)}`;
+  $('#lesson-brief').innerHTML = prose(lesson.brief);
+  history.replaceState(null, '', `#training/${i + 1}`);
+  showTarget();
+  // Moving on from a solved level keeps the student's own spelling, which the next level starts from.
+  if (!(keep && lesson.start === undefined)) $('#pipeline').value = lessonStart(i);
+  fitEditor();
+  render();
+  const editor = $('#pipeline');
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(editor.value.length, editor.value.length);
+}
+
+function enterTraining(level = Math.max(0, lessons.findIndex(lesson => !progress[lesson.id]))) {
+  if (!training.active) training.viewer = $('#pipeline').value;
+  training.active = true;
+  document.documentElement.classList.add('training');
+  $('#training').hidden = $('#target-panel').hidden = false;
+  $('.example-rows').hidden = true;
+  $('#training-button').setAttribute('aria-pressed', 'true');
+  loadLesson(Math.min(level, lessons.length - 1));
+}
+
+function exitTraining() {
+  Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
+  document.documentElement.classList.remove('training');
+  $('#training').hidden = $('#target-panel').hidden = true;
+  $('.example-rows').hidden = false;
+  $('#training-button').setAttribute('aria-pressed', 'false');
+  $('#target-diagram').innerHTML = '';
+  history.replaceState(null, '', location.pathname + location.search);
+  $('#pipeline').value = training.viewer;
+  fitEditor();
+  render();
+  $('#pipeline').focus({ preventScroll: true });
+}
+
+const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(training.level + 1, { keep: true }); };
+$('#training-button').addEventListener('click', () => training.active ? exitTraining() : enterTraining());
+$('#exit-training').addEventListener('click', exitTraining);
+$('#levels').addEventListener('click', event => {
+  const button = event.target.closest('[data-level]');
+  if (button) loadLesson(Number(button.dataset.level));
+});
+$('#hint-buttons').addEventListener('click', event => {
+  const button = event.target.closest('[data-hint]');
+  if (!button || training.matched) return;
+  training.hints = Math.max(training.hints, Number(button.dataset.hint));
+  showTraining();
+});
+$('#restart').addEventListener('click', () => loadLesson(training.level));
+$('#coach').addEventListener('click', event => {
+  const action = event.target.closest('[data-coach]')?.dataset.coach;
+  if (action === 'next') nextLevel();
+  if (action === 'replay') loadLesson(0);
+  if (action === 'viewer') exitTraining();
+});
+// Once the pictures match, Enter moves on rather than starting a new line.
+$('#pipeline').addEventListener('keydown', event => {
+  if (training.active && training.matched && event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    nextLevel();
+  }
+});
+// #training opens training at the first unsolved level, and #training/2 at level 2, so a link can
+// send a colleague straight there.
+const trainingLink = () => /^#training(?:\/(\d+))?$/.exec(location.hash);
+addEventListener('hashchange', () => {
+  const link = trainingLink();
+  if (link) enterTraining(link[1] ? Number(link[1]) - 1 : undefined);
+  else if (training.active) exitTraining();
 });
 fitEditor();
 // Wrapping changes once the web font loads or the window resizes.
 document.fonts?.ready.then(fitEditor);
 addEventListener('resize', fitEditor);
 render();
+if (trainingLink()) enterTraining(trainingLink()[1] ? Number(trainingLink()[1]) - 1 : undefined);

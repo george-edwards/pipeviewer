@@ -23,6 +23,8 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Features
 
+- **Training** mode, from the green button in the header, teaches redirects by picture. Each level shows the diagram of a command the student can't see, and they edit a starting command until their own diagram matches it. See [Training](#training).
+
 - Light, dark and terminal themes. The terminal theme is phosphor green on black, all monospace. The page follows the system's light or dark theme until you pick one with the theme button, which shows the current theme, steps through the three, and remembers your choice. In the terminal theme the command editor is a black terminal too. The editor names the shell the **SHELL** switch picks, and a faint Tux or apple watermark behind the page shows which system is being mapped.
 - Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
 - Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
@@ -42,6 +44,20 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 - The diagram follows the editor caret, like a browser's element inspector: a command lights its card and streams, a redirect its port and destination, and `|` its pipe. Commands inside process substitutions and `parallel` jobs light up too. It works the other way too: hover part of the diagram to mark its text in the editor, and click to select it.
 - Descriptors above 2 that stay open are drawn on their card. One left writing to the pipe to the next command, as `3>&1 1>&2 2>&3` leaves fd 3, gets a port on the card's bottom edge and a line into that command's stdin, since it keeps the pipe open. The others are listed in the card's lower-left corner with where they point. One used and then closed, as with `3>&-`, is listed as closed.
 - Quoted arguments and destinations, escapes, and additional descriptor bookkeeping.
+
+## Training
+
+Each level shows a target picture and a starting command, typed and drawn. The student edits the command until their picture matches the target's. On windows 64em wide or more the two pictures sit side by side under the editor, cropped to one shared frame so they are drawn at the same scale. On narrower windows the target sits above the editor. A ring marks each port whose stream goes somewhere else in the target, in both pictures, and a dashed outline marks a card whose words differ. The toolbar counts the differences.
+
+Pictures are compared, not spellings. Two command lines match when they draw the same cards, with the same words after quote removal, and send every descriptor to the same place. So `sort <in >out`, `sort 0< in 1> out` and `>out sort <in` all solve the same level. Once a level is solved, the target's own command is shown above its picture, and the student's spelling is compared with it if the two differ.
+
+A level is worth three stars. There are three hints: **What's different?** lists each difference in words, **Show me how** gives the syntax, and **Answer** shows the target command. Each hint costs a star, but a solved level always earns at least one. When the pictures match, the streams start to flow, and Enter or the button moves on to the next level, keeping the student's command as its starting point. Best stars per level are kept in the browser's local storage.
+
+Link to `/#training` to open training at the first unsolved level, or to `/#training/2` for level 2.
+
+### Adding a level
+
+Levels are listed in `lessons.js`, in the order they're played. Each has an `id` (keep it fixed once published, since progress is saved under it), a `title`, a `brief`, a `target`, a `how` hint and a `learned` note shown once it's solved. `start` is the command in the editor when the level opens; leave it out to start from the previous level's target. Text in backticks is set as code. `npm test` checks that every target parses under both shells and that no level starts out already solved.
 
 ## macOS and zsh
 

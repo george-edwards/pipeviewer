@@ -323,6 +323,140 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .talk-chapters button.active { background: var(--purple-bg); color: var(--purple); font-weight: 550; }
 .chapter-time { min-width: 2.5rem; font: .75rem/1.6 'IBM Plex Mono', monospace; }
 .talk-frame p { margin: 0; padding: 1.5rem; color: #fff; }
+/* Training. The header button is green, stdin's colour, as the place to start. */
+.training-button { display: flex; align-items: center; gap: .4375rem; min-height: 2.5rem; padding: .5rem .875rem .5rem .6875rem; border: 1px solid var(--green-bg); border-radius: .4375rem; background: var(--green-bg); color: var(--green); font-size: .75rem; font-weight: 600; }
+.training-button:hover, .training-button[aria-pressed="true"] { border-color: var(--green); }
+.training-button svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.training-only { display: none; }
+.training .training-only { display: inline-flex; }
+.training #redirect-count, .training #command-count { display: none; }
+/* Training crops its drawings to fit, so zoom and export stand down and the two toolbars stay one line high. */
+.training .zoom-controls, .training #download { display: none; }
+.how-it-works { margin: 0; font-size: .8125rem; color: var(--muted); }
+.how-it-works strong { color: var(--text); font-weight: 600; }
+.training-bar { margin-bottom: 1rem; }
+.training-top { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem 1.125rem; }
+.level-buttons button { display: inline-flex; align-items: center; gap: .4375rem; font-variant-numeric: tabular-nums; }
+.level-number { font-weight: 600; }
+.level-stars { display: inline-flex; gap: .0625rem; }
+.level-stars .star { width: .625rem; height: .625rem; }
+.level-stars.unearned { opacity: .55; }
+.star { width: 1rem; height: 1rem; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; flex-shrink: 0; }
+.star.filled { fill: var(--amber); stroke: var(--amber); }
+.star-total { display: inline-flex; align-items: center; gap: .3125rem; font: 600 .8125rem 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.star-of { color: var(--muted); font-weight: 400; }
+#exit-training { margin-left: auto; padding: .25rem 0; }
+.lesson { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 2rem; margin-top: 1.125rem; }
+.lesson-text { flex: 1 1 26rem; min-width: 0; }
+.lesson h2 { font-size: 1.375rem; letter-spacing: -.03em; display: flex; align-items: baseline; gap: .625rem; }
+.lesson-number { font: 600 .6875rem 'IBM Plex Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--green); background: var(--green-bg); padding: .1875rem .4375rem; border-radius: .25rem; transform: translateY(-.15em); }
+.lesson p { margin: .4375rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--muted); max-width: 44rem; }
+.lesson code, .coach code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
+.hint-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; }
+.worth { display: inline-flex; align-items: center; gap: .0625rem; margin-right: .375rem; }
+.worth-label { font-size: .6875rem; color: var(--muted); margin-right: .3125rem; }
+.worth .star { width: .9375rem; height: .9375rem; transition: fill .3s, stroke .3s; }
+.hint-buttons button { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: .375rem; padding: .375rem .6875rem; font-size: .75rem; }
+.hint-buttons button:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.hint-buttons button.active { color: var(--purple); border-color: var(--purple); background: var(--purple-bg); }
+.hint-buttons button:disabled { opacity: .45; cursor: default; }
+.hint-buttons .restart { display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; }
+.restart svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.coach:empty { display: none; }
+.coach { margin-top: .875rem; }
+.hints { display: grid; gap: .5rem; }
+.hint { padding: .75rem 1rem; border-left: 3px solid var(--purple); background: var(--surface); font-size: .8125rem; line-height: 1.6; }
+.hint p { margin: .25rem 0 0; }
+.hint .row-label { display: block; }
+.answer { font-size: .875rem !important; color: var(--purple) !important; }
+.answer-note { color: var(--muted); font-size: .75rem; margin-left: .375rem; }
+.diff-list { list-style: none; margin: .375rem 0 0; padding: 0; display: grid; gap: .375rem; }
+.diff-list { grid-template-columns: auto auto auto auto; justify-content: start; column-gap: 1.25rem; }
+.diff-list li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; }
+.diff-list li.diff-shape { display: block; }
+.diff-list .fd-badge { font: .6875rem 'IBM Plex Mono', monospace; padding: .0625rem .3125rem; border-radius: .1875rem; background: var(--inset); color: var(--muted); text-align: center; min-width: 1.25rem; }
+.diff-list .fd-0 .fd-badge { background: var(--green-bg); color: var(--green); }
+.diff-list .fd-1 .fd-badge { background: var(--purple-bg); color: var(--purple); }
+.diff-list .fd-2 .fd-badge { background: var(--amber-bg); color: var(--amber); }
+.diff-list strong { font-weight: 550; overflow-wrap: anywhere; }
+/* The result of a solved level: the stars, what it showed, and the way on. */
+.solved { display: flex; gap: 1.5rem; align-items: flex-start; padding: 1rem 1.25rem; border: 1px solid var(--green); border-radius: .6875rem; background: var(--green-bg); animation: solved-in .35s cubic-bezier(.3, 1.3, .5, 1); }
+.solved-stars { position: relative; display: flex; gap: .25rem; padding-top: .25rem; }
+.solved-stars .star { width: 1.75rem; height: 1.75rem; animation: star-pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }
+.solved-stars .star:nth-child(2) { animation-delay: .12s; }
+.solved-stars .star:nth-child(3) { animation-delay: .24s; }
+.solved-stars .star:not(.filled) { stroke: color-mix(in srgb, var(--green) 45%, transparent); }
+.spark { position: absolute; left: 50%; top: 50%; font: 600 .75rem 'IBM Plex Mono', monospace; opacity: 0; pointer-events: none; animation: spark .9s ease-out var(--delay) both; }
+.spark.fd-0 { color: var(--green); }
+.spark.fd-1 { color: var(--purple); }
+.spark.fd-2 { color: var(--amber); }
+.solved-body { flex: 1; min-width: 0; font-size: .8125rem; line-height: 1.6; }
+.solved-body p { margin: 0 0 .375rem; }
+.solved-title { font-size: 1rem; }
+.solved-title strong { color: var(--green); }
+.solved-spelling { color: var(--muted); }
+.solved-spelling:empty { display: none; }
+.solved-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .75rem; }
+.next-button { border: 0; border-radius: .4375rem; padding: .5625rem 1rem; background: var(--green); color: var(--surface); font-size: .8125rem; font-weight: 600; }
+.next-button:hover { filter: brightness(1.1); }
+.key-hint { color: var(--muted); font-size: .75rem; }
+kbd { font: .6875rem 'IBM Plex Mono', monospace; padding: .0625rem .3125rem; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: .25rem; background: var(--surface); }
+.solved-finale { font-size: .875rem; }
+@keyframes solved-in { from { opacity: 0; transform: translateY(-.375rem); } }
+@keyframes star-pop { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: none; } }
+@keyframes spark { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.6); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); } }
+/* The two drawings: the target above the editor, or beside the student's on wide screens. */
+.target-panel { position: relative; border: 1px dashed var(--border); border-radius: .6875rem; background: var(--surface); overflow: hidden; margin-bottom: .875rem; }
+.target-scroll { overflow-x: auto; }
+#target-diagram { min-width: 45rem; line-height: 0; }
+#target-diagram svg { width: 100%; height: auto; display: block; }
+#target-diagram.redrawn svg { animation: redrawn .35s ease-out; }
+.panel-name { font: 600 .625rem var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.diagram-summary h2.panel-name { font-size: .625rem; color: var(--muted); }
+.panel-hint { font-family: var(--sans); }
+.panel-hint code { font: 500 .75rem 'IBM Plex Mono', monospace; color: var(--green); background: var(--green-bg); padding: .125rem .4375rem; border-radius: .25rem; white-space: pre-wrap; }
+.match-status { align-items: center; font: 500 .75rem var(--sans); padding: .1875rem .5rem; border-radius: 1rem; background: var(--inset); color: var(--muted); }
+.match-status.differs { background: var(--error-bg); color: var(--error); }
+.match-status.matched { background: var(--green-bg); color: var(--green); font-weight: 600; }
+.diagram-panel.matched-glow { animation: matched-glow 1.2s ease-out; }
+@keyframes matched-glow { 0%, 40% { border-color: var(--green); box-shadow: 0 0 0 .3125rem var(--green-bg); } 100% { box-shadow: 0 0 0 0 transparent; } }
+/* Each difference is ringed at its port, in both drawings, and a card whose words differ is outlined. */
+.diff-ring { stroke: var(--error); stroke-width: 1.6; stroke-dasharray: 3 2.5; pointer-events: none; transform-box: fill-box; transform-origin: center; animation: diff-ring 1.6s ease-in-out infinite; }
+.diff-card > .card-body { stroke: var(--error); stroke-width: 1.6; stroke-dasharray: 6 4; }
+@keyframes diff-ring { 50% { transform: scale(1.25); opacity: .55; } }
+/* Matching drawings run their streams, as data would flow through the finished plumbing. */
+svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { stroke-dasharray: 7 5; animation: flow .8s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -12; } }
+@media (min-width: 64em) {
+  .training main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 1.25rem; }
+  .training main > *, .training #results > * { grid-column: 1 / -1; order: 5; }
+  .training #results { display: contents; }
+  .training #training { order: 1; }
+  .training .editor-panel { order: 2; margin-bottom: .875rem; }
+  .training #target-panel, .training #results > .diagram-panel { grid-column: auto; order: 3; margin-bottom: 0; }
+}
+@media (max-width: 47.5em) {
+  /* On a phone both drawings shrink to the screen's width, so they can be compared without scrolling. */
+  .training #diagram, .training #target-diagram { min-width: 0 !important; }
+  .training #diagram-scroll::after { content: none; }
+  .lesson h2 { font-size: 1.125rem; }
+  .diff-list { grid-template-columns: auto minmax(0, 1fr); }
+  .diff-list li > :nth-child(n+3) { grid-column: 2; }
+  .solved { flex-direction: column; gap: .5rem; }
+  .panel-hint { display: none; }
+}
+@media (max-width: 30em) {
+  .training-button { width: 2.5rem; justify-content: center; padding: 0; }
+  .training-label { display: none; }
+}
+/* Four header controls and the name only fit a phone a little smaller. */
+@media (max-width: 26.25em) {
+  .brand { font-size: 1.1875rem; }
+  .brand-icon { width: 1.75rem; height: 1.75rem; margin-right: .375rem; }
+  .training-button, .talk-button, .theme-toggle { width: 2.25rem; min-height: 2.25rem; }
+  .site-header { padding: 0 1rem; }
+  .header-actions { gap: .4375rem; }
+}
 [hidden] { display: none !important; }
 /* Pipelines read left to right, so wide windows give the page their width instead of margins. */
 @media (min-width: 90.625em) { :root { --content: calc(100vw - 12rem); } main { padding: 2rem 0 2.5rem; } }

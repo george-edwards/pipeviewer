@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 const args = process.argv.slice(2);
 const port = Number(process.env.PORT || args[args.indexOf('--port') + 1]) || 5173;
-const files = { '/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/parser.js': 'parser.js', '/usage.js': 'usage.js', '/favicon.svg': 'favicon.svg', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+const files = { '/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/parser.js': 'parser.js', '/usage.js': 'usage.js', '/training.js': 'training.js', '/lessons.js': 'lessons.js', '/favicon.svg': 'favicon.svg', '/apple-touch-icon.png': 'apple-touch-icon.png' };
 const types = { html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8', svg: 'image/svg+xml', png: 'image/png', webm: 'video/webm' };
 // Videos are streamed with byte ranges so the player can seek without loading the whole file.
 async function sendVideo(req, res, name) {

@@ -263,6 +263,8 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
       cmd.steps.push({ text: '|&', fd: 2, fds: [2], destination, span: connectorTokens[index].span, description: `stderr follows stdout → ${fds[2].label}` });
     }
     cmd.command = words.join(' ');
+    // The words as the command receives them, after quote removal, so 'a b' and "a b" compare equal.
+    cmd.args = argv.map(token => token.value);
     // Redirects apply before the command runs, so /dev/fd/3 names whatever 3< <(…) opened.
     const substitutionPath = token => !token.dynamic && fds[token.value.match(/^\/(?:dev|proc\/self)\/fd\/(\d+)$/)?.[1]]?.type === 'procsub';
     const paths = argv.map(token => !token.procsub && substitutionPath(token) ? { ...token, procsub: true } : token);
