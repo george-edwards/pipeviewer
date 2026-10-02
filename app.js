@@ -87,6 +87,13 @@ const spelling = (variation, on = platform) => on === 'macos' ? variation.mac ??
 const exampleSources = (key, on = platform) => (variations[key]?.map(variation => spelling(variation, on)) ?? [examples[key]])
   .map(source => restyle(source, redirectStyle, { platform: on }));
 
+function showExamples() {
+  document.querySelectorAll('[data-example]').forEach(button => {
+    const active = exampleSources(button.dataset.example).includes(currentSource);
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
+}
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
   // The row and its label stay put; only the buttons come and go.
@@ -824,7 +831,7 @@ function render() {
     $('#error').hidden = true;
     $('#results').classList.remove('stale');
     $('#results').classList.add('empty');
-    document.querySelectorAll('[data-example].active').forEach(button => button.classList.remove('active'));
+    showExamples();
     showVariations();
     showRedirectStyle();
     return;
@@ -847,7 +854,7 @@ function render() {
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
     $('#notes').innerHTML = currentModel.notes.map(note => `<div class="note">${escape(note)}</div>`).join('');
-    document.querySelectorAll('[data-example]').forEach(button => button.classList.toggle('active', exampleSources(button.dataset.example).includes(currentSource)));
+    showExamples();
     // Keep the chosen example visible in the scrolling strip.
     const chosen = $('#example-strip .active');
     if (chosen) { const strip = $('#example-strip'); if (chosen.offsetLeft < strip.scrollLeft || chosen.offsetLeft + chosen.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = chosen.offsetLeft - strip.clientWidth / 2 + chosen.offsetWidth / 2; }
@@ -1001,7 +1008,14 @@ $('#resize-handle').addEventListener('keydown', event => {
   resizeEditor($('#pipeline').offsetHeight + (event.key === 'ArrowDown' ? step : -step));
 });
 $('#resize-handle').addEventListener('dblclick', () => { chosenHeight = 0; fitEditor(); });
-function loadExample(key) { $('#pipeline').value = exampleSources(key)[0]; fitEditor(); render(); }
+// Clicking the chosen example again turns it off, which clears the editor back to an empty prompt.
+function loadExample(key) {
+  const chosen = exampleSources(key).includes(currentSource);
+  $('#pipeline').value = chosen ? '' : exampleSources(key)[0];
+  fitEditor();
+  render();
+  if (chosen) $('#pipeline').focus();
+}
 $('#variations').addEventListener('click', event => {
   const button = event.target.closest('[data-variation]');
   if (!button) return;
