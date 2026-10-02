@@ -6,7 +6,6 @@ const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', 
 const names = ['stdin', 'stdout', 'stderr'];
 // Examples are written in the explicit redirect style; the Explicit/Common switch restyles them.
 const examples = {
-  simple: 'cat access.log | grep "404" | sort',
   file: 'sort 0< names.txt | uniq -c 1> counts.txt',
   order: 'curl https://example.com 2>&1 1> response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
@@ -15,8 +14,14 @@ const examples = {
 // Examples with several equivalent or related spellings, shown as toggles once one of them is loaded.
 // A mac spelling replaces the source in macOS mode.
 const variations = {
+  // macOS keeps no auth.log (authentication goes to the unified log), so it reads install.log.
+  simple: [
+    { label: 'cat into grep', source: 'cat /var/log/auth.log | grep "denied access"', mac: 'cat /var/log/install.log | grep "Installed"' },
+    { label: 'Redirect stdin', source: 'grep "denied access" 0</var/log/auth.log', mac: 'grep "Installed" 0</var/log/install.log' },
+    { label: 'File argument', source: 'grep "denied access" /var/log/auth.log', mac: 'grep "Installed" /var/log/install.log' },
+  ],
   merge: [
-    { label: 'short-hand', source: 'make &> build.log' },
+    { label: 'short-form', source: 'make &> build.log' },
     { label: 'long-form', source: 'make 1> build.log 2>&1' },
   ],
   procsub: [
