@@ -7,7 +7,6 @@ const names = ['stdin', 'stdout', 'stderr'];
 // Examples are written in the explicit redirect style; the Explicit/Common switch restyles them.
 const examples = {
   file: 'sort 0< names.txt | uniq -c 1> counts.txt',
-  order: 'curl https://example.com 2>&1 1> response.html | grep "error"',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
   lists: 'sort names.txt 1> sorted.txt && wc -l 0< sorted.txt || echo "sort failed" 1>&2',
 };
@@ -31,7 +30,7 @@ const variations = {
     { label: 'Descriptors 7, 8 and 9', source: "cat /dev/fd/7 /dev/fd/8 /dev/fd/9 \\\n    7< <(head /etc/hosts | sed 's:^:/etc/hosts --> :') \\\n    8< <(head /etc/shells | sed 's:^:/etc/shells --> :') \\\n    9< <(echo hello, world)" },
   ],
   palindromes: [
-    { label: 'Pipe into paste -', source: "rev /usr/share/dict/words | paste /usr/share/dict/words - | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
+    { label: 'Pipe into paste -', source: "rev 0</usr/share/dict/words | paste - /usr/share/dict/words | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'One substitution', source: "paste /usr/share/dict/words <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Two substitutions', source: "paste <(cat /usr/share/dict/words) <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
     { label: 'Descriptors 3 and 4', source: "paste /dev/fd/3 /dev/fd/4 \\\n  3< <(cat /usr/share/dict/words) \\\n  4< <(rev /usr/share/dict/words) | awk '$1==$2 {print $1}' | grep -E '.{5,}'" },
@@ -39,19 +38,21 @@ const variations = {
   timing: [
     { label: 'sleep 2 | echo', source: 'sleep 2 | echo "hello, world"' },
     { label: 'echo | sleep 2', source: 'echo "hello, world" | sleep 2' },
-    { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 | sleep 2' },
+    { label: 'Swap stdout and stderr', source: 'echo "hello, world" 3>&1 1>&2 2>&3 3>&- | sleep 2' },
   ],
-  // Stock macOS has no parallel, wget, pv or mawk, and its zcat wants .Z files, so these use
-  // xargs -P, curl, dd, awk and gzcat there.
-  wiki: [
+  // Stock macOS has no parallel, wget, pv or mawk, and its zcat wants .Z files, so the Wiki examples
+  // use xargs -P, curl, dd, awk and gzcat there. The download fetches the week of hourly files that
+  // Wiki pageviews counts.
+  wikiDownload: [
     { label: 'Fetch', source: String.raw`parallel -j2 --bar wget -q -c https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609{1}-{2}0000.gz \
 ::: {14..20} ::: {00..23}`,
       mac: String.raw`curl -Z --parallel-max 2 -C - --remote-name-all \
   'https://dumps.wikimedia.org/other/pageviews/2026/2026-09/pageviews-202609[14-20]-[00-23]0000.gz'` },
     { label: 'Unpacked size', source: 'parallel --ungroup "zcat {}" ::: *.gz | pv -b 1>/dev/null',
       mac: String.raw`printf '%s\0' *.gz | xargs -0 -n 1 -P 8 gzcat | dd of=/dev/null bs=1m status=progress` },
-    // Each job writes its own counts file in Top 50 pages, so output from concurrent jobs never
-    // mixes; the second pipeline merges them.
+  ],
+  // Each job counts one file and a single awk outside parallel adds up their totals.
+  wiki: [
     { label: 'Total en views', source: String.raw`parallel "zcat {} \
           | grep -E '^en |^en\.m ' \
           | mawk '{total+=\$3} END {print total}'" ::: pageviews-*.gz \
@@ -61,6 +62,8 @@ const variations = {
 | xargs -0 -n 1 -P 8 sh -c 'gzcat "$1" | grep -E "^en |^en\.m " | awk "{total+=\$3} END {print total}"' _ \
 | awk '{n+=$1} END {print n}' \
 | xargs printf "\n%'d <-- total Wiki page views in 1 week\n"` },
+    // In Top 50 pages each job writes its own counts file, so output from concurrent jobs never
+    // mixes; the second pipeline merges them.
     { label: 'Top 50 pages', source: String.raw`parallel 'zcat {} | grep -E "^en |^en\.m " | awk "{pages[\$2]+=\$3} END {for (p in pages) print p, pages[p]}" 1> {}.counts' ::: *.gz &&
 cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
     $1 == prev { sum += $2; next }
@@ -96,8 +99,7 @@ function showExamples() {
 }
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
-  // The row shows only while the pipeline is one of an example's variations.
-  $('#variations').hidden = !key;
+  // The row and its label stay put; only the buttons come and go.
   if (!key) { $('#variation-buttons').innerHTML = ''; return; }
   $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
     const source = styled(spelling(variation)), active = source === currentSource;
@@ -329,8 +331,10 @@ function drawPipeline(model, palette, colors, mono) {
   // or 1> file 2>&1, share one tag between their ports. A file shared any other way keeps its box,
   // so the drawing still shows the streams reaching one place.
   const fileTags = new Map();
-  // With tags on, a stream left on the terminal, as stdin, stdout and stderr start, ends in a terminal tag.
-  const grounded = (fd, dest) => terminalTags && dest.id === ['terminal-in', 'terminal-out', 'terminal-err'][fd];
+  // With tags on, a stream that ends at the terminal ends in a terminal tag. The terminal's input,
+  // output and errors are told apart by which of stdin, stdout and stderr the tag is coloured as.
+  const terminalStreams = ['terminal-in', 'terminal-out', 'terminal-err'];
+  const grounded = dest => terminalTags && terminalStreams.includes(dest.id);
   const plan = (dest, room) => {
     const device = deviceOf(dest), label = short(dest.label, Math.floor((room - 24) / 5.4));
     const caption = device ? device[dest.mode === 'read' ? 'read' : 'write'] : dest.mode === 'append' ? 'append' : '';
@@ -378,7 +382,7 @@ function drawPipeline(model, palette, colors, mono) {
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
     // A grounded stream ends in a tag beside its port, with no box.
-    if (grounded(Number(fd), dest)) return;
+    if (grounded(dest)) return;
     used.set(dest.id, dest);
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
@@ -401,15 +405,18 @@ function drawPipeline(model, palette, colors, mono) {
     paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason, tagged));
     paths.push(`<text${tagged} x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
   };
-  // With terminal tags, stdin, stdout and stderr left on the terminal, the defaults, are drawn as a
-  // short line to a “terminal” tag beside the port rather than a route to a shared box, much as
-  // circuit diagrams mark ground. stdin's tag sits to the left of its port, the others' to the right.
-  const ground = (p, fd, inactive, reason, tagged) => {
-    const color = inactive ? palette.muted : colors[fd], fill = inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][fd]];
+  // With terminal tags, a stream to or from the terminal is drawn as a short line to a “terminal”
+  // tag beside the port rather than a route to a shared box, much as circuit diagrams mark ground.
+  // stdin's tag sits to the left of its port, the others' to the right. The line takes the port's
+  // colour and the tag the terminal stream's, so stdout sent on with >&2 ends in stderr's colour.
+  const ground = (p, fd, dest, inactive, reason, tagged) => {
+    const stream = terminalStreams.indexOf(dest.id);
+    const line = inactive ? palette.muted : colors[fd], color = inactive ? palette.muted : colors[stream], fill = inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][stream]];
     // Monospace text, in the terminal theme, needs a wider tag.
     const w = mono ? 50 : 44, [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
-    const what = fd === 0 ? 'stdin comes from the terminal.' : `${names[fd]} goes to the terminal.`;
-    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
+    const what = fd === stream ? (fd === 0 ? 'stdin comes from the terminal.' : `${names[fd]} goes to the terminal.`)
+      : fd === 0 ? `stdin reads the terminal’s ${names[stream]}.` : `${names[fd]} goes to the terminal’s ${names[stream]}.`;
+    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
   };
   // A file tag looks like a small destination box: the file's glyph and name, with an arrow the way
   // the data goes, and a word above it for appends and devices.
@@ -540,7 +547,8 @@ function drawPipeline(model, palette, colors, mono) {
         if (fd !== 0 && cmd === producer && reaches(next.fds[0], dest)) {
           const q = port(next, 0);
           paths.push(path(`M ${p.x} ${p.y} C ${p.x + 50} ${p.y}, ${q.x - 50} ${q.y}, ${q.x - 5} ${q.y}`, fd, false, inactive || activity.notRead, `${usage.reason} ${activity.reason}`, tagged));
-          if (fd === 1 || !reaches(cmd.fds[1], dest)) paths.push(`<text class="pipe-label"${tagged} x="${(p.x + q.x) / 2}" y="${Math.min(p.y, q.y) - 12}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
+          // A pipe from stderr alone is labelled under its curve, clear of whatever stdout ends in above.
+          if (fd === 1 || !reaches(cmd.fds[1], dest)) paths.push(`<text class="pipe-label"${tagged} x="${(p.x + q.x) / 2}" y="${fd === 1 ? Math.min(p.y, q.y) - 12 : (p.y + q.y) / 2 + 34}" text-anchor="middle" fill="${palette.muted}" font-size="10"><title>${escape(activity.reason)}</title>${escape(activity.label)}</text>`);
         } else if (cmd.substitution && fd !== 0 && reaches(next.fds[0], dest) && geometry(next).y < geometry(cmd).y) {
           // An inherited pipe: run below the reader's card, then into its stdin.
           const q = port(next, 0), gapY = geometry(next).y + 178;
@@ -548,7 +556,7 @@ function drawPipeline(model, palette, colors, mono) {
         } else stub(p, fd, `pipe ${dest.from + 1}`, inactive, usage.reason, tag([here], dest));
         continue;
       }
-      if (grounded(fd, dest)) { ground(p, fd, inactive, usage.reason, tag([here], dest)); continue; }
+      if (grounded(dest)) { ground(p, fd, dest, inactive, usage.reason, tag([here], dest)); continue; }
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
       const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
@@ -941,10 +949,10 @@ $('#platform').addEventListener('click', event => {
   render();
 });
 showPlatform();
-// The row shows only while the pipeline has a redirect the switch would rewrite.
+// The switch's buttons show only while the pipeline has a redirect they would rewrite.
 function showRedirectStyle() {
   const source = $('#pipeline').value;
-  $('#redirects').hidden = restyle(source, 'explicit', { platform }) === restyle(source, 'common', { platform });
+  $('#redirect-style').classList.toggle('idle', restyle(source, 'explicit', { platform }) === restyle(source, 'common', { platform }));
   $('#redirect-style').querySelectorAll('button').forEach(button => {
     const active = button.dataset.style === redirectStyle;
     button.classList.toggle('active', active);
