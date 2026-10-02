@@ -1040,6 +1040,7 @@ $('#platform').addEventListener('click', event => {
   render();
 });
 showPlatform();
+requestAnimationFrame(() => requestAnimationFrame(() => $('#platform').classList.add('ready')));
 // The switch's buttons show only while the pipeline has a redirect they would rewrite.
 function showRedirectStyle() {
   const source = $('#pipeline').value;
