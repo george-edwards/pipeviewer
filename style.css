@@ -107,11 +107,11 @@ a { color: inherit; }
 .shell-switch::before { content: ''; position: absolute; top: .1875rem; bottom: .1875rem; left: .1875rem; width: calc((100% - .5rem) / 2); border-radius: .3125rem; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 3px rgb(0 0 0 / .12); }
 :root[data-platform="macos"] .shell-switch::before { transform: translateX(calc(100% + .125rem)); }
 /* The thumb starts moving only once the page has placed it, so it never slides in on load. */
-.shell-switch.ready::before { transition: transform .42s cubic-bezier(.34, 1.45, .55, 1); }
-.shell-switch button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .375rem; padding: 0 .625rem; border: 0; border-radius: .3125rem; background: transparent; color: var(--muted); font-size: .75rem; transition: color .3s; }
+.shell-switch.ready::before { transition: transform .24s cubic-bezier(.34, 1.45, .55, 1); }
+.shell-switch button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .375rem; padding: 0 .625rem; border: 0; border-radius: .3125rem; background: transparent; color: var(--muted); font-size: .75rem; transition: color .2s; }
 .shell-switch button:hover { color: var(--text); }
 .shell-switch button.active { color: var(--purple); }
-.shell-switch .os-icon { transition: transform .42s cubic-bezier(.34, 1.45, .55, 1); }
+.shell-switch .os-icon { transition: transform .24s cubic-bezier(.34, 1.45, .55, 1); }
 .shell-switch button.active .os-icon { transform: scale(1.12); }
 .theme-toggle { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .5625rem .75rem; min-height: 2.5rem; border: 1px solid var(--border); border-radius: .4375rem; background: var(--surface); color: var(--text); font-size: .75rem; }
 .theme-toggle:hover { background: var(--inset); }
