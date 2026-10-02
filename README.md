@@ -25,7 +25,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 - **Training** mode, from the green button in the header, teaches redirects by picture. Each level shows the diagram of a command the student can't see, and they edit a starting command until their own diagram matches it. See [Training](#training).
 
-- Light, dark and terminal themes. The terminal theme is phosphor green on black, all monospace. The page follows the system's light or dark theme until you pick one with the theme button, which shows the current theme, steps through the three, and remembers your choice. In the terminal theme the command editor is a black terminal too. The editor names the shell the **SHELL** switch picks, and a faint Tux or apple watermark behind the page shows which system is being mapped.
+- Light, dark and terminal themes. The terminal theme is phosphor green on black, all monospace. The page follows the system's light or dark theme until you pick one with the theme button, which shows the current theme, steps through the three, and remembers your choice. In the terminal theme the command editor is a black terminal too. The editor names the shell the header's shell switch picks, and a faint Tux or apple watermark behind the page shows which system is being mapped.
 - Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
 - Static stream-usage hints distinguish connections from actual command behaviour. Includes a `sleep 2 | echo "hello, world"` example and explanations of output timing.
 - Clickable examples, each with its related spellings under **Variations**, and a quick reference. Clicking the chosen example again clears the editor. The **Redirects** switch shows any pipeline, an example or your own, in the common style (`< file`, `> file`, `>&2`), the default, or the explicit one (`0< file`, `1> file`, `1>&2`). Variations and Redirects show their buttons only when the pipeline has something for them.
@@ -55,6 +55,8 @@ Pictures are compared, not spellings. Two command lines match when they draw the
 
 A level is worth three stars. There are three hints: **What's different?** lists each difference in words, **Show me how** gives the syntax, and **Answer** shows the target command. Each hint costs a star, but a solved level always earns at least one. When the pictures match, the streams start to flow, and Enter or the button moves on to the next level, keeping the student's command as its starting point. Best stars per level are kept in the browser's local storage.
 
+The shell switch in the header works in training too: the target is redrawn as the chosen shell runs it.
+
 Link to `/#training` to open training at the first unsolved level, or to `/#training/2` for level 2.
 
 ### Adding a level
@@ -63,7 +65,7 @@ Levels are listed in `lessons.js`, in the order they're played. Each has an `id`
 
 ## macOS and zsh
 
-The **SHELL** switch above the editor, Tux for Linux and Bash and an apple for macOS and zsh, maps a command line as macOS runs it: under zsh, the default macOS shell, with the BSD and Apple versions of the tools. It starts on macOS on Apple devices and on Linux elsewhere, and remembers your choice once you pick one.
+The shell switch in the header, Tux for Linux and Bash and an apple for macOS and zsh, maps a command line as macOS runs it: under zsh, the default macOS shell, with the BSD and Apple versions of the tools. It starts on macOS on Apple devices and on Linux elsewhere, and remembers your choice once you pick one.
 
 - zsh's MULTIOS option is on by default, so a redirect adds a destination instead of replacing the pipe or an earlier redirect. `cmd > out | grep x` sends output to both, and `cmd 2>&1 > /dev/null | grep x` gives grep both streams. The diagram draws a line to each target.
 - Process substitutions are numbered from `/dev/fd/11`. One used as an argument gets the shell's own descriptors; one used as a redirect target sees the pipeline's pipes but not the command's redirects.

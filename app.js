@@ -1035,6 +1035,8 @@ $('#platform').addEventListener('click', event => {
   try { localStorage.setItem('pipeviewer-platform', platform); } catch {}
   showPlatform();
   showKnown();
+  // Training compares against the target as the chosen shell runs it.
+  showTarget();
   render();
 });
 showPlatform();
