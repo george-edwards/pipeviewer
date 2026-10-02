@@ -10,8 +10,10 @@ const names = ['stdin', 'stdout', 'stderr'];
 const examples = {
   file: 'sort 0< names.txt | uniq -c 1> counts.txt',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
-  lists: 'sort names.txt 1> sorted.txt && wc -l 0< sorted.txt || echo "sort failed" 1>&2',
+  // macOS has no apt; softwareupdate is its system updater, and lists and installs updates in the same two steps.
+  lists: { source: 'sudo apt update && sudo apt upgrade -y || echo "uh oh, something went wrong when trying to update software"', mac: 'sudo softwareupdate --list && sudo softwareupdate --install --all || echo "uh oh, something went wrong when trying to update software"' },
 };
+// Examples without variations are a source, or a source and its mac spelling.
 // Examples with several equivalent or related spellings, shown as toggles once one of them is loaded.
 // A mac spelling replaces the source in macOS mode.
 const variations = {
@@ -89,7 +91,7 @@ try { if (localStorage.getItem('pipeviewer-redirects') === 'explicit') redirectS
 const styled = source => restyle(source, redirectStyle, { platform });
 // Every spelling of an example as it reads on a platform, in the current redirect style.
 const spelling = (variation, on = platform) => on === 'macos' ? variation.mac ?? variation.source : variation.source;
-const exampleSources = (key, on = platform) => (variations[key]?.map(variation => spelling(variation, on)) ?? [examples[key]])
+const exampleSources = (key, on = platform) => (variations[key]?.map(variation => spelling(variation, on)) ?? [typeof examples[key] === 'string' ? examples[key] : spelling(examples[key], on)])
   .map(source => restyle(source, redirectStyle, { platform: on }));
 
 // In the variations, redirect style and examples rows, the chosen button sits on a raised thumb that
@@ -1385,10 +1387,13 @@ function markDifferences() {
 }
 
 function showLevels() {
-  $('#levels').innerHTML = lessons.map((lesson, i) => {
+  // The buttons are rebuilt around the thumb, which stays so it can slide to the new level.
+  $('#levels').querySelectorAll(':scope > button').forEach(button => button.remove());
+  $('#levels').insertAdjacentHTML('beforeend', lessons.map((lesson, i) => {
     const earned = progress[lesson.id] ?? 0, active = i === training.level;
     return `<button type="button" data-level="${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="Level ${i + 1}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number">${i + 1}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
-  }).join('');
+  }).join(''));
+  slide($('#levels'));
   const total = lessons.reduce((sum, lesson) => sum + (progress[lesson.id] ?? 0), 0);
   $('#star-total').innerHTML = `${star(true)}<span>${total}<span class="star-of"> / ${lessons.length * 3}</span></span><span class="sr-only"> stars</span>`;
 }

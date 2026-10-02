@@ -70,7 +70,7 @@ test('cat file arguments and explicit stdin operands affect only stdin usage', (
 });
 
 test('unknown commands and wrappers are not guessed from their names', () => {
-  for (const source of ['custom', './sleep 2', 'sudo echo hello', '"$COMMAND" 2', 'VAR=value sleep 2']) {
+  for (const source of ['custom', './sleep 2', 'doas echo hello', '"$COMMAND" 2', 'VAR=value sleep 2']) {
     const cmd = parsePipeline(source).commands[0];
     assert.equal(cmd.usage.recognised, false, source);
     for (const fd of [0, 1, 2]) assert.equal(cmd.usage.fds[fd].state, 'unknown', source);
@@ -374,4 +374,33 @@ test('make runs recipes that may read stdin, except in dry-run and question mode
   assert.match(parsePipeline('make', { platform: 'macos' }).notes.join(' '), /Command Line Tools/);
   const merged = parsePipeline('make &> build.log').commands[0];
   assert.equal(merged.fds[1], merged.fds[2]);
+});
+
+test('sudo follows the command it runs, and asks for a password on the terminal', () => {
+  const [cmd] = parsePipeline('sudo -u admin sort names.txt').commands;
+  assert.equal(cmd.usage.recognised, true);
+  assert.equal(cmd.usage.fds[0].state, 'unused');
+  assert.match(cmd.usage.fds[0].reason, /terminal itself/);
+  assert.equal(parsePipeline('sudo sort').commands[0].usage.fds[0].state, 'possible');
+  assert.equal(parsePipeline('sudo -S sort names.txt').commands[0].usage.fds[0].state, 'possible');
+  assert.equal(parsePipeline('sudo -v').commands[0].usage.fds[1].state, 'unused');
+});
+
+test('apt reads stdin only when it may ask whether to continue', () => {
+  const stdin = source => parsePipeline(source).commands[0].usage.fds[0].state;
+  assert.equal(stdin('apt update'), 'unused');
+  assert.equal(stdin('apt-get install curl'), 'possible');
+  assert.equal(stdin('apt upgrade -y'), 'unknown');
+  assert.equal(stdin('apt-get -qq install curl'), 'unknown');
+  assert.equal(stdin('apt install -s curl'), 'unused');
+  assert.equal(stdin('sudo apt upgrade'), 'possible');
+  assert.equal(parsePipeline('apt update', { platform: 'macos' }).commands[0].usage.recognised, false);
+});
+
+test('softwareupdate reads stdin for a licence or --stdinpass', () => {
+  const stdin = source => parsePipeline(source, { platform: 'macos' }).commands[0].usage.fds[0].state;
+  assert.equal(stdin('softwareupdate --list'), 'unused');
+  assert.equal(stdin('softwareupdate --install --all'), 'possible');
+  assert.equal(stdin('softwareupdate -ia --agree-to-license'), 'unused');
+  assert.equal(stdin('softwareupdate -ia --agree-to-license --stdinpass'), 'possible');
 });

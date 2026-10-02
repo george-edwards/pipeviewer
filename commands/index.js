@@ -15,6 +15,7 @@
 //   instead        per platform, what to use where a name is missing: { macos: { tac: 'use tail -r' } },
 //                  with '*' for every name in the rule
 // To add a command, add its file and list it here. The Quick reference lists the names alphabetically.
+import apt from './apt.js';
 import arch from './arch.js';
 import awk from './awk.js';
 import base64 from './base64.js';
@@ -99,11 +100,13 @@ import shasum from './shasum.js';
 import shred from './shred.js';
 import shuf from './shuf.js';
 import sleep from './sleep.js';
+import softwareupdate from './softwareupdate.js';
 import sort from './sort.js';
 import split from './split.js';
 import stat from './stat.js';
 import stdbuf from './stdbuf.js';
 import stty from './stty.js';
+import sudo from './sudo.js';
 import sum from './sum.js';
 import sw_vers from './sw_vers.js';
 import sync from './sync.js';
@@ -134,13 +137,13 @@ import yes from './yes.js';
 import zcat from './zcat.js';
 
 export default [
-  arch, awk, base64, basename, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
+  apt, arch, awk, base64, basename, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
   cp, csplit, curl, cut, date, dd, df, dircolors, dirname, du, echo, env, expand, expr, factor,
   find, fmt, fold, grep, groups, head, hostid, hostname, id, install, join, kill, less, link, ln,
   logname, ls, make, md5, md5sum, mkdir, mkfifo, mknod, mktemp, mv, nice, nl, nohup, nproc, numfmt,
   od, open, parallel, paste, pathchk, pbcopy, pbpaste, pinky, pr, printenv, ptx, pv, pwd, readlink,
-  realpath, rev, rm, rmdir, runcon, say, sed, seq, shasum, shred, shuf, sleep, sort, split, stat,
-  stdbuf, stty, sum, sw_vers, sync, tac, tail, tee, test, time, timeout, touch, tr, truth,
+  realpath, rev, rm, rmdir, runcon, say, sed, seq, shasum, shred, shuf, sleep, softwareupdate, sort, split, stat,
+  stdbuf, stty, sudo, sum, sw_vers, sync, tac, tail, tee, test, time, timeout, touch, tr, truth,
   truncate, tsort, tty, uname, unexpand, uniq, unlink, uptime, users, wc, wget, who, whoami, xargs,
   yes, zcat,
 ];

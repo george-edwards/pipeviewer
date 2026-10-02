@@ -165,9 +165,9 @@ body::before { content: ''; position: fixed; z-index: -1; right: max(2rem, 4vw);
 .variation-buttons button:hover { color: var(--text); }
 .variation-buttons button.active { background: var(--surface); color: var(--purple); font-weight: 550; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); }
 /* Rows with a sliding thumb draw the chosen button's raised look on the thumb instead. */
-#variation-buttons, #redirect-style { position: relative; }
-:is(#variation-buttons, #redirect-style, #example-strip) > button { position: relative; transition: color .2s; }
-:is(#variation-buttons, #redirect-style, #example-strip) > button.active { background: transparent; box-shadow: none; }
+#variation-buttons, #redirect-style, #levels { position: relative; }
+:is(#variation-buttons, #redirect-style, #example-strip, #levels) > button { position: relative; transition: color .2s; }
+:is(#variation-buttons, #redirect-style, #example-strip, #levels) > button.active { background: transparent; box-shadow: none; }
 .thumb { position: absolute; top: 0; left: 0; border-radius: .3125rem; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); opacity: 0; pointer-events: none;
   transition: transform .24s cubic-bezier(.34, 1.45, .55, 1), width .24s cubic-bezier(.34, 1.45, .55, 1), height .24s cubic-bezier(.34, 1.45, .55, 1), opacity .15s; }
 .thumb.instant { transition: opacity .15s; }
