@@ -329,6 +329,8 @@ function drawPipeline(model, palette, colors, mono) {
   // or 1> file 2>&1, share one tag between their ports. A file shared any other way keeps its box,
   // so the drawing still shows the streams reaching one place.
   const fileTags = new Map();
+  // With tags on, a stream left on the terminal, as stdin, stdout and stderr start, ends in a terminal tag.
+  const grounded = (fd, dest) => terminalTags && dest.id === ['terminal-in', 'terminal-out', 'terminal-err'][fd];
   const plan = (dest, room) => {
     const device = deviceOf(dest), label = short(dest.label, Math.floor((room - 24) / 5.4));
     const caption = device ? device[dest.mode === 'read' ? 'read' : 'write'] : dest.mode === 'append' ? 'append' : '';
@@ -375,8 +377,8 @@ function drawPipeline(model, palette, colors, mono) {
     if (fileTags.get(`${cmd.key}:${fd}`)?.dest === dest) return;
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
-    // With terminal tags, stdin from and stderr to the terminal end in a tag beside the port, with no box.
-    if (terminalTags && ((Number(fd) === 0 && dest.id === 'terminal-in') || (Number(fd) === 2 && dest.id === 'terminal-err'))) return;
+    // A grounded stream ends in a tag beside its port, with no box.
+    if (grounded(Number(fd), dest)) return;
     used.set(dest.id, dest);
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
@@ -399,14 +401,14 @@ function drawPipeline(model, palette, colors, mono) {
     paths.push(path(`M ${fd === 0 ? endX : p.x} ${p.y} L ${fd === 0 ? p.x - 4 : endX} ${p.y}`, fd, true, inactive, reason, tagged));
     paths.push(`<text${tagged} x="${endX}" y="${p.y - 12}" text-anchor="middle" fill="${palette.muted}" font-size="9">${escape(label)}</text>`);
   };
-  // With terminal tags, stdin from and stderr to the terminal, the defaults, are drawn as a short
-  // line to a “terminal” tag beside the port rather than a route to a shared box, much as circuit
-  // diagrams mark ground. stdin's tag sits to the left of its port, stderr's to the right.
+  // With terminal tags, stdin, stdout and stderr left on the terminal, the defaults, are drawn as a
+  // short line to a “terminal” tag beside the port rather than a route to a shared box, much as
+  // circuit diagrams mark ground. stdin's tag sits to the left of its port, the others' to the right.
   const ground = (p, fd, inactive, reason, tagged) => {
-    const color = inactive ? palette.muted : colors[fd], fill = inactive ? palette.inset : palette[fd === 0 ? 'green-bg' : 'amber-bg'];
+    const color = inactive ? palette.muted : colors[fd], fill = inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][fd]];
     // Monospace text, in the terminal theme, needs a wider tag.
     const w = mono ? 50 : 44, [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
-    const what = fd === 0 ? 'stdin comes from the terminal.' : 'stderr goes to the terminal.';
+    const what = fd === 0 ? 'stdin comes from the terminal.' : `${names[fd]} goes to the terminal.`;
     paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${color}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
   };
   // A file tag looks like a small destination box: the file's glyph and name, with an arrow the way
@@ -546,7 +548,7 @@ function drawPipeline(model, palette, colors, mono) {
         } else stub(p, fd, `pipe ${dest.from + 1}`, inactive, usage.reason, tag([here], dest));
         continue;
       }
-      if (terminalTags && ((fd === 0 && dest.id === 'terminal-in') || (fd === 2 && dest.id === 'terminal-err'))) { ground(p, fd, inactive, usage.reason, tag([here], dest)); continue; }
+      if (grounded(fd, dest)) { ground(p, fd, inactive, usage.reason, tag([here], dest)); continue; }
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
       const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
