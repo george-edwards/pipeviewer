@@ -30,6 +30,16 @@ test('substitutions snapshot descriptors at their place in the redirect order', 
   assert.equal(model.substitutions[1].commands[0].fds[2], model.substitutions[0].endpoint);
 });
 
+test('an argument substitution gets the pipes but none of its command\'s redirects', () => {
+  // Bash expands arguments before it applies any redirect, as bash 5.1 shows with /proc/self/fd.
+  const [rev] = parsePipeline('paste </usr/share/dict/words <(rev /usr/share/dict/words) -').substitutions[0].commands;
+  assert.equal(rev.fds[0].id, 'terminal-in');
+  const [ls] = parsePipeline('cat <(ls) 2>/dev/null').substitutions[0].commands;
+  assert.equal(ls.fds[2].id, 'terminal-err');
+  const model = parsePipeline('echo hi | cat <(cat) -');
+  assert.equal(model.substitutions[0].commands[0].fds[0], model.pipes[0]);
+});
+
 test('<(…) arguments become /dev/fd paths that do not alias stdin', () => {
   const model = parsePipeline('paste <(cut -f 1 a.tsv) <(cut -f 3 b.tsv)');
   const [paste] = model.commands;

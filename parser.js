@@ -106,7 +106,8 @@ function addJob(cmd, context, shell) {
 
 /**
  * Builds one pipeline. Process substitutions recurse with a snapshot of the owning
- * command's descriptors, taken when Bash expands the word (left to right).
+ * command's descriptors, taken when Bash expands the word: before any redirect for an argument,
+ * and at its place among the redirects, left to right, for a redirect target.
  *
  * zsh (the macOS shell) differs in three ways that change the map:
  * - MULTIOS: a descriptor keeps a list of targets. In a pipeline it starts with the pipe; otherwise
@@ -163,9 +164,12 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
       while (fd in fds) fd += zsh ? 1 : -1;
       const sub = { id: `sub-${context.substitutions.length}`, key: `${key}${letters[cmd.substitutions.length]}`, text: token.raw, direction: token.direction, owner: cmd, fd, place, span: token.span };
       sub.endpoint = context.endpoint(sub.id, 'procsub', token.raw, { direction: token.direction, owner: cmd, fd, substitution: sub });
-      // The child inherits the owner's current descriptors, except earlier substitution pipes. Under
-      // zsh, an argument gets the shell's descriptors, and a redirect target the pipeline's pipes.
-      const base = !zsh ? fds : place === 'argument' ? inherited : initial;
+      // A redirect target inherits the owner's descriptors as redirected so far, as Bash expands it
+      // while applying the redirects left to right. An argument is expanded before any redirect, so
+      // it gets the descriptors the command started with: the pipeline's pipes, none of its own
+      // redirects. Earlier substitution pipes are never inherited. Under zsh, an argument gets the
+      // shell's descriptors, and a redirect target the pipeline's pipes.
+      const base = zsh ? (place === 'argument' ? inherited : initial) : place === 'argument' ? initial : fds;
       const snapshot = Object.fromEntries(Object.entries(base).filter(([n, dest]) => Number(n) <= 2 || dest.type !== 'procsub'));
       snapshot[token.direction === '>' ? 0 : 1] = sub.endpoint;
       cmd.substitutions.push(sub);
@@ -263,6 +267,11 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
     const substitutionPath = token => !token.dynamic && fds[token.value.match(/^\/(?:dev|proc\/self)\/fd\/(\d+)$/)?.[1]]?.type === 'procsub';
     const paths = argv.map(token => !token.procsub && substitutionPath(token) ? { ...token, procsub: true } : token);
     cmd.usage = inferUsage(paths, context.platform);
+    // Files the command opens itself, as tee does its operands, are reached on descriptors it picks,
+    // not through stdout, so they are kept apart from fds.
+    cmd.opens = (cmd.usage.writes ?? []).map(({ token, mode }, i) => ({
+      span: token.span, endpoint: context.endpoint(`open-${key}-${i}`, token.value === '/dev/null' ? 'null' : 'file', token.value, { mode, opener: cmd }),
+    }));
     for (const note of [cmd.usage.missing, ...(cmd.usage.notes ?? [])]) if (note && !context.notes.includes(note)) context.notes.push(note);
     for (const sub of cmd.substitutions) {
       cmd.usage.fds[sub.fd] = substitutionUsage(cmd.usage.name, sub.direction, sub.fd, sub.place === 'argument');

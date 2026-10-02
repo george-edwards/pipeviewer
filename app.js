@@ -374,6 +374,9 @@ function drawPipeline(model, palette, colors, mono) {
       const planned = plan(dest, crowded ? 92 : 170);
       fileTags.set(`${cmd.key}:${fd}`, { ...planned, x: fd === 0 ? p.x - 36 - planned.w : p.x + 36 });
     }));
+    // A file the command opens itself, as tee does, ends in a tag just under its bottom-edge port.
+    // Its x is known only once the ports are laid out, and it stays within the card's width.
+    model.all.forEach(cmd => (cmd.opens ?? []).forEach((open, i) => fileTags.set(`${cmd.key}:o${i}`, { ...plan(open.endpoint, 110), below: true })));
   }
   const used = new Map();
   model.all.forEach(cmd => Object.entries(cmd.fds).forEach(([fd, value]) => targetsOf(value).forEach(dest => {
@@ -385,10 +388,11 @@ function drawPipeline(model, palette, colors, mono) {
     if (grounded(dest) || (terminalTags && dest.type === 'closed')) return;
     used.set(dest.id, dest);
   })));
+  model.all.forEach(cmd => (cmd.opens ?? []).forEach((open, i) => { if (!fileTags.has(`${cmd.key}:o${i}`)) used.set(open.endpoint.id, open.endpoint); }));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
   // Space for the terminal boxes is only kept when a stream uses them.
   // File tags can reach past the cards on either side, so the drawing widens to hold them.
-  const tagged = [...fileTags.values()];
+  const tagged = [...fileTags.values()].filter(t => !t.below);
   const minX = Math.min(used.has('terminal-in') ? 0 : terminalTags ? 120 : 140, ...tagged.map(t => t.x - 16));
   const width = Math.max(850, used.has('terminal-out') ? 240 + grid.cols * 360 + 175 : 180 + grid.cols * 360, 350 + bottom.length * 190,
     ...tagged.map(t => t.x + t.w + (used.has('terminal-out') ? 195 : 20)));
@@ -474,6 +478,21 @@ function drawPipeline(model, palette, colors, mono) {
     const g = geometry(cmd), k = bottomSubs(cmd).filter(sub => sub.direction === '<').length + extraFds(cmd).filter(f => leaksPipe(cmd, f)).indexOf(fd);
     return { x: g.x + 30 + k * 34, y: g.y + 156 };
   };
+  // Files a command opens itself take bottom-edge ports in argument order, left to right, spaced so
+  // the tags under them, and any caption beside a line, do not touch. The group is centred on the
+  // card, or ends left of the >(…) argument ports, whose curves leave to the right.
+  const openSpots = new Map();
+  const openPort = (cmd, i) => {
+    if (!openSpots.has(cmd)) {
+      const g = geometry(cmd), planned = cmd.opens.map((open, j) => fileTags.get(`${cmd.key}:o${j}`));
+      const gaps = planned.slice(1).map((t, j) => Math.max(planned[j]?.caption ? 46 : 34, ((planned[j]?.w ?? 0) + (t?.w ?? 0)) / 2 + 10));
+      const span = gaps.reduce((a, b) => a + b, 0), subs = bottomSubs(cmd).filter(sub => sub.direction === '>').length;
+      let x = subs ? g.x + 110 - subs * 34 - span : g.x + 110 - span / 2;
+      openSpots.set(cmd, planned.map((t, j) => ({ x: j ? (x += gaps[j - 1]) : x, y: g.y + 156 })));
+    }
+    return openSpots.get(cmd)[i];
+  };
+  const opensReason = (cmd, open) => `${cmd.usage.name} opens ${open.endpoint.label} itself, on a descriptor of its own, and ${open.endpoint.mode === 'append' ? 'appends' : 'writes'} a copy of its input there. This is not stdout, which goes to ${destinationLabel(cmd.fds[1], 1, model.commands, cmd)}.`;
   const argumentPort = (cmd, sub) => {
     const g = geometry(cmd), same = bottomSubs(cmd).filter(s => s.direction === sub.direction), k = same.indexOf(sub);
     return { x: g.x + (sub.direction === '<' ? 30 + k * 34 : 110 - k * 34), y: g.y + 156 };
@@ -592,6 +611,17 @@ function drawPipeline(model, palette, colors, mono) {
     const reason = `fd ${fd} also writes to the pipe to ${next.usage.name}, so the pipe stays open until ${cmd.usage.name} closes it too. ${portUsage(cmd, fd).reason}`;
     paths.push(path(`M ${p.x} ${p.y} V ${low - 8} Q ${p.x} ${low} ${p.x + 8} ${low} H ${turn - 8} Q ${turn} ${low} ${turn} ${low - 8} V ${q.y + 8} Q ${turn} ${q.y} ${turn + 8} ${q.y} H ${q.x - 4}`, 3, false, false, reason, tag([`${cmd.key}:${fd}`, `${next.key}:0`], dest)));
   }));
+  model.all.forEach(cmd => (cmd.opens ?? []).forEach((open, i) => {
+    const p = openPort(cmd, i), dest = open.endpoint, reason = opensReason(cmd, open), tagged = tag([`${cmd.key}:o${i}`], dest);
+    const planned = fileTags.get(`${cmd.key}:o${i}`);
+    if (!planned) {
+      laneLinks.push({ input: false, bottom: true, fd: 3, box: positions.get(dest.id), p, upper: p.x, lower: positions.get(dest.id).x + positions.get(dest.id).w / 2, down: true, dashed: false, inactive: false, reason, tagged });
+      return;
+    }
+    const top = p.y + 22, x = p.x - planned.w / 2, d = `M ${p.x} ${p.y} V ${top - 4}`;
+    // An append is noted beside the line, as the line comes in from above.
+    paths.push(`<g class="stream-link file-tag"${tagged}><title>${escape(reason)}</title><path class="link-hit" d="${d}" fill="none" stroke="transparent" stroke-width="12"/><path d="${d}" fill="none" stroke="${colors[3]}" stroke-width="2" marker-end="url(#arrow-3)"/>${tagBody({ ...planned, x, caption: '' }, top + 8)}${planned.caption ? `<text x="${p.x + 5}" y="${p.y + 14}" fill="${palette.muted}" font-size="8.5">${escape(planned.caption)}</text>` : ''}</g>`);
+  }));
   // Each bottom route gets its own lane. A route must sit above another when that one's horizontal
   // would cross its vertical from the card, or its rise to a terminal; and below one it drops through.
   const spans = (link, x) => Math.min(link.upper, link.lower) + 1 < x && x < Math.max(link.upper, link.lower) - 1;
@@ -609,7 +639,11 @@ function drawPipeline(model, palette, colors, mono) {
   lanes.forEach((link, k) => {
     const { p, box, upper, lower } = link, y = laneY(k);
     const r = Math.min(10, Math.abs(lower - upper) / 2);
-    if (link.input) {
+    if (link.bottom) {
+      const s = Math.sign(lower - upper) || 1, turn = Math.abs(lower - upper) > 1;
+      const across = turn ? `V ${y - 10} Q ${upper} ${y} ${upper + s * r} ${y} H ${lower - s * r} Q ${lower} ${y} ${lower} ${y + 10} ` : '';
+      paths.push(path(`M ${p.x} ${p.y} ${across}V ${box.y - 4}`, link.fd, false, link.inactive, link.reason, link.tagged));
+    } else if (link.input) {
       const s = Math.sign(upper - lower) || 1;
       paths.push(path(`M ${lower} ${box.y} V ${y + 10} Q ${lower} ${y} ${lower + s * r} ${y} H ${upper - s * r} Q ${upper} ${y} ${upper} ${y - 10} V ${p.y + 12} Q ${upper} ${p.y} ${upper + 12} ${p.y} H ${p.x - 4}`, link.fd, false, link.inactive, link.reason, link.tagged));
     } else {
@@ -650,6 +684,11 @@ function drawPipeline(model, palette, colors, mono) {
         <text x="${p.x}" y="${p.y - 9}" text-anchor="middle" fill="${palette.muted}" font-size="9">fd ${fd}</text>
         <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
     }).join('');
+    const openPorts = (cmd.opens ?? []).map((open, i) => {
+      const p = openPort(cmd, i);
+      return `<g data-command="${cmd.key}" data-fd="o${i}" data-usage="possible"><title>${escape(opensReason(cmd, open))}</title>
+        <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${palette.text}" stroke="${palette.text}" stroke-width="1.8"/></g>`;
+    }).join('');
     const extraPorts = extraFds(cmd).filter(fd => leaksPipe(cmd, fd)).map(fd => {
       const p = extraPort(cmd, fd), usage = portUsage(cmd, fd);
       return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(usage.reason)}</title>
@@ -687,10 +726,10 @@ function drawPipeline(model, palette, colors, mono) {
       <path d="M ${x} ${y + 57} H ${x + 220}" stroke="${palette.border}"/>
       <text x="${x + 16}" y="${y + 22}" fill="${palette.muted}" font-size="9" letter-spacing="1.3">${title}</text>
       <text x="${x + 16}" y="${y + 43}" fill="${palette.text}" font-size="12" font-weight="500" font-family="'IBM Plex Mono',monospace">${escape(short(cmd.command, 24))}</text>
-      ${ports}${argumentPorts}${extraPorts}${extraLines}${jobPorts}</g>`;
+      ${ports}${argumentPorts}${openPorts}${extraPorts}${extraLines}${jobPorts}</g>`;
   });
   // With stderr tagged in place, a pipeline often has nothing below its cards; end the drawing there.
-  const cardsBottom = 101 + grid.rows * 200 + 156 + 34;
+  const cardsBottom = 101 + grid.rows * 200 + 156 + 34 + (model.all.some(cmd => cmd.opens?.length && grid.place.get(cmd).row === grid.rows) ? 16 : 0);
   const height = bottom.length || lanes.length ? 390 + (bottomY - 353) : cardsBottom - 55;
   return { minX, width, height, body: `${paths.join('')}${nodes.join('')}${cards.join('')}` };
 }
@@ -718,6 +757,8 @@ function inspectTargets(model) {
       const ports = step.fds.map(fd => `${cmd.key}:${fd}`);
       list.push({ kind: 'step', ref: step, span: step.span, strong: [], context: [cmd.key], ends: ports, ports, dests: [step.destination.id] });
     }
+    // A file the command opens itself lights its bottom-edge port and tag.
+    (cmd.opens ?? []).forEach((open, i) => list.push({ kind: 'open', ref: open, span: open.span, strong: [], context: [cmd.key], ends: [`${cmd.key}:o${i}`], ports: [`${cmd.key}:o${i}`], dests: [open.endpoint.id] }));
   }
   // A pipe's target also covers the spaces either side of |, so moving the caret along never goes dark.
   for (const { commands, pipes } of [...model.pipelines, ...model.substitutions]) {
@@ -876,7 +917,7 @@ function render() {
     showDiagram();
     const redirects = currentModel.all.reduce((total, cmd) => total + cmd.steps.length, 0);
     $('#redirect-count').textContent = `${redirects} redirect${redirects === 1 ? '' : 's'} applied`;
-    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>${escape(cmd.substitution.owner.usage.name)}</code> once per ${cmd.substitution.tool === 'xargs' ? 'item' : 'argument'}</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
+    $('#details').innerHTML = detailOrder(currentModel).map(cmd => `<article class="detail-card${cmd.substitution ? ' substitution-card' : ''}"><div class="detail-title"><span class="detail-label">${cmd.substitution?.kind === 'job' ? `IN EACH JOB · ${cmd.index + 1}` : `${cmd.substitution ? 'SUBSTITUTION' : 'COMMAND'} ${cmd.key}`}</span><code title="${escape(cmd.command)}">${escape(cmd.command)}</code></div>${cmd.substitution?.kind === 'job' ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, run by <code>${escape(cmd.substitution.owner.usage.name)}</code> once per ${cmd.substitution.tool === 'xargs' ? 'item' : 'argument'}</p>` : cmd.substitution ? `<p class="detail-context">In <code>${escape(cmd.substitution.text)}</code>, started by <code>${escape(cmd.substitution.owner.command)}</code></p>` : ''}${Object.entries(cmd.fds).map(([fd, dest]) => `<div class="fd-row fd-${fd}"><span class="fd-badge">${fd}</span><span>${names[fd] || 'fd ' + fd}</span><span class="right-arrow">→</span><span class="destination">${destinationMarkup(dest, Number(fd), currentModel.commands, cmd)}${usageMarkup(cmd, Number(fd))}</span></div>`).join('')}${(cmd.opens ?? []).map(open => `<p class="detail-context">${escape(cmd.usage.name)} also ${open.endpoint.mode === 'append' ? 'appends' : 'writes'} to <code>${escape(open.endpoint.label)}</code>, which it opens itself.</p>`).join('')}${cmd.steps.length ? `<details class="steps"><summary>${cmd.steps.length} redirect${cmd.steps.length === 1 ? '' : 's'}, applied left to right</summary><ol>${cmd.steps.map(step => `<li><code>${escape(step.text)}</code><br>${escape(step.description)}</li>`).join('')}</ol></details>` : ''}</article>`).join('');
     $('#details-count').textContent = `${currentModel.all.length} card${currentModel.all.length === 1 ? '' : 's'}`;
     $('#insights').innerHTML = multioInsights(currentModel) + listInsights(currentModel) + currentModel.pipelines.map(usageInsights).join('') + substitutionInsights(currentModel);
     $('#notes').innerHTML = currentModel.notes.map(note => `<div class="note">${escape(note)}</div>`).join('');

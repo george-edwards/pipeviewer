@@ -45,6 +45,8 @@ export function inferUsage(argv, platform = 'linux') {
     infer: argv => inferUsage(argv, platform),
     setJob: job => { result.job = job; },
     note: text => { (result.notes ??= []).push(text); },
+    // Files the command opens itself to write, such as tee's operands, given as argument tokens.
+    writes: (files, mode = 'write') => { result.writes = files.map(token => ({ token, mode })); },
   });
   return result;
 }
