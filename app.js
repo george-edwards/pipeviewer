@@ -1353,10 +1353,10 @@ function showHints() {
 
 function differenceMarkup(difference) {
   if (difference.kind === 'shape') return `<li class="diff-shape">${escape(difference.text)}</li>`;
-  if (difference.kind === 'command') return `<li><span class="fd-badge">card</span><span>Card ${escape(difference.key)}</span><span>Target: <code>${escape(difference.target)}</code></span><span>Yours: <code>${escape(difference.yours)}</code></span></li>`;
-  if (difference.kind === 'opens') return `<li><span class="fd-badge">${escape(difference.command)}</span><span>opens</span><span>Target: <strong>${escape(difference.target)}</strong></span><span>Yours: <strong>${escape(difference.yours)}</strong></span></li>`;
+  if (difference.kind === 'command') return `<li><span class="fd-badge">card</span><span>Card ${escape(difference.key)}</span><span>Yours: <code>${escape(difference.yours)}</code></span><span>Target: <code>${escape(difference.target)}</code></span></li>`;
+  if (difference.kind === 'opens') return `<li><span class="fd-badge">${escape(difference.command)}</span><span>opens</span><span>Yours: <strong>${escape(difference.yours)}</strong></span><span>Target: <strong>${escape(difference.target)}</strong></span></li>`;
   const arrow = difference.fd === 0 ? '←' : '→';
-  return `<li class="fd-${difference.fd}"><span class="fd-badge">${difference.fd}</span><span>${escape(difference.name)} ${arrow}</span><span>Target: <strong>${escape(difference.target)}</strong></span><span>Yours: <strong>${escape(difference.yours)}</strong></span></li>`;
+  return `<li class="fd-${difference.fd}"><span class="fd-badge">${difference.fd}</span><span>${escape(difference.name)} ${arrow}</span><span>Yours: <strong>${escape(difference.yours)}</strong></span><span>Target: <strong>${escape(difference.target)}</strong></span></li>`;
 }
 
 // The coach, under the brief, holds the hints taken so far, or the result once the pictures match.
