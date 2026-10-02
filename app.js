@@ -96,7 +96,8 @@ function showExamples() {
 }
 function showVariations() {
   const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
-  // The row and its label stay put; only the buttons come and go.
+  // The row shows only while the pipeline is one of an example's variations.
+  $('#variations').hidden = !key;
   if (!key) { $('#variation-buttons').innerHTML = ''; return; }
   $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
     const source = styled(spelling(variation)), active = source === currentSource;
@@ -932,10 +933,10 @@ $('#platform').addEventListener('click', event => {
   render();
 });
 showPlatform();
-// The switch empties to a bare track when the pipeline has no redirect it would rewrite.
+// The row shows only while the pipeline has a redirect the switch would rewrite.
 function showRedirectStyle() {
   const source = $('#pipeline').value;
-  $('#redirect-style').classList.toggle('idle', restyle(source, 'explicit', { platform }) === restyle(source, 'common', { platform }));
+  $('#redirects').hidden = restyle(source, 'explicit', { platform }) === restyle(source, 'common', { platform });
   $('#redirect-style').querySelectorAll('button').forEach(button => {
     const active = button.dataset.style === redirectStyle;
     button.classList.toggle('active', active);

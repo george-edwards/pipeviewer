@@ -211,12 +211,6 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 /* A redrawn diagram fades in, so a switch that changes the drawing visibly takes effect. */
 #diagram.redrawn svg { animation: redrawn .35s ease-out; }
 @keyframes redrawn { from { opacity: .25; } to { opacity: 1; } }
-/* With no variations, or no redirects to restyle, the track stays as an empty pill, as tall as a
-   filled one, so the row reads as empty rather than broken and the editor below does not jump. The
-   invisible character gives it a button's line box and baseline, so the label lines up as it does
-   beside buttons. */
-#redirect-style.idle button { display: none; }
-#variation-buttons:empty::before, #redirect-style.idle::before { content: '\200b'; padding: .3125rem 0; font-size: .75rem; }
 @keyframes switch-pulse { from { opacity: .8; box-shadow: 0 0 0 0 var(--focus); } to { opacity: 0; box-shadow: 0 0 0 .5rem var(--focus); } }
 /* Feedback on the whole diagram: a purple glow when the linking comes on, a brief grey dim when it goes off. */
 .diagram-panel.linking-on { animation: linking-on .7s ease-out; }
