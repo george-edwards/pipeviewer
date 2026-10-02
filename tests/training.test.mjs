@@ -33,7 +33,7 @@ test('a different number of commands is reported once', () => {
   const differences = diff('sort <unsorted.txt >sorted.txt', 'cat unsorted.txt | sort >sorted.txt');
   assert.equal(differences.length, 1);
   assert.equal(differences[0].kind, 'shape');
-  assert.match(differences[0].text, /1 command joined by pipes; yours has 2/);
+  assert.match(differences[0].text, /^Yours has 2 commands joined by pipes; the target has 1\.$/);
 });
 test('every level starts away from its target, and its target parses on both systems', () => {
   lessons.forEach((lesson, i) => {

@@ -40,15 +40,15 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 // concerns so the drawing can mark them. An empty list means the pictures match.
 export function compare(target, yours) {
   if (target.pipelines.length !== yours.pipelines.length) {
-    return [{ kind: 'shape', text: `The target runs ${plural(target.pipelines.length, 'pipeline')}, one after another; yours runs ${yours.pipelines.length}.` }];
+    return [{ kind: 'shape', text: `Yours runs ${plural(yours.pipelines.length, 'pipeline')}, one after another; the target runs ${target.pipelines.length}.` }];
   }
   const shape = target.pipelines.map((pipeline, n) => {
-    const other = yours.pipelines[n], label = target.pipelines.length > 1 ? `Pipeline ${n + 1}: the` : 'The';
-    if (pipeline.commands.length !== other.commands.length) return { kind: 'shape', text: `${label} target has ${plural(pipeline.commands.length, 'command')} joined by pipes; yours has ${other.commands.length}.` };
+    const other = yours.pipelines[n], label = target.pipelines.length > 1 ? `Pipeline ${n + 1}: yours` : 'Yours';
+    if (pipeline.commands.length !== other.commands.length) return { kind: 'shape', text: `${label} has ${plural(other.commands.length, 'command')} joined by pipes; the target has ${pipeline.commands.length}.` };
     if (pipeline.all.length !== other.all.length || pipeline.all.some((cmd, i) => cmd.key !== other.all[i].key)) {
-      return { kind: 'shape', text: `${label} target draws ${plural(pipeline.all.length, 'card')}, counting process substitutions and jobs; yours draws ${other.all.length}.` };
+      return { kind: 'shape', text: `${label} draws ${plural(other.all.length, 'card')}, counting process substitutions and jobs; the target draws ${pipeline.all.length}.` };
     }
-    if (n && pipeline.operator !== other.operator) return { kind: 'shape', text: `Pipeline ${n + 1} follows ${pipeline.operator} in the target, but ${other.operator} in yours.` };
+    if (n && pipeline.operator !== other.operator) return { kind: 'shape', text: `Pipeline ${n + 1} follows ${other.operator} in yours, but ${pipeline.operator} in the target.` };
     return null;
   }).filter(Boolean);
   if (shape.length) return shape;
