@@ -164,6 +164,14 @@ body::before { content: ''; position: fixed; z-index: -1; right: max(2rem, 4vw);
 .variation-buttons button { background: transparent; border: 0; border-radius: .3125rem; padding: .3125rem .6875rem; color: var(--muted); font-size: .75rem; }
 .variation-buttons button:hover { color: var(--text); }
 .variation-buttons button.active { background: var(--surface); color: var(--purple); font-weight: 550; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); }
+/* Rows with a sliding thumb draw the chosen button's raised look on the thumb instead. */
+#variation-buttons, #redirect-style { position: relative; }
+:is(#variation-buttons, #redirect-style, #example-strip) > button { position: relative; transition: color .2s; }
+:is(#variation-buttons, #redirect-style, #example-strip) > button.active { background: transparent; box-shadow: none; }
+.thumb { position: absolute; top: 0; left: 0; border-radius: .3125rem; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .1); opacity: 0; pointer-events: none;
+  transition: transform .24s cubic-bezier(.34, 1.45, .55, 1), width .24s cubic-bezier(.34, 1.45, .55, 1), height .24s cubic-bezier(.34, 1.45, .55, 1), opacity .15s; }
+.thumb.instant { transition: opacity .15s; }
+.thumb.shown { opacity: 1; }
 h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .count { font-size: .6875rem; letter-spacing: 0; font-weight: 450; padding: .25rem .4375rem; background: var(--inset); color: var(--muted); border-radius: .25rem; white-space: nowrap; }
 .dot { display: inline-block; width: .4375rem; height: .4375rem; border-radius: 50%; flex-shrink: 0; }
@@ -226,8 +234,8 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
    empty track is hidden. The invisible character gives the track a button's line box and baseline,
    so the label lines up as it does beside buttons. */
 #redirect-style.idle button { display: none; }
-#variation-buttons:empty, #redirect-style.idle { visibility: hidden; }
-#variation-buttons:empty::before, #redirect-style.idle::before { content: '\200b'; padding: .3125rem 0; font-size: .75rem; }
+#variation-buttons:not(:has(button)), #redirect-style.idle { visibility: hidden; }
+#variation-buttons:not(:has(button))::before, #redirect-style.idle::before { content: '\200b'; padding: .3125rem 0; font-size: .75rem; }
 @keyframes switch-pulse { from { opacity: .8; box-shadow: 0 0 0 0 var(--focus); } to { opacity: 0; box-shadow: 0 0 0 .5rem var(--focus); } }
 /* Feedback on the whole diagram: a purple glow when the linking comes on, a brief grey dim when it goes off. */
 .diagram-panel.linking-on { animation: linking-on .7s ease-out; }
@@ -278,7 +286,6 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .ground-sample.out { --tag: var(--purple); --tag-bg: var(--purple-bg); }
 .ground-sample.closed { --tag: var(--muted); --tag-bg: var(--inset); }
 .ground-sample.closed::before { border-top-style: dashed; }
-.ground-sample + .ground-sample { margin-left: .25rem; }
 .ground-sample b { padding: .0625rem .375rem; border: 1px solid var(--tag); border-radius: 1rem; background: var(--tag-bg); color: var(--tag); font-size: .5625rem; font-weight: 500; }
 /* Matches the diagram's file tag: a short arrow into a small box. */
 .file-sample { display: inline-flex; align-items: center; font-style: normal; }

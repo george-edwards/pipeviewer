@@ -92,21 +92,55 @@ const spelling = (variation, on = platform) => on === 'macos' ? variation.mac ??
 const exampleSources = (key, on = platform) => (variations[key]?.map(variation => spelling(variation, on)) ?? [examples[key]])
   .map(source => restyle(source, redirectStyle, { platform: on }));
 
+// In the variations, redirect style and examples rows, the chosen button sits on a raised thumb that
+// slides from button to button, as the shell switch's does. Buttons differ in width, so the thumb
+// is measured from the chosen one. It fades in where it lands when nothing was chosen, and out when
+// nothing is.
+function slide(group) {
+  let thumb = group.querySelector(':scope > .thumb');
+  if (!thumb) {
+    thumb = document.createElement('span');
+    thumb.className = 'thumb';
+    thumb.setAttribute('aria-hidden', 'true');
+    group.prepend(thumb);
+  }
+  const active = group.querySelector(':scope > button.active'), shown = !!active?.offsetParent;
+  if (shown) {
+    const placed = thumb.classList.contains('shown');
+    if (!placed) thumb.classList.add('instant');
+    thumb.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+    thumb.style.width = `${active.offsetWidth}px`;
+    thumb.style.height = `${active.offsetHeight}px`;
+    if (!placed) { void thumb.offsetWidth; thumb.classList.remove('instant'); }
+  }
+  thumb.classList.toggle('shown', shown);
+}
+const slideAll = () => ['#variation-buttons', '#redirect-style', '#example-strip'].forEach(id => slide($(id)));
+
 function showExamples() {
   document.querySelectorAll('[data-example]').forEach(button => {
     const active = exampleSources(button.dataset.example).includes(currentSource);
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
+  slide($('#example-strip'));
 }
 function showVariations() {
-  const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource));
-  // The row and its label stay put; only the buttons come and go.
-  if (!key) { $('#variation-buttons').innerHTML = ''; return; }
-  $('#variation-buttons').innerHTML = variations[key].map((variation, i) => {
-    const source = styled(spelling(variation)), active = source === currentSource;
-    return `<button type="button" data-variation="${key}:${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="${escape(source)}">${escape(variation.label)}</button>`;
-  }).join('');
+  const key = Object.keys(variations).find(name => exampleSources(name).includes(currentSource)), group = $('#variation-buttons');
+  // The row and its label stay put; only the buttons come and go. The same example's buttons stay,
+  // and the thumb stays through a change of example, so it can slide to the new one.
+  if (group.dataset.variationsOf !== (key ?? '')) {
+    group.dataset.variationsOf = key ?? '';
+    group.querySelectorAll(':scope > button').forEach(button => button.remove());
+    if (key) group.insertAdjacentHTML('beforeend', variations[key].map((variation, i) => `<button type="button" data-variation="${key}:${i}">${escape(variation.label)}</button>`).join(''));
+  }
+  group.querySelectorAll(':scope > button').forEach((button, i) => {
+    const source = styled(spelling(variations[key][i])), active = source === currentSource;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+    button.title = source;
+  });
+  slide(group);
 }
 let currentModel;
 let currentSource = '';
@@ -420,9 +454,9 @@ function drawPipeline(model, palette, colors, mono) {
   // stdin's tag sits to the left of its port, the others' to the right. The line takes the port's
   // colour and the tag the terminal stream's, so stdout sent on with >&2 ends in stderr's colour.
   // A tag is a short line from the port to a pill beside it, to the left of stdin, otherwise right.
-  const pill = (p, fd, { line, color, fill, label, w, dashed, what }, reason, tagged) => {
+  const pill = (p, fd, { line, color, fill, label, w, dashed, what, kind }, reason, tagged) => {
     const [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
-    paths.push(`<g class="stream-link${dashed ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">${label}</text></g>`);
+    paths.push(`<g class="stream-link${dashed ? ' unused-link' : ''}" data-key="${kind}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">${label}</text></g>`);
   };
   const ground = (p, fd, dest, inactive, reason, tagged) => {
     const stream = terminalStreams.indexOf(dest.id);
@@ -430,11 +464,11 @@ function drawPipeline(model, palette, colors, mono) {
       : fd === 0 ? `stdin reads the terminal’s ${names[stream]}.` : `${names[fd]} goes to the terminal’s ${names[stream]}.`;
     // Monospace text, in the terminal theme, needs a wider tag.
     pill(p, fd, { line: inactive ? palette.muted : colors[fd], color: inactive ? palette.muted : colors[stream], fill: inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][stream]],
-      label: 'terminal', w: mono ? 50 : 44, dashed: inactive, what }, reason, tagged);
+      label: 'terminal', w: mono ? 50 : 44, dashed: inactive, what, kind: dest.id }, reason, tagged);
   };
   // A closed descriptor ends in a grey “closed” tag, as nothing is at the other end to draw a box for.
   const closedTag = (p, fd, reason, tagged) => pill(p, fd, { line: palette.muted, color: palette.muted, fill: palette.inset,
-    label: 'closed', w: mono ? 44 : 38, dashed: true, what: `${names[fd]} is closed.` }, reason, tagged);
+    label: 'closed', w: mono ? 44 : 38, dashed: true, what: `${names[fd]} is closed.`, kind: 'closed' }, reason, tagged);
   // A file tag looks like a small destination box: the file's glyph and name, with an arrow the way
   // the data goes, and a word above it for appends and devices.
   const tagBody = ({ device, label, caption, w, x }, y, h = 16) => `<rect class="tag-body node-body" x="${x}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${palette.inset}" stroke="${palette.border}"/>${glyph(device?.icon ?? 'file', x + 5, y - 5, palette.muted, 10 / 12)}<text x="${x + 19}" y="${y + 3.2}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="9">${escape(label)}</text>`
@@ -907,6 +941,7 @@ function showDiagram() {
     scroll.scrollLeft = centre * scroll.scrollWidth - scroll.clientWidth / 2;
   }
   markDifferences();
+  showKey();
   inspect(true);
   $('#zoom-reset').textContent = `${Math.round(zoom * 100)}%`;
   $('#zoom-out').disabled = zoom === zoomSteps[0];
@@ -1050,6 +1085,7 @@ function showRedirectStyle() {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
+  slide($('#redirect-style'));
 }
 // The switch restyles whatever is in the editor, an example or the viewer's own pipeline.
 $('#redirect-style').addEventListener('click', event => {
@@ -1247,7 +1283,21 @@ $('#highlight-toggle').addEventListener('click', event => {
 showHighlighting();
 function showTerminalTags() {
   $('#tags-toggle').setAttribute('aria-checked', terminalTags);
-  $('#tags-key').hidden = $('#file-key').hidden = $('#closed-key').hidden = !terminalTags;
+  showKey();
+}
+// The key under the diagram lists only what the drawing holds: no closed tag without a closed
+// descriptor, and only the terminal streams that end in a tag.
+function showKey() {
+  const svg = $('#diagram svg'), has = selector => !!svg?.querySelector(selector);
+  $('#connected-key').hidden = !has('.stream-link:not(.unused-link)');
+  $('#unused-key').hidden = !has('.unused-link');
+  const streams = ['terminal-in', 'terminal-out', 'terminal-err'].map(id => terminalTags && has(`[data-key="${id}"]`));
+  $('#tags-key').querySelectorAll('.ground-sample').forEach((sample, i) => { sample.hidden = !streams[i]; });
+  const words = ['input', 'output', 'errors'].filter((_, i) => streams[i]);
+  $('#tags-key-text').textContent = `the terminal’s ${words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]}`;
+  $('#tags-key').hidden = !words.length;
+  $('#closed-key').hidden = !terminalTags || !has('[data-key="closed"]');
+  $('#file-key').hidden = !terminalTags || !has('.tag-body');
 }
 $('#tags-toggle').addEventListener('click', event => {
   terminalTags = !terminalTags;
@@ -1459,6 +1509,7 @@ function exitTraining() {
   document.documentElement.classList.remove('training');
   $('#training').hidden = $('#target-panel').hidden = true;
   $('.example-rows').hidden = false;
+  slideAll();
   $('#training-button').setAttribute('aria-pressed', 'false');
   $('#target-diagram').innerHTML = '';
   history.replaceState(null, '', location.pathname + location.search);
@@ -1593,7 +1644,7 @@ document.addEventListener('keydown', event => {
 });
 fitEditor();
 // Wrapping changes once the web font loads or the window resizes.
-document.fonts?.ready.then(fitEditor);
-addEventListener('resize', fitEditor);
+document.fonts?.ready.then(() => { fitEditor(); slideAll(); });
+addEventListener('resize', () => { fitEditor(); slideAll(); });
 render();
 if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) - 1 : undefined);
