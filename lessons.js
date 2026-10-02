@@ -39,4 +39,22 @@ export const lessons = [
     how: 'Add `2>errors.txt`. A number right before `>` picks the descriptor, and 2 is stderr. A bare `>` means `1>`.',
     learned: '`2> file` gives stderr its own file, so error messages never end up in `sorted.txt`. The order of these three redirects doesn’t matter, as each points a different descriptor somewhere.',
   },
+  {
+    id: 'both-to-one-file',
+    title: 'Everything in one log',
+    brief: '`make` prints its progress on stdout and its warnings and errors on stderr. Send both to `build.log`, so the log keeps each error next to the step that caused it.',
+    start: 'make',
+    target: 'make &> build.log',
+    how: 'Add `&>build.log`. `&>` points stdout and stderr at the same file. The longer spelling, `>build.log 2>&1`, does the same.',
+    learned: '`&> file` sends stdout and stderr to one file, which the shell opens once. It is short for `> file 2>&1`, and there order matters: `2>&1` copies wherever stdout points at that moment, so `2>&1 >build.log` leaves stderr on the terminal.',
+  },
+  {
+    id: 'errors-away',
+    title: 'Throw the errors away',
+    brief: 'This counts the `.js` files under the current directory. `find` complains on stderr about every directory it can’t read. Throw those complaints away, and keep the count.',
+    start: 'find . -name "*.js" | wc -l',
+    target: 'find . -name "*.js" 2> /dev/null | wc -l',
+    how: 'Add `2>/dev/null` after `find`’s arguments, before the `|`. `/dev/null` discards whatever is written to it.',
+    learned: 'A redirect belongs to the command it’s written with. Put at the end of the line, `2>/dev/null` silences `wc`, and `find`’s errors still reach the terminal. The pipe only carries stdout, so stderr was never part of the count.',
+  },
 ];
