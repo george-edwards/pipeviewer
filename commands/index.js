@@ -20,6 +20,7 @@ import arch from './arch.js';
 import awk from './awk.js';
 import base64 from './base64.js';
 import basename from './basename.js';
+import brew from './brew.js';
 import caffeinate from './caffeinate.js';
 import cat from './cat.js';
 import chcon from './chcon.js';
@@ -137,7 +138,7 @@ import yes from './yes.js';
 import zcat from './zcat.js';
 
 export default [
-  apt, arch, awk, base64, basename, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
+  apt, arch, awk, base64, basename, brew, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
   cp, csplit, curl, cut, date, dd, df, dircolors, dirname, du, echo, env, expand, expr, factor,
   find, fmt, fold, grep, groups, head, hostid, hostname, id, install, join, kill, less, link, ln,
   logname, ls, make, md5, md5sum, mkdir, mkfifo, mknod, mktemp, mv, nice, nl, nohup, nproc, numfmt,

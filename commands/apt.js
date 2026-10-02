@@ -8,7 +8,7 @@ const queries = ['update', 'list', 'search', 'show', 'showsrc', 'policy', 'depen
 export default {
   names: ['apt', 'apt-get'],
   macos: false,
-  instead: { macos: { '*': 'use softwareupdate for system updates, or Homebrew’s brew for packages' } },
+  instead: { macos: { '*': 'use Homebrew’s brew for packages, or softwareupdate for system updates' } },
   infer({ name, args, set, output, errors }) {
     errors();
     if (args.some(arg => arg.dynamic)) return;

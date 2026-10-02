@@ -10,8 +10,8 @@ const names = ['stdin', 'stdout', 'stderr'];
 const examples = {
   file: 'sort 0< names.txt | uniq -c 1> counts.txt',
   discard: 'find . -name "*.js" 2> /dev/null | wc -l',
-  // macOS has no apt; softwareupdate is its system updater, and lists and installs updates in the same two steps.
-  lists: { source: 'sudo apt update && sudo apt upgrade -y || echo "uh oh, something went wrong when trying to update software"', mac: 'sudo softwareupdate --list && sudo softwareupdate --install --all || echo "uh oh, something went wrong when trying to update software"' },
+  // macOS has no apt; Homebrew takes its place, and refuses to run under sudo.
+  lists: { source: 'sudo apt update && sudo apt upgrade -y || echo "uh oh, something went wrong when trying to update software"', mac: 'brew update && brew upgrade || echo "uh oh, something went wrong when trying to update software"' },
 };
 // Examples without variations are a source, or a source and its mac spelling.
 // Examples with several equivalent or related spellings, shown as toggles once one of them is loaded.

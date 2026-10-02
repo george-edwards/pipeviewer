@@ -404,3 +404,13 @@ test('softwareupdate reads stdin for a licence or --stdinpass', () => {
   assert.equal(stdin('softwareupdate -ia --agree-to-license'), 'unused');
   assert.equal(stdin('softwareupdate -ia --agree-to-license --stdinpass'), 'possible');
 });
+
+test('brew reads stdin only for a shell or a Brewfile from stdin', () => {
+  const stdin = source => parsePipeline(source, { platform: 'macos' }).commands[0].usage.fds[0].state;
+  assert.equal(stdin('brew update'), 'unused');
+  assert.equal(stdin('brew upgrade'), 'unused');
+  assert.equal(stdin('brew bundle --file=-'), 'possible');
+  assert.equal(stdin('brew sh'), 'possible');
+  assert.equal(stdin('brew frobnicate'), 'unknown');
+  assert.equal(parsePipeline('brew update').commands[0].usage.recognised, true);
+});
