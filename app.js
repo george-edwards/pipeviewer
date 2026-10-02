@@ -814,6 +814,21 @@ function setZoom(level) {
 }
 
 function render() {
+  // An empty editor is a blank prompt: no diagram, old or new, and no message.
+  if (!$('#pipeline').value.trim()) {
+    currentModel = undefined;
+    currentSource = $('#pipeline').value;
+    targets = [];
+    hovered = null;
+    for (const id of ['diagram', 'insights', 'notes', 'details', 'command-count', 'redirect-count', 'details-count']) $(`#${id}`).innerHTML = '';
+    $('#error').hidden = true;
+    $('#results').classList.remove('stale');
+    $('#results').classList.add('empty');
+    document.querySelectorAll('[data-example].active').forEach(button => button.classList.remove('active'));
+    showVariations();
+    showRedirectStyle();
+    return;
+  }
   try {
     currentModel = parsePipeline($('#pipeline').value, { platform });
     currentSource = $('#pipeline').value;
@@ -837,11 +852,10 @@ function render() {
     const chosen = $('#example-strip .active');
     if (chosen) { const strip = $('#example-strip'); if (chosen.offsetLeft < strip.scrollLeft || chosen.offsetLeft + chosen.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = chosen.offsetLeft - strip.clientWidth / 2 + chosen.offsetWidth / 2; }
     showVariations();
-    try { localStorage.setItem('pipeviewer-pipeline', currentSource); } catch { /* Storage is optional. */ }
+    showRedirectStyle();
   } catch (error) {
     // Half-typed pipelines rarely parse, so keep the last diagram and say what is missing.
     $('#error').textContent = error.message;
-    $('#error').classList.toggle('hint', !$('#pipeline').value.trim());
     $('#error').hidden = false;
     $('#results').classList.add('stale');
     $('#results').classList.toggle('empty', !currentModel);
@@ -911,7 +925,10 @@ $('#platform').addEventListener('click', event => {
   render();
 });
 showPlatform();
+// The switch empties to a bare track when the pipeline has no redirect it would rewrite.
 function showRedirectStyle() {
+  const source = $('#pipeline').value;
+  $('#redirect-style').classList.toggle('idle', restyle(source, 'explicit', { platform }) === restyle(source, 'common', { platform }));
   $('#redirect-style').querySelectorAll('button').forEach(button => {
     const active = button.dataset.style === redirectStyle;
     button.classList.toggle('active', active);
@@ -1140,6 +1157,7 @@ $('#zoom-in').addEventListener('click', () => setZoom(zoomSteps.find(step => ste
 $('#zoom-out').addEventListener('click', () => setZoom(zoomSteps.findLast(step => step < zoom) ?? zoom));
 $('#zoom-reset').addEventListener('click', () => setZoom(1));
 $('#download').addEventListener('click', () => {
+  if (!$('#diagram svg')) return;
   // Export without on-page sizing so the file scales to wherever it is opened.
   const copy = $('#diagram svg').cloneNode(true);
   copy.removeAttribute('style');
@@ -1148,7 +1166,6 @@ $('#download').addEventListener('click', () => {
   const a = document.createElement('a'); a.href = url; a.download = 'pipeline.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-try { const saved = localStorage.getItem('pipeviewer-pipeline'); if (saved) $('#pipeline').value = saved; } catch { /* Storage is optional. */ }
 fitEditor();
 // Wrapping changes once the web font loads or the window resizes.
 document.fonts?.ready.then(fitEditor);
