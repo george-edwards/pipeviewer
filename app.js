@@ -1567,15 +1567,16 @@ addEventListener('hashchange', () => {
 // which a spotlight picks out while a card beside it explains it. The spotlight glides from part to
 // part and follows it while the page scrolls.
 const tourSteps = [
-  { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>. Change it however you like: nothing you type is run.` },
+  { at: '#training', title: 'Training mode engaged', text: () => `Each level shows a picture of a command. Your job is to write the command that draws it. There are ${lessons.length} levels, each worth up to three stars.` },
+  { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>.` },
   { at: '#results > .diagram-panel', title: 'Your picture', text: () => {
     const cmd = currentModel?.commands[0];
-    const now = cmd ? ` Right now, <code>${escape(cmd.usage.name)}</code>’s output goes to ${escape(describe(cmd.fds[1], 1))}.` : '';
-    return `This draws your command, and redraws it as you type. Each card is a command, and its lines show where its input (0), output (1) and errors (2) go.${now}`;
+    const now = cmd ? ` Right now, <code>${escape(cmd.usage.name)}</code>’s stdout goes to ${escape(describe(cmd.fds[1], 1))}.` : '';
+    return `This draws your command, and redraws it as you type. Each card is a command, and its lines show where its stdin (0), stdout (1) and stderr (2) go.${now}`;
   } },
   { at: '#target-panel', title: 'Your goal', text: () => {
     const first = training.differences?.find(d => d.kind === 'stream');
-    const spot = first ? ` Here, <code>${escape(first.command)}</code>’s ${escape(first.name)} ${first.fd === 0 ? 'comes from' : 'goes to'} ${escape(first.target)}, not ${escape(first.yours)}.` : '';
+    const spot = first ? ` Here, <code>${escape(first.command)}</code>’s ${escape(first.name)} ${first.fd === 0 ? 'comes from' : 'goes to'} ${escape(first.target)}.` : '';
     return `Change your command until your picture looks like this one.${spot} Rings mark each spot where the two differ.`;
   } },
   { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
