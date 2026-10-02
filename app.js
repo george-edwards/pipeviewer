@@ -1,6 +1,6 @@
 import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './parser.js';
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
-import { compare, starsFor } from './training.js';
+import { compare, describe, starsFor } from './training.js';
 import { lessons } from './lessons.js';
 
 const $ = selector => document.querySelector(selector);
@@ -750,6 +750,8 @@ let targets = [], inspected = null, hovered = null, marked = null;
 // The Highlight switch turns the linking off in both directions.
 let highlighting = true;
 try { highlighting = localStorage.getItem('pipeviewer-highlight') !== 'off'; } catch {}
+// Training compares whole pictures, so it never fades parts of them.
+const linking = () => highlighting && !training.active;
 // The Tags switch draws terminal stdin and stderr, and files one port uses, as tags beside their ports,
 // or as routes to shared boxes.
 let terminalTags = true;
@@ -826,7 +828,7 @@ function inspect(redrawn = false) {
   // While a keystroke waits for its frame the old diagram stays lit, so typing does not flicker.
   if (editor.value !== currentSource && renderQueued) return;
   const caret = editor.selectionDirection === 'backward' ? editor.selectionStart : editor.selectionEnd;
-  const live = highlighting && svg && editor.value === currentSource;
+  const live = linking() && svg && editor.value === currentSource;
   // The smallest span holding the caret wins; on a tie the later target, such as a pipe over |&.
   const atCaret = () => document.activeElement === editor ? targets.reduce((best, t) => t.span[0] <= caret && caret <= t.span[1] && (!best || t.span[1] - t.span[0] <= best.span[1] - best.span[0]) ? t : best, null) : null;
   const target = live ? hovered ?? atCaret() : null;
@@ -1062,7 +1064,7 @@ document.addEventListener('selectionchange', () => inspect());
 for (const type of ['select', 'keyup', 'pointerup', 'focus', 'blur']) $('#pipeline').addEventListener(type, () => inspect());
 $('#pipeline').addEventListener('scroll', () => { $('#editor-mirror').scrollTop = $('#pipeline').scrollTop; });
 $('#diagram').addEventListener('pointerover', event => {
-  if (!highlighting) return;
+  if (!linking()) return;
   const element = event.target.closest(hoverable);
   const target = element && currentSource === $('#pipeline').value ? targetFor(element) : null;
   if (target === hovered) return;
@@ -1072,7 +1074,7 @@ $('#diagram').addEventListener('pointerover', event => {
 $('#diagram').addEventListener('pointerleave', () => { hovered = null; inspect(); });
 // A click selects the text, so the caret inspector carries on from there.
 $('#diagram').addEventListener('click', event => {
-  if (!highlighting) return;
+  if (!linking()) return;
   const element = event.target.closest(hoverable), target = element && hovered;
   if (!target) return;
   const editor = $('#pipeline');
@@ -1382,9 +1384,7 @@ function showCoach() {
         `<div class="hint"><span class="row-label">HOW</span><p>${prose(lesson.how)}</p></div>`,
         `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">Type it in to see the pictures match.</span></p></div>`,
       ];
-      // The first level says how training works until a hint is taken.
-      const intro = training.level ? '' : '<p class="how-it-works"><strong>How it works:</strong> edit the command until your picture matches the target’s. Rings mark where they differ. Each hint costs a star.</p>';
-      coach.innerHTML = training.hints ? `<div class="hints">${parts.slice(0, training.hints).join('')}</div>` : intro;
+      coach.innerHTML = training.hints ? `<div class="hints">${parts.slice(0, training.hints).join('')}</div>` : '';
     }
   }
   // The parts that follow the editor update in place.
@@ -1451,6 +1451,7 @@ function enterTraining(level = Math.max(0, lessons.findIndex(lesson => !progress
 }
 
 function exitTraining() {
+  if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
   document.documentElement.classList.remove('training');
   $('#training').hidden = $('#target-panel').hidden = true;
@@ -1465,8 +1466,12 @@ function exitTraining() {
 }
 
 const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(training.level + 1, { keep: true }); };
-$('#training-button').addEventListener('click', () => training.active ? exitTraining() : enterTraining());
-$('#exit-training').addEventListener('click', exitTraining);
+// Training opens and closes with a crossfade where the browser has view transitions. The tour runs
+// once the new page has faded in, the first time training opens.
+const transition = change => document.startViewTransition ? document.startViewTransition(change).finished.catch(() => {}) : Promise.resolve(change());
+const openTraining = level => transition(() => enterTraining(level)).then(() => { if (!toured()) startTour(); });
+$('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining());
+$('#exit-training').addEventListener('click', () => transition(exitTraining));
 $('#levels').addEventListener('click', event => {
   const button = event.target.closest('[data-level]');
   if (button) loadLesson(Number(button.dataset.level));
@@ -1496,12 +1501,96 @@ $('#pipeline').addEventListener('keydown', event => {
 const trainingLink = () => /^#training(?:\/(\d+))?$/.exec(location.hash);
 addEventListener('hashchange', () => {
   const link = trainingLink();
-  if (link) enterTraining(link[1] ? Number(link[1]) - 1 : undefined);
+  if (link) openTraining(link[1] ? Number(link[1]) - 1 : undefined);
   else if (training.active) exitTraining();
+});
+// The tour walks a first-time student through the training screen: everything dims but one part,
+// which a spotlight picks out while a card beside it explains it. The spotlight glides from part to
+// part and follows it while the page scrolls.
+const tourSteps = [
+  { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>. Change it however you like: nothing you type is run.` },
+  { at: '#results > .diagram-panel', title: 'Your picture', text: () => {
+    const cmd = currentModel?.commands[0];
+    const now = cmd ? ` Right now, <code>${escape(cmd.usage.name)}</code>’s output goes to ${escape(describe(cmd.fds[1], 1))}.` : '';
+    return `This draws your command, and redraws it as you type. Each card is a command, and its lines show where its input (0), output (1) and errors (2) go.${now}`;
+  } },
+  { at: '#target-panel', title: 'Your goal', text: () => {
+    const first = training.differences?.find(d => d.kind === 'stream');
+    const spot = first ? ` Here, <code>${escape(first.command)}</code>’s ${escape(first.name)} ${first.fd === 0 ? 'comes from' : 'goes to'} ${escape(first.target)}, not ${escape(first.yours)}.` : '';
+    return `Change your command until your picture looks like this one.${spot} Rings mark each spot where the two differ.`;
+  } },
+  { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
+];
+let tourStep = -1, tourFrame = 0;
+const toured = () => { try { return localStorage.getItem('pipeviewer-tour') === 'done'; } catch { return true; } };
+
+function showTourStep(n) {
+  tourStep = n;
+  const step = tourSteps[n], last = n === tourSteps.length - 1;
+  $('#tour-count').textContent = `${n + 1} of ${tourSteps.length}`;
+  $('#tour-title').textContent = step.title;
+  $('#tour-text').innerHTML = step.text();
+  $('#tour-back').hidden = !n;
+  $('#tour-next').textContent = last ? 'Let’s go' : 'Next';
+  $('#tour-card').classList.remove('arrived');
+  void $('#tour-card').offsetWidth;
+  $('#tour-card').classList.add('arrived');
+  $(step.at).scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  $('#tour-next').focus({ preventScroll: true });
+}
+
+// Each frame puts the spotlight over the step's part and the card below it, or above it when the
+// window has no room below.
+function placeTour() {
+  if (tourStep < 0) return;
+  const spot = $(tourSteps[tourStep].at).getBoundingClientRect(), card = $('#tour-card'), pad = 8, gap = 14;
+  const box = { left: spot.left - pad, top: spot.top - pad, width: spot.width + pad * 2, height: spot.height + pad * 2 };
+  Object.assign($('#tour-spot').style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+  const { offsetWidth: w, offsetHeight: h } = card;
+  const below = box.top + box.height + gap, above = box.top - gap - h;
+  const top = below + h < innerHeight - 8 || above < 8 ? Math.min(below, innerHeight - h - 8) : above;
+  const left = Math.min(Math.max(8, box.left), innerWidth - w - 8);
+  Object.assign(card.style, { left: `${left}px`, top: `${Math.max(8, top)}px` });
+  tourFrame = requestAnimationFrame(placeTour);
+}
+
+function startTour() {
+  if (!training.active) return;
+  $('#tour').hidden = false;
+  requestAnimationFrame(() => $('#tour').classList.add('open'));
+  showTourStep(0);
+  cancelAnimationFrame(tourFrame);
+  placeTour();
+}
+
+function endTour() {
+  if (tourStep < 0) return;
+  tourStep = -1;
+  try { localStorage.setItem('pipeviewer-tour', 'done'); } catch {}
+  $('#tour').classList.remove('open');
+  setTimeout(() => { if (tourStep < 0) { $('#tour').hidden = true; cancelAnimationFrame(tourFrame); } }, 300);
+  const editor = $('#pipeline');
+  editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(editor.value.length, editor.value.length);
+}
+
+const tourNext = () => tourStep === tourSteps.length - 1 ? endTour() : showTourStep(tourStep + 1);
+$('#tour-next').addEventListener('click', tourNext);
+$('#tour-back').addEventListener('click', () => showTourStep(Math.max(0, tourStep - 1)));
+$('#tour-skip').addEventListener('click', endTour);
+$('#tour-button').addEventListener('click', startTour);
+document.addEventListener('keydown', event => {
+  if (tourStep < 0) return;
+  if (event.key === 'Escape') { event.preventDefault(); endTour(); }
+  else if (event.key === 'ArrowRight') { event.preventDefault(); tourNext(); }
+  else if (event.key === 'ArrowLeft' && tourStep) { event.preventDefault(); showTourStep(tourStep - 1); }
+  // Focus stays on the card's buttons while the rest of the page is dimmed.
+  else if (event.key === 'Tab' && !$('#tour-card').contains(document.activeElement)) { event.preventDefault(); $('#tour-next').focus(); }
 });
 fitEditor();
 // Wrapping changes once the web font loads or the window resizes.
 document.fonts?.ready.then(fitEditor);
 addEventListener('resize', fitEditor);
 render();
-if (trainingLink()) enterTraining(trainingLink()[1] ? Number(trainingLink()[1]) - 1 : undefined);
+if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) - 1 : undefined);

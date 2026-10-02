@@ -47,7 +47,9 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Training
 
-Each level shows a target picture and a starting command, typed and drawn. The student edits the command until their picture matches the target's. On windows 64em wide or more the two pictures sit side by side under the editor, cropped to one shared frame so they are drawn at the same scale. On narrower windows the target sits above the editor. A ring marks each port whose stream goes somewhere else in the target, in both pictures, and a dashed outline marks a card whose words differ. The toolbar counts the differences.
+Training opens with a crossfade. The first time, a short tour dims the page and moves a spotlight from the command, to its picture, to the target, to the hints, with a card explaining each. **Show me around** runs it again.
+
+Each level shows a target picture and a starting command, typed and drawn. The student edits the command until their picture matches the target's. On windows 64em wide or more the two pictures sit side by side under the editor: the student's on the left, just under where they type, and the target's on the right. Both are cropped to one shared frame so they are drawn at the same scale. On narrower windows the target sits above the editor. The training screen leaves out the viewer's key, insights, descriptor details and toolbar switches, and the caret doesn't fade parts of the picture, so nothing gets in the way of comparing the two. A ring marks each port whose stream goes somewhere else in the target, in both pictures, and a dashed outline marks a card whose words differ. The toolbar counts the differences.
 
 Pictures are compared, not spellings. Two command lines match when they draw the same cards, with the same words after quote removal, and send every descriptor to the same place. So `sort <in >out`, `sort 0< in 1> out` and `>out sort <in` all solve the same level. Once a level is solved, the target's own command is shown above its picture, and the student's spelling is compared with it if the two differ.
 
