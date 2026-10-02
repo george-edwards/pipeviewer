@@ -79,8 +79,8 @@ cat *.gz.counts | LC_ALL=C sort -k1,1 | awk '
 };
 for (const [key, list] of Object.entries(variations)) examples[key] = list[0].source;
 // Explicit writes the implied descriptors (0< file, 1> file); common leaves them out.
-let redirectStyle = 'explicit';
-try { if (localStorage.getItem('pipeviewer-redirects') === 'common') redirectStyle = 'common'; } catch {}
+let redirectStyle = 'common';
+try { if (localStorage.getItem('pipeviewer-redirects') === 'explicit') redirectStyle = 'explicit'; } catch {}
 const styled = source => restyle(source, redirectStyle, { platform });
 // Every spelling of an example as it reads on a platform, in the current redirect style.
 const spelling = (variation, on = platform) => on === 'macos' ? variation.mac ?? variation.source : variation.source;
@@ -342,7 +342,12 @@ function drawPipeline(model, palette, colors, mono) {
     const terminalBox = model.all.some(cmd => [1, 2].some(fd => targetsOf(cmd.fds[fd]).some(dest => dest.id === 'terminal-in')));
     const raised = new Set();
     model.all.forEach(cmd => [0, 1, 2].forEach(fd => {
-      const dest = cmd.fds[fd], { col, row } = grid.place.get(cmd);
+      // Under zsh's MULTIOS a port can reach several places. A file sent alongside a pipe can take
+      // the tag, as the pipe has its own line; beside another file it keeps its box, so the routes
+      // to the boxes do not cross a tag's line.
+      const value = cmd.fds[fd], { col, row } = grid.place.get(cmd);
+      const files = value?.type === 'multio' ? value.targets.filter(t => t.type !== 'pipe') : [value];
+      const dest = files.length === 1 ? files[0] : null;
       if (!['file', 'null'].includes(dest?.type) || fileTags.has(`${cmd.key}:${fd}`)) return;
       const crowded = occupied.has(`${col + (fd === 0 ? -1 : 1)},${row}`), p = port(cmd, fd);
       if (fd === 1 && cmd.fds[2] === dest && sharers.get(dest) === 2 && dest.mode !== 'read') {
@@ -499,8 +504,9 @@ function drawPipeline(model, palette, colors, mono) {
       const inactive = inactiveState(usage.state);
       // Under zsh's MULTIOS a port can feed several targets; each gets its own line.
       if (cmd.fds[fd]?.type === 'multio') {
-        const count = cmd.fds[fd].targets.length;
-        paths.push(`<text x="${p.x + (fd === 0 ? -10 : 10)}" y="${p.y - 7}" text-anchor="${fd === 0 ? 'end' : 'start'}" fill="${palette.muted}" font-size="8"><title>${escape(destinationLabel(cmd.fds[fd], fd, model.commands, cmd))}</title>zsh ×${count}</text>`);
+        // A raised tag's line climbs just beside the port, so the count moves out past it.
+        const count = cmd.fds[fd].targets.length, gap = fileTags.get(here)?.raised ? 20 : 10;
+        paths.push(`<text x="${p.x + (fd === 0 ? -gap : gap)}" y="${p.y - 7}" text-anchor="${fd === 0 ? 'end' : 'start'}" fill="${palette.muted}" font-size="8"><title>${escape(destinationLabel(cmd.fds[fd], fd, model.commands, cmd))}</title>zsh ×${count}</text>`);
       }
       for (const dest of targetsOf(cmd.fds[fd])) {
       if (dest.type === 'procsub') {
