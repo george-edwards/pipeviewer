@@ -265,6 +265,8 @@ h2 { font-size: 1rem; letter-spacing: -.02em; margin: 0; font-weight: 650; }
 .ground-sample.from { flex-direction: row-reverse; --tag: var(--green); --tag-bg: var(--green-bg); }
 .ground-sample { --tag: var(--amber); --tag-bg: var(--amber-bg); }
 .ground-sample.out { --tag: var(--purple); --tag-bg: var(--purple-bg); }
+.ground-sample.closed { --tag: var(--muted); --tag-bg: var(--inset); }
+.ground-sample.closed::before { border-top-style: dashed; }
 .ground-sample + .ground-sample { margin-left: .25rem; }
 .ground-sample b { padding: .0625rem .375rem; border: 1px solid var(--tag); border-radius: 1rem; background: var(--tag-bg); color: var(--tag); font-size: .5625rem; font-weight: 500; }
 /* Matches the diagram's file tag: a short arrow into a small box. */

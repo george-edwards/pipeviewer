@@ -382,7 +382,7 @@ function drawPipeline(model, palette, colors, mono) {
     // Substitutions show inherited terminal input as a short labelled stub.
     if (cmd.substitution && dest.id === 'terminal-in') return;
     // A grounded stream ends in a tag beside its port, with no box.
-    if (grounded(dest)) return;
+    if (grounded(dest) || (terminalTags && dest.type === 'closed')) return;
     used.set(dest.id, dest);
   })));
   const bottom = [...used.values()].filter(d => !['terminal-in', 'terminal-out'].includes(d.id));
@@ -409,15 +409,22 @@ function drawPipeline(model, palette, colors, mono) {
   // tag beside the port rather than a route to a shared box, much as circuit diagrams mark ground.
   // stdin's tag sits to the left of its port, the others' to the right. The line takes the port's
   // colour and the tag the terminal stream's, so stdout sent on with >&2 ends in stderr's colour.
+  // A tag is a short line from the port to a pill beside it, to the left of stdin, otherwise right.
+  const pill = (p, fd, { line, color, fill, label, w, dashed, what }, reason, tagged) => {
+    const [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
+    paths.push(`<g class="stream-link${dashed ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">${label}</text></g>`);
+  };
   const ground = (p, fd, dest, inactive, reason, tagged) => {
     const stream = terminalStreams.indexOf(dest.id);
-    const line = inactive ? palette.muted : colors[fd], color = inactive ? palette.muted : colors[stream], fill = inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][stream]];
-    // Monospace text, in the terminal theme, needs a wider tag.
-    const w = mono ? 50 : 44, [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
     const what = fd === stream ? (fd === 0 ? 'stdin comes from the terminal.' : `${names[fd]} goes to the terminal.`)
       : fd === 0 ? `stdin reads the terminal’s ${names[stream]}.` : `${names[fd]} goes to the terminal’s ${names[stream]}.`;
-    paths.push(`<g class="stream-link${inactive ? ' unused-link' : ''}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${inactive ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">terminal</text></g>`);
+    // Monospace text, in the terminal theme, needs a wider tag.
+    pill(p, fd, { line: inactive ? palette.muted : colors[fd], color: inactive ? palette.muted : colors[stream], fill: inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][stream]],
+      label: 'terminal', w: mono ? 50 : 44, dashed: inactive, what }, reason, tagged);
   };
+  // A closed descriptor ends in a grey “closed” tag, as nothing is at the other end to draw a box for.
+  const closedTag = (p, fd, reason, tagged) => pill(p, fd, { line: palette.muted, color: palette.muted, fill: palette.inset,
+    label: 'closed', w: mono ? 44 : 38, dashed: true, what: `${names[fd]} is closed.` }, reason, tagged);
   // A file tag looks like a small destination box: the file's glyph and name, with an arrow the way
   // the data goes, and a word above it for appends and devices.
   const tagBody = ({ device, label, caption, w, x }, y, h = 16) => `<rect class="tag-body node-body" x="${x}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${palette.inset}" stroke="${palette.border}"/>${glyph(device?.icon ?? 'file', x + 5, y - 5, palette.muted, 10 / 12)}<text x="${x + 19}" y="${y + 3.2}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="9">${escape(label)}</text>`
@@ -557,6 +564,7 @@ function drawPipeline(model, palette, colors, mono) {
         continue;
       }
       if (grounded(dest)) { ground(p, fd, dest, inactive, usage.reason, tag([here], dest)); continue; }
+      if (terminalTags && dest.type === 'closed') { closedTag(p, fd, usage.reason, tag([here], dest)); continue; }
       if (cmd.substitution && dest.id === 'terminal-in') { stub(p, fd, 'terminal', inactive, usage.reason, tag([here], dest)); continue; }
       const box = positions.get(dest.id), tagged = tag([here], dest);
       if (fd === 0) {
@@ -649,17 +657,18 @@ function drawPipeline(model, palette, colors, mono) {
         <circle class="port-dot" cx="${p.x}" cy="${p.y}" r="4" fill="${usage.state === 'possible' ? colors[3] : palette.surface}" stroke="${colors[3]}" stroke-width="1.8" ${usage.state === 'unknown' ? 'stroke-dasharray="2 2"' : ''}/></g>`;
     }).join('');
     // The rest are listed in the card's empty lower-left corner, one line each: the descriptor, which
-    // way it goes, and where. Two lines fit above bottom-edge ports and three without; more are
-    // counted, and Descriptor details lists them all.
-    const listed = extraFds(cmd).filter(fd => !leaksPipe(cmd, fd)), room = extraPorts || bottomSubs(cmd).length ? 2 : 3;
+    // way it goes, and where. One the command line used and then closed, as 3>&- does, is listed as
+    // closed; one never mentioned is not. Two lines fit above bottom-edge ports and three without;
+    // more are counted, and Descriptor details lists them all.
+    const listed = Object.keys(cmd.fds).map(Number).filter(fd => fd > 2 && targetsOf(cmd.fds[fd])[0]?.type !== 'procsub' && !leaksPipe(cmd, fd)), room = extraPorts || bottomSubs(cmd).length ? 2 : 3;
     const shown = listed.length > room ? listed.slice(0, room - 1) : listed;
     const extraLines = shown.map((fd, i) => {
       const dest = targetsOf(cmd.fds[fd])[0], ly = y + 115 + i * 13, usage = portUsage(cmd, fd);
       const reads = dest.mode === 'read' || dest.id === 'terminal-in' || dest.type === 'pipe';
       const file = ['file', 'null'].includes(dest.type), icon = file ? deviceOf(dest)?.icon ?? 'file' : null;
       const where = dest.type === 'pipe' ? `pipe ${dest.from + 1}` : dest.type === 'job' ? dest.job.owner.usage.name : String(dest.id).startsWith('terminal') ? 'terminal' : short(dest.label, 13);
-      const lead = `fd ${fd} ${reads ? '←' : '→'}`, at = x + 16 + lead.length * 5.1 + 4;
-      return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(`fd ${fd}: ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)}. ${usage.reason}`)}</title><text class="extra-fd" x="${x + 16}" y="${ly}" fill="${palette.muted}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${escape(lead)}</text>${icon ? glyph(icon, at, ly - 7.5, palette.muted, 9 / 12) : ''}<text x="${at + (icon ? 12 : 0)}" y="${ly}" fill="${palette.text}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${escape(where)}</text></g>`;
+      const closed = dest.type === 'closed', lead = `fd ${fd} ${closed ? '×' : reads ? '←' : '→'}`, at = x + 16 + lead.length * 5.1 + 4;
+      return `<g data-command="${cmd.key}" data-fd="${fd}" data-usage="${usage.state}"><title>${escape(`fd ${fd}: ${destinationLabel(cmd.fds[fd], fd, model.commands, cmd)}. ${usage.reason}`)}</title><text class="extra-fd" x="${x + 16}" y="${ly}" fill="${palette.muted}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${escape(lead)}</text>${icon ? glyph(icon, at, ly - 7.5, palette.muted, 9 / 12) : ''}<text x="${at + (icon ? 12 : 0)}" y="${ly}" fill="${closed ? palette.muted : palette.text}" font-family="'IBM Plex Mono',monospace" font-size="8.5">${closed ? 'closed' : escape(where)}</text></g>`;
     }).join('') + (listed.length > shown.length ? `<text x="${x + 16}" y="${y + 115 + shown.length * 13}" fill="${palette.muted}" font-size="8.5"><title>Descriptor details lists every descriptor.</title>+${listed.length - shown.length} more</text>` : '');
     const jobPorts = cmd.substitutions.filter(sub => sub.kind === 'job').flatMap(job => [
       ...(job.input === 'blocks' ? [['>', 'blocks', palette.green]] : []), ...(job.ungroup ? [] : [['<', 'jobs', palette.purple]]),
@@ -1155,7 +1164,7 @@ $('#highlight-toggle').addEventListener('click', event => {
 showHighlighting();
 function showTerminalTags() {
   $('#tags-toggle').setAttribute('aria-checked', terminalTags);
-  $('#tags-key').hidden = $('#file-key').hidden = !terminalTags;
+  $('#tags-key').hidden = $('#file-key').hidden = $('#closed-key').hidden = !terminalTags;
 }
 $('#tags-toggle').addEventListener('click', event => {
   terminalTags = !terminalTags;
