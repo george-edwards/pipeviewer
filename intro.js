@@ -8,8 +8,8 @@
 // quote    optional, a quotation shown under the text, with `by` naming its source.
 // example  a command that shows the idea, and a note on what the picture shows.
 // picture  draws the example as SVG.
-// video    optional, a YouTube film shown as a tape under the picture until it's played: its id,
-//          the second to start at, the label on the tape, and a caption.
+// video    in place of an example and a picture, a YouTube film, shown as a tape until it's played:
+//          its id, the second to start at, and the label on the tape.
 
 const LOOP = 7;
 
@@ -125,7 +125,6 @@ export const slides = [
     text: 'McIlroy pushed for pipes for years, and in 1973 Ken Thompson added them to Unix in a single night. Every `|` adds another segment to the hose.',
     quote: 'We should have some ways of coupling programs like garden hose—screw in another segment when it becomes necessary to massage data in another way.',
     by: 'Doug McIlroy, Bell Labs memo, 1964',
-    video: { id: 'tc4ROCJYbm0', start: 330, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'], caption: 'Blow the dust off the VHS. In 1982 Bell Labs filmed the people who built Unix, and here’s Brian Kernighan on why the pipe is the system’s “fundamental contribution”.' },
     example: { command: 'ls | grep txt | wc -l', note: '`grep txt` passes on only the lines with “txt” in them, so `wc -l` now counts just the `.txt` files.' },
     picture: () => {
       return picture('n00b-hose', 640, 150, move => {
@@ -141,5 +140,10 @@ export const slides = [
         ].join('');
       });
     },
+  },
+  {
+    title: 'Rewind to 1982',
+    text: 'Blow the dust off the VHS. Bell Labs filmed the people who built Unix, and here’s Brian Kernighan on why the pipe is the system’s “fundamental contribution”.',
+    video: { id: 'tc4ROCJYbm0', start: 330, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'] },
   },
 ];

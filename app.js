@@ -1558,7 +1558,7 @@ function loadLesson(i, { keep = false, intro = true } = {}) {
 }
 
 // The n00b explainer takes the place of the exercise: one idea per slide, each with an example and
-// its moving picture, then the exercise.
+// its moving picture, then a film, then the exercise.
 const ideaProse = text => prose(text).replace(/\b(stdin|stdout|stderr)\b(?![^<]*<\/code>)/g, (word, name) => `<b class="stream-word fd-${['stdin', 'stdout', 'stderr'].indexOf(name)}">${word}</b>`);
 function showSlide(n) {
   const slide = slides[n], last = n === slides.length - 1;
@@ -1568,8 +1568,8 @@ function showSlide(n) {
   $('#intro-count').textContent = `${n + 1} of ${slides.length}`;
   $('#intro-slide').innerHTML = `<div class="intro-text"><h3>${escape(slide.title)}</h3><p>${ideaProse(slide.text)}</p>`
     + (slide.quote ? `<blockquote><p>“${escape(slide.quote)}”</p><footer>${escape(slide.by)}</footer></blockquote>` : '')
-    + `<div class="intro-example"><code>$ ${escape(slide.example.command)}</code><p>${ideaProse(slide.example.note)}</p></div></div>`
-    + `<div class="intro-figure">${slide.picture()}${slide.video ? tape(slide.video) : ''}</div>`;
+    + (slide.example ? `<div class="intro-example"><code>$ ${escape(slide.example.command)}</code><p>${ideaProse(slide.example.note)}</p></div>` : '') + '</div>'
+    + `<div class="intro-figure">${slide.video ? tape(slide.video) : slide.picture()}</div>`;
   $('#intro-dots').innerHTML = slides.map((_, i) => `<i${i === n ? ' class="on"' : ''}></i>`).join('');
   $('#intro-back').hidden = !n;
   $('#intro-next').innerHTML = last ? 'Your turn <span aria-hidden="true">→</span>' : 'Next';
@@ -1578,12 +1578,12 @@ function showSlide(n) {
 }
 
 // A film is a drawn tape until it's played, so nothing loads from YouTube until the student asks.
-const tape = ({ label: [title, by], caption }) => `<div class="intro-video"><button type="button" class="tape" title="Play" aria-label="Play the film: ${escape(title)}, ${escape(by)}"><svg viewBox="0 0 320 180" aria-hidden="true">
+const tape = ({ label: [title, by] }) => `<div class="intro-video"><button type="button" class="tape" title="Play" aria-label="Play the film: ${escape(title)}, ${escape(by)}"><svg viewBox="0 0 320 180" aria-hidden="true">
   <rect class="tape-body" x="4" y="4" width="312" height="172" rx="10"/><rect class="tape-label" x="28" y="18" width="264" height="54" rx="4"/>
   <text class="tape-title" x="160" y="44" text-anchor="middle">${escape(title)}</text><text class="tape-by" x="160" y="62" text-anchor="middle">${escape(by)}</text>
   <rect class="tape-window" x="60" y="92" width="200" height="56" rx="28"/>
   ${[100, 220].map(cx => `<g class="tape-reel"><circle cx="${cx}" cy="120" r="21"/>${[0, 60, 120].map(a => `<rect x="${cx - 2}" y="103" width="4" height="34" transform="rotate(${a} ${cx} 120)"/>`).join('')}<circle class="tape-hub" cx="${cx}" cy="120" r="6"/></g>`).join('')}
-  <g class="tape-play"><circle cx="160" cy="120" r="19"/><path d="M154 109v22l18-11z"/></g></svg></button><p>${escape(caption)}</p></div>`;
+  <g class="tape-play"><circle cx="160" cy="120" r="19"/><path d="M154 109v22l18-11z"/></g></svg></button></div>`;
 $('#intro-slide').addEventListener('click', event => {
   if (!event.target.closest('.tape')) return;
   const { id, start, label } = slides[training.slide].video;

@@ -502,10 +502,9 @@ kbd { font: .6875rem 'IBM Plex Mono', monospace; padding: .0625rem .3125rem; bor
 .pic-tag text { font: 500 9.5px var(--sans); fill: var(--c); }
 .pic-number circle { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
 .pic-number text { font-size: 13px; font-weight: 600; fill: var(--c); }
-/* The film waits as a tape, black in every theme, under the picture. */
-.intro-video { display: flex; align-items: center; gap: 1rem; max-width: 30rem; margin: 1rem auto 0; }
-.intro-video p { margin: 0; font-size: .8125rem; line-height: 1.55; color: var(--muted); }
-.tape { flex: 0 0 9.5rem; padding: 0; border: 0; background: none; border-radius: .5rem; transition: transform .2s; }
+/* The film waits as a tape, black in every theme, in place of the picture. */
+.intro-video { display: grid; place-items: center; }
+.tape { width: min(17rem, 100%); padding: 0; border: 0; background: none; border-radius: .5rem; transition: transform .2s; }
 .tape svg { display: block; width: 100%; height: auto; }
 .tape:hover { transform: rotate(-2deg) scale(1.04); }
 .tape-body { fill: #1c1d21; }
@@ -521,11 +520,9 @@ kbd { font: .6875rem 'IBM Plex Mono', monospace; padding: .0625rem .3125rem; bor
 .tape:hover .tape-reel { animation: reel 1.6s linear infinite; }
 .tape:hover .tape-play circle { transform: scale(1.12); }
 @keyframes reel { to { transform: rotate(360deg); } }
-.tape-player { display: block; width: 100%; max-width: 30rem; aspect-ratio: 16 / 9; margin: 0 auto; border: 0; border-radius: .5rem; }
-.intro-video:has(.tape-player) { display: block; }
-/* The text stays put when the film opens beside it. */
-.intro-slide:has(.tape-player) { align-items: start; }
-.intro-video:has(.tape-player) p { margin-top: .5rem; }
+.tape-player { display: block; width: 100%; max-width: 36rem; aspect-ratio: 16 / 9; border: 0; border-radius: .5rem; }
+/* The text stays at the top, so it doesn't move when the tape opens into the player. */
+.intro-slide:has(.intro-video) { align-items: start; }
 @media (prefers-reduced-motion: reduce) { .intro-picture * { animation: none !important; } }
 @media (max-width: 47.5em) {
   .intro { padding: 1rem; }
