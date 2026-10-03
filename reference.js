@@ -185,7 +185,7 @@ The shell handles the plumbing, routing the output of both commands to “files�
   {
     syntax: "parallel 'a {} | b' ::: x y",
     summary: 'Run the pipeline once per argument. Jobs read `/dev/null`, and `parallel` collects their output unless `-u` is given.',
-    more: `GNU \`parallel\` runs a command once for each argument after \`:::\`, several at a time, with \`{}\` replaced by the argument. Each job reads \`/dev/null\` rather than your keyboard. \`parallel\` holds each job’s output and prints it in one piece, so lines from different jobs don’t get mixed; with \`-u\` they write straight out instead.
+    more: `GNU \`parallel\` runs a command once for each argument after \`:::\`, in parallel, with \`{}\` replaced by the argument. Each job reads \`/dev/null\` rather than your keyboard. \`parallel\` holds each job’s output and prints it in one piece, so lines from different jobs don’t get mixed; with \`-u\` they write straight out instead.
 
 \`\`\`
 parallel 'wc -l {}' ::: a.txt b.txt
