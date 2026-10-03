@@ -19,6 +19,8 @@ npm run build # Static files in dist/
 
 Serve `dist/` with any static host, at a domain's root or under a subpath such as `/pipeviewer/`: every path in the page is relative. Under a subpath, link to it with the trailing slash, which nginx adds itself when the folder is reached through `try_files $uri $uri/`. No build dependencies or backend are needed. The interface uses optional Google Fonts with local fallbacks.
 
+`./deploy.sh` tests, builds, and deploys to `pipeviewer.offelbrook.com` on the host `jellyfin`: it copies `dist/` to `/var/www/pipeviewer` over SSH, writes `/etc/nginx/sites-available/pipeviewer` if it's missing, links it into `sites-enabled`, and runs `nginx -t` before reloading nginx. sudo on the server may ask for your password. The nginx file is left alone once it exists, since certbot edits it to add HTTPS; `./deploy.sh --nginx` rewrites it. The host, domain and folder are set at the top of the script.
+
 The **Tips & Tricks** button plays a recorded talk from `video/`, which is not in git. Put the `.webm` file there before building, and `npm run build` copies it to `dist/video/`. Your static host must support HTTP range requests so the player can seek. The dev server supports them.
 
 ## Features
