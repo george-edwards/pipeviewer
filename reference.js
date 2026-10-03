@@ -107,8 +107,8 @@ make |& grep -i error
   },
   {
     syntax: 'a && b',
-    summary: 'Run `b` only if the last pipeline that ran succeeded.',
-    more: `\`&&\` runs \`b\` only if \`a\` succeeded, which means it exited with status 0. Use it to chain steps that each depend on the one before.
+    summary: 'And: run `b` only if the last pipeline that ran succeeded.',
+    more: `Read \`&&\` as “and”: do \`a\`, and then \`b\`, but only if \`a\` succeeded, which means it exited with status 0. Use it to chain steps that each depend on the one before.
 
 \`\`\`
 mkdir backup && cp notes.txt backup/
@@ -118,8 +118,8 @@ If the folder can’t be made, nothing is copied.`,
   },
   {
     syntax: 'a || b',
-    summary: 'Run `b` only if the last pipeline that ran failed.',
-    more: `\`||\` runs \`b\` only if \`a\` failed. Handy for a fallback, or an error message.
+    summary: 'Or: run `b` only if the last pipeline that ran failed.',
+    more: `Read \`||\` as “or”: do \`a\`, or else \`b\`. \`b\` runs only if \`a\` failed. Handy for a fallback, or an error message.
 
 \`\`\`
 mkdir backup || echo "couldn't make backup" >&2
