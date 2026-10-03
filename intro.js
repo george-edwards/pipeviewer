@@ -143,7 +143,7 @@ export const slides = [
   },
   {
     title: 'Rewind to 1982',
-    text: 'Blow the dust off the VHS. Bell Labs filmed the people who built Unix, and here’s Brian Kernighan on why the pipe is the system’s “fundamental contribution”.',
-    video: { id: 'tc4ROCJYbm0', start: 330, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'] },
+    text: 'Blow the dust off the VHS. Bell Labs filmed the people who built Unix, and here’s Brian Kernighan building a spelling checker out of programs that already exist, without writing a line of code.',
+    video: { id: 'XvDZLjaCJuw', start: 314, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'] },
   },
 ];
