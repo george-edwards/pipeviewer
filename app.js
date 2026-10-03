@@ -1,6 +1,6 @@
 import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './parser.js';
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
-import { compare, describe, starsFor } from './training.js';
+import { compare, starsFor } from './training.js';
 import { lessons } from './lessons.js';
 import { slides } from './intro.js';
 
@@ -1652,11 +1652,7 @@ addEventListener('hashchange', () => {
 const tourSteps = [
   { at: '#training', title: 'Training mode engaged', text: () => `Each level shows a picture. Your job is to write the command that draws it. There are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>.` },
-  { at: '#results > .diagram-panel', title: 'Your picture', text: () => {
-    const cmd = currentModel?.commands[0];
-    const now = cmd ? ` Right now, <code>${escape(cmd.usage.name)}</code>’s stdout goes to ${escape(describe(cmd.fds[1], 1))}.` : '';
-    return `This draws your command, and redraws it as you type. Each card is a command, and its lines show where its stdin (0), stdout (1) and stderr (2) go.${now}`;
-  } },
+  { at: '#results > .diagram-panel', title: 'Your picture', text: () => 'This draws your command, and redraws it as you type. If the picture makes no sense whatsoever then best to start on the <span class="lesson-label">n00b</span> level.' },
   { at: '#target-panel', title: 'Your goal', text: () => {
     const streams = training.differences?.filter(d => d.kind === 'stream') ?? [], first = streams[0];
     // A file is named without "(overwrite)", the usual way to open one for writing.
