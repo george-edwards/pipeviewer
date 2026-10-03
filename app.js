@@ -3,9 +3,12 @@ import { portUsage, pipeActivity, commands, ships } from './usage.js';
 import { compare, starsFor } from './training.js';
 import { lessons } from './lessons.js';
 import { slides } from './intro.js';
+import { reference } from './reference.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// Lesson and reference text sets `backticks` as code.
+const prose = text => escape(text).replace(/`([^`]+)`/g, '<code>$1</code>');
 const names = ['stdin', 'stdout', 'stderr'];
 // Examples are written in the explicit redirect style; the Explicit/Common switch restyles them.
 const examples = {
@@ -1187,6 +1190,26 @@ $('#known-toggle').addEventListener('click', event => {
   $('#known-commands').hidden = !open;
   event.currentTarget.setAttribute('aria-expanded', open);
 });
+// Each reference entry opens, one at a time, to explain more. Its commands can be drawn in the
+// viewer with a click, except in training, where the editor belongs to the level.
+const moreMarkup = text => text.split(/\n{2,}/).map(block => {
+  if (block.startsWith('```')) {
+    const source = block.replace(/^```\n?|\n?```$/g, '');
+    return `<div class="ref-code" data-source="${escape(source)}"><pre>${escape(source)}</pre><button type="button" class="ref-try" title="Draw this" aria-label="Draw this in the viewer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg></button></div>`;
+  }
+  return block.startsWith('# ') ? `<h3>${prose(block.slice(2))}</h3>` : `<p>${prose(block)}</p>`;
+}).join('');
+$('#ref-entries').innerHTML = reference.map(entry => `<details class="ref-entry" name="reference"><summary><code class="ref-syntax">${escape(entry.syntax)}</code><span>${prose(entry.summary)}</span></summary><div class="ref-more">${moreMarkup(entry.more)}</div></details>`).join('');
+$('#ref-entries').addEventListener('click', event => {
+  const block = event.target.closest('.ref-code');
+  // A drag to select the text, to copy it, isn't a click to draw it.
+  if (!block || training.active || (!event.target.closest('.ref-try') && getSelection().toString())) return;
+  $('#reference').close();
+  $('#pipeline').value = block.dataset.source;
+  fitEditor();
+  render();
+  $('#pipeline').focus();
+});
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 // Chapter starts in seconds, marked by hand when the talk was first published.
@@ -1356,8 +1379,6 @@ try { progress = JSON.parse(localStorage.getItem('pipeviewer-training')) ?? {}; 
 const lessonStart = i => lessons[i].start ?? lessons[i - 1].target;
 // Levels are numbered from 0, as descriptors are; a level's button can show a label instead.
 const levelName = i => lessons[i].label ?? String(i);
-// Lesson text sets `backticks` as code.
-const prose = text => escape(text).replace(/`([^`]+)`/g, '<code>$1</code>');
 const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6L12 17l-5.38 2.85 1.03-6L3.3 9.6l6-.9z"/></svg>`;
 const stars = n => [0, 1, 2].map(i => star(i < n)).join('');
 const cheers = ['Nailed it.', 'Spot on.', 'Clean pipes.', 'Exactly right.', 'Plumbing works.'];
