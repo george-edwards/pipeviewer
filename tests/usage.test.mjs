@@ -343,10 +343,10 @@ test('coreutils wrappers follow the command they run', () => {
 });
 
 test('coreutils filters, printers and file actions', () => {
-  for (const source of ['tac', 'nl -ba', 'fold -w 40', 'fmt -72', 'od -c', 'sha256sum', 'b2sum -l 256', 'tr a-z A-Z', 'tee log', 'numfmt --to=si', 'factor', 'comm - b', 'split -l 2', 'csplit - 3', 'dd bs=1M', 'date -f -', 'shuf', 'pr -2', 'tsort']) {
+  for (const source of ['tac', 'nl -ba', 'fold -w 40', 'fmt -72', 'od -c', 'sha256sum', 'b2sum -l 256', 'tr a-z A-Z', 'tee log', 'numfmt --to=si', 'factor', 'comm - b', 'diff - b', 'diff -u a -', 'diff --from-file=- a b', 'split -l 2', 'csplit - 3', 'dd bs=1M', 'date -f -', 'shuf', 'pr -2', 'tsort']) {
     assert.equal(stdin(source), 'possible', source);
   }
-  for (const source of ['tac f', 'nl f', 'od -c f', 'sha256sum -c sums', 'tr --help', 'numfmt 2000', 'factor 12', 'comm a b', 'split big p', 'csplit f 3', 'dd if=f', 'date +%s', 'shuf -e a b', 'shuf -i 1-9', 'pr +2 f', 'seq 5', 'yes', 'pwd', 'whoami', 'df -h', 'du -sh .', 'stat f', 'tty', 'stty -a', 'test -f x', '[ -f x ]', 'cp a b', 'rm -f x', 'mv -f a b', 'chmod 644 f', 'mkdir -p d', 'kill 1']) {
+  for (const source of ['tac f', 'nl f', 'od -c f', 'sha256sum -c sums', 'tr --help', 'numfmt 2000', 'factor 12', 'comm a b', 'diff a b', 'diff -u a b', 'diff -C 3 a b', 'split big p', 'csplit f 3', 'dd if=f', 'date +%s', 'shuf -e a b', 'shuf -i 1-9', 'pr +2 f', 'seq 5', 'yes', 'pwd', 'whoami', 'df -h', 'du -sh .', 'stat f', 'tty', 'stty -a', 'test -f x', '[ -f x ]', 'cp a b', 'rm -f x', 'mv -f a b', 'chmod 644 f', 'mkdir -p d', 'kill 1']) {
     assert.equal(stdin(source), 'unused', source);
   }
   for (const source of ['od -c +16', 'du --files0-from=/dev/stdin']) assert.equal(stdin(source), 'unknown', source);

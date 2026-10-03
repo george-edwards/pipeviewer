@@ -37,6 +37,7 @@ import cut from './cut.js';
 import date from './date.js';
 import dd from './dd.js';
 import df from './df.js';
+import diff from './diff.js';
 import dircolors from './dircolors.js';
 import dirname from './dirname.js';
 import du from './du.js';
@@ -139,7 +140,7 @@ import zcat from './zcat.js';
 
 export default [
   apt, arch, awk, base64, basename, brew, caffeinate, cat, chcon, chgrp, chmod, chown, chroot, cksum, comm,
-  cp, csplit, curl, cut, date, dd, df, dircolors, dirname, du, echo, env, expand, expr, factor,
+  cp, csplit, curl, cut, date, dd, df, diff, dircolors, dirname, du, echo, env, expand, expr, factor,
   find, fmt, fold, grep, groups, head, hostid, hostname, id, install, join, kill, less, link, ln,
   logname, ls, make, md5, md5sum, mkdir, mkfifo, mknod, mktemp, mv, nice, nl, nohup, nproc, numfmt,
   od, open, parallel, paste, pathchk, pbcopy, pbpaste, pinky, pr, printenv, ptx, pv, pwd, readlink,

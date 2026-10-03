@@ -128,11 +128,11 @@ export const lessons = [
   {
     id: 'sorted-on-the-way-in',
     title: 'Sorted on the way in',
-    brief: '`comm -12` prints the lines two files share, but only if both are sorted, and these aren’t. Sort them on the way in, without temporary files.',
-    start: 'comm -12 a.txt b.txt',
-    target: 'comm -12 <(sort a.txt) <(sort b.txt)',
+    brief: '`a.txt` and `b.txt` hold nearly the same names, but in a different order, so `diff` says almost every line differs. Sort both on the way in, without temporary files, so `diff` shows only the names that really differ.',
+    start: 'diff a.txt b.txt',
+    target: 'diff <(sort a.txt) <(sort b.txt)',
     how: 'Replace each file name with a process substitution: `<(sort a.txt)` and `<(sort b.txt)`. `<(cmd)` runs `cmd` and hands over a name such as `/dev/fd/63` to read its output from.',
-    learned: '`<(cmd)` turns a command’s output into something that looks like a file name. A command has only one stdin, so a pipe couldn’t feed `comm` both lists; two substitutions can.',
+    learned: '`<(cmd)` turns a command’s output into something that looks like a file name. A command has only one stdin, so a pipe couldn’t feed `diff` both lists; two substitutions can.',
   },
   {
     id: 'log-and-see-errors',
