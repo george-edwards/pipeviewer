@@ -1500,7 +1500,7 @@ function showTraining() {
   }
   training.matched = matched;
   // Once solved, the target's own command is shown with its picture.
-  $('#target-panel .panel-hint').innerHTML = matched ? `<code>${escape(lessons[training.level].target)}</code>` : 'Make yours match this picture';
+  $('#target-panel .panel-hint').innerHTML = matched ? `<code>${escape(lessons[training.level].target)}</code>` : '';
   const status = $('#match-status');
   status.classList.toggle('matched', matched);
   status.classList.toggle('differs', !!differences?.length);
