@@ -1798,8 +1798,10 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Tab' && !$('#tour-card').contains(document.activeElement)) { event.preventDefault(); $('#tour-next').focus(); }
 });
 fitEditor();
-// Wrapping changes once the web font loads or the window resizes.
+// Wrapping changes once the web font loads or the window resizes. The font stylesheet loads without
+// blocking the page, so fonts.ready can settle before the fonts are even requested.
 document.fonts?.ready.then(() => { fitEditor(); slideAll(); });
+document.fonts?.addEventListener('loadingdone', () => { fitEditor(); slideAll(); });
 addEventListener('resize', () => { fitEditor(); slideAll(); });
 render();
 if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) : undefined);

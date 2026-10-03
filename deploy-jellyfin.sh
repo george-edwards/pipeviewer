@@ -44,8 +44,9 @@ server {
 }
 
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
+    # HTTP/2 fetches the page's ~150 small modules over one connection.
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name $DOMAIN;
 
     ssl_certificate     $CERT/fullchain.pem;
@@ -54,12 +55,17 @@ server {
     root $ROOT;
     index index.html;
 
+    # The code is plain text, unminified, and shrinks to a fraction when compressed.
+    gzip on;
+    gzip_vary on;
+    gzip_types text/css text/javascript application/javascript image/svg+xml;
+
     location / {
         try_files \$uri \$uri/ =404;
     }
 
-    # Code is cached briefly, so a redeploy shows up within the hour.
-    location ~* \.(js|css)\$ {
+    # Code and icons are cached briefly, so a redeploy shows up within the hour.
+    location ~* \.(js|css|svg|png)\$ {
         expires 1h;
     }
 }

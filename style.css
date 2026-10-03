@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=IBM+Plex+Mono:wght@400;450;500;600&display=swap');
-
 :root {
   --sans: 'DM Sans', sans-serif;
   font-family: var(--sans);
@@ -92,6 +90,7 @@ button { cursor: pointer; transition: background .16s, color .16s; }
 button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 a { color: inherit; }
 .site-header { height: 5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 max(6.5%, calc((100vw - var(--content))/2)); background: var(--surface); }
+.brand-heading { margin: 0; font: inherit; }
 .brand { text-decoration: none; display: flex; align-items: center; font-size: 1.4375rem; font-weight: 700; letter-spacing: -.04em; }
 .brand-icon { width: 2rem; height: 2rem; margin-right: .625rem; }
 .brand-dot { color: var(--purple); }
@@ -587,10 +586,6 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
   .solved { flex-direction: column; gap: .5rem; }
   .panel-hint { display: none; }
 }
-@media (max-width: 24em) {
-  .training-button { width: 2.5rem; justify-content: center; padding: 0; }
-  .training-label { display: none; }
-}
 /* The tour dims the page but for a spotlight on one part, with a card beside it. The spotlight's
    shadow does the dimming, so the spot glides from part to part. The layer takes clicks so the
    dimmed page cannot be used until the tour ends. */
@@ -652,27 +647,42 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
   .ref-entry summary { grid-template-columns: 7.5rem minmax(0, 1fr) .5rem; gap: .625rem; }
   #diagram svg { min-height: 17.5rem; }
   .diagram-toolbar { gap: .625rem; }
-  .diagram-actions { gap: .5rem; flex-shrink: 0; }
-  #download span { display: none; }
+  /* The actions wrap rather than run past the panel's edge. */
+  .diagram-actions { flex-wrap: wrap; gap: .5rem; }
+  #download .download-label { display: none; }
   .details { grid-template-columns: 1fr; }
   .usage-assumption { margin-left: 0; flex-basis: 100%; }
   #diagram-scroll::after { content: 'Scroll horizontally →'; position: sticky; left: 0; display: block; width: 100%; text-align: center; font-size: .6875rem; color: var(--muted); padding: .375rem 0 .75rem; }
 }
-/* Phones: the header keeps every control on one line by shortening the reference label. */
+/* On narrow windows the controls move to a row of their own under the name. */
+@media (max-width: 40em) {
+  .site-header { height: auto; flex-wrap: wrap; gap: .625rem; padding: .875rem 1.25rem; }
+  /* Controls keep their size; on the narrowest screens the last one wraps instead. */
+  .header-actions { width: 100%; max-width: 26rem; flex-wrap: wrap; justify-content: space-between; }
+  .header-actions > * { flex-shrink: 0; }
+}
+/* Phones: the header keeps every control on one line by shortening the reference label and showing Training's icon alone. */
 @media (max-width: 26.25em) {
   .header-actions { gap: .625rem; }
   .reference-quick { display: none; }
+  .training-button { width: 2.5rem; justify-content: center; padding: 0; }
+  .training-label { display: none; }
 }
 @media (max-width: 22.5em) {
   .site-header { padding: .75rem; }
   .brand { font-size: 1.1875rem; }
   .brand-icon { margin-right: .375rem; }
-  .header-actions { gap: .375rem; }
+  .header-actions { gap: .25rem; }
   .talk-button { width: 2.25rem; min-height: 2.25rem; }
 }
-/* On narrow windows the controls move to a row of their own under the name. */
-@media (max-width: 40em) {
-  .site-header { height: auto; flex-wrap: wrap; gap: .625rem; padding: .875rem 1.25rem; }
-  .header-actions { width: 100%; max-width: 26rem; justify-content: space-between; }
+/* Touch screens get controls a fingertip can hit: at least 44px (2.75rem) each way. */
+@media (pointer: coarse) {
+  .training-button, .talk-button, .theme-toggle, .shell-switch, .text-button, .variation-buttons button, .zoom-controls button, .toolbar-switch, #download, .details-heading { min-height: 2.75rem; }
+  .training-button, .talk-button, .theme-toggle, .zoom-controls button, #download { min-width: 2.75rem; }
+  .brand { min-height: 2.75rem; }
+  .shell-switch button { min-width: 2.25rem; }
+  /* The shell switch keeps its inset look; each half's hit area reaches the switch's outer edge. */
+  .shell-switch button::after { content: ''; position: absolute; inset: -.25rem -.0625rem; }
+  .diagram-toolbar button, .details-heading { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { *, .shell-switch::before { transition: none !important; animation: none !important; } }
