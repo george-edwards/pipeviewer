@@ -47,7 +47,9 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Training
 
-Training opens with a crossfade. The first time, a short tour dims the page and moves a spotlight from the training bar, to the command, to its picture, to the target, to the hints, with a card explaining each. **Show me around** runs it again.
+Levels are numbered from 0, as descriptors are. Level 0, **n00b**, is for complete beginners. It opens on four short slides, each with one idea, an example command and a small animated picture: every program has stdin, stdout and stderr; they are numbered 0, 1 and 2; a pipe joins 1 on the left to 0 on the right; and McIlroy's 1964 garden-hose memo, with a three-command pipe. **Your turn** then hands over to an ordinary level, where the student pipes `ls` into `head -n 3`. Arrow keys step through the slides, and **Skip to the exercise** jumps ahead. Training opens on level 0 for a first-time student, and skips it for anyone with stars on another level.
+
+Training opens with a crossfade. The first time a level's exercise is shown, a short tour dims the page and moves a spotlight from the training bar, to the command, to its picture, to the target, to the hints, with a card explaining each. **Show me around** runs it again.
 
 Each level shows a target picture and a starting command, typed and drawn. The student edits the command until their picture matches the target's. On windows 64em wide or more the two pictures sit side by side under the editor: the student's on the left, just under where they type, and the target's on the right. Both are cropped to one shared frame so they are drawn at the same scale. On narrower windows the target sits above the editor. The training screen leaves out the viewer's key, insights, descriptor details and toolbar switches, and the caret doesn't fade parts of the picture, so nothing gets in the way of comparing the two. A ring marks each port whose stream goes somewhere else in the target, in both pictures, and a dashed outline marks a card whose words differ. The toolbar counts the differences.
 
@@ -57,11 +59,11 @@ A level is worth three stars. There are three hints: **What's different?** lists
 
 The shell switch in the header works in training too: the target is redrawn as the chosen shell runs it.
 
-Link to `/#training` to open training at the first unsolved level, or to `/#training/2` for level 2.
+Link to `/#training` to open training at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2.
 
 ### Adding a level
 
-Levels are listed in `lessons.js`, in the order they're played. Each has an `id` (keep it fixed once published, since progress is saved under it), a `title`, a `brief`, a `target`, a `how` hint and a `learned` note shown once it's solved. `start` is the command in the editor when the level opens; leave it out to start from the previous level's target. Text in backticks is set as code. `npm test` checks that every target parses under both shells and that no level starts out already solved.
+Levels are listed in `lessons.js`, in the order they're played. Each has an `id` (keep it fixed once published, since progress is saved under it), a `title`, a `brief`, a `target`, a `how` hint and a `learned` note shown once it's solved. `start` is the command in the editor when the level opens; leave it out to start from the previous level's target. Text in backticks is set as code. `label` replaces the level's number on its button, and `intro: true` shows the slides in `intro.js` before the exercise. Each slide there has a `title`, `text`, an `example` command with a `note`, an optional `quote`, and a `picture` that draws it. `npm test` checks that every target parses under both shells and that no level starts out already solved.
 
 ## macOS and zsh
 

@@ -11,9 +11,24 @@
 //          the level or ask for the answer.
 // how      the syntax hint, shown when the student asks for it.
 // learned  what the level shows, shown once it is solved.
+// label    optional, shown on the level's button in place of its number.
+// intro    true to show the n00b explainer in intro.js before the exercise.
 //
 // Text in `backticks` is set as code.
+//
+// Levels are numbered from 0, as descriptors are. Level 0 is for complete beginners.
 export const lessons = [
+  {
+    id: 'n00b',
+    label: 'n00b',
+    title: 'Pipes for n00bs',
+    intro: true,
+    brief: 'Your turn. `ls` lists every file here. Pipe its list into `head -n 3`, so only the first three reach the screen.',
+    start: 'ls',
+    target: 'ls | head -n 3',
+    how: 'Type ` | head -n 3` after `ls`. The `|` joins `ls`’s stdout (1) to `head`’s stdin (0).',
+    learned: 'That’s a pipeline, and you built it. From level 1 on you’ll point streams at files as well as at each other, and the pictures will show you where each one goes.',
+  },
   {
     id: 'into-a-file',
     title: 'Into a file',

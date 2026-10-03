@@ -357,6 +357,9 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .training-top { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem 1.125rem; }
 .level-buttons button { display: inline-flex; flex-direction: column; align-items: center; gap: .125rem; padding: .25rem .5rem; font-variant-numeric: tabular-nums; line-height: 1; }
 .level-number { font-weight: 600; }
+/* DM Sans draws 0 like O, so a word with zeros in it, as n00b has, is set in Plex Mono. */
+.level-label { font: 600 .75rem 'IBM Plex Mono', monospace; }
+.lesson-label { font-family: 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
 .level-stars { display: inline-flex; gap: .0625rem; }
 .level-stars .star { width: .5rem; height: .5rem; }
 .level-stars.unearned { opacity: .55; }
@@ -425,6 +428,62 @@ kbd { font: .6875rem 'IBM Plex Mono', monospace; padding: .0625rem .3125rem; bor
 @keyframes solved-in { from { opacity: 0; transform: translateY(-.375rem); } }
 @keyframes star-pop { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: none; } }
 @keyframes spark { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.6); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); } }
+/* The n00b explainer stands in for the exercise, one idea at a time, until the student moves on. */
+.explaining :is(#lesson-brief, #hint-buttons, #coach, #tour-button, .editor-panel, #results, #target-panel) { display: none !important; }
+.intro { margin-top: 1rem; padding: 1.25rem 1.5rem 1rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); }
+.intro-slide { display: grid; grid-template-columns: minmax(0, 23rem) minmax(0, 1fr); gap: 1.25rem 2rem; align-items: center; animation: tour-text .35s ease-out; }
+.intro-text h3 { margin: 0 0 .5rem; font-size: 1.125rem; letter-spacing: -.02em; }
+.intro-text p { margin: 0; font-size: .875rem; line-height: 1.6; color: var(--muted); }
+.intro code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
+.stream-word { font-weight: 600; }
+.stream-word.fd-0 { color: var(--green); }
+.stream-word.fd-1 { color: var(--purple); }
+.stream-word.fd-2 { color: var(--amber); }
+.intro blockquote { margin: .875rem 0 0; padding: .5rem .875rem; border-left: 3px solid var(--purple); background: var(--inset); border-radius: 0 .375rem .375rem 0; }
+.intro blockquote p { color: var(--text); font-style: italic; }
+.intro blockquote footer { margin-top: .25rem; font-size: .75rem; color: var(--muted); }
+.intro blockquote footer::before { content: '— '; }
+.intro-example { margin-top: .875rem; }
+.intro-example > code { font-size: .875rem; color: var(--purple); padding: .1875rem .5rem; }
+.intro-example p { margin-top: .4375rem; font-size: .8125rem; }
+.intro-figure { min-width: 0; }
+.intro-picture { display: block; width: 100%; height: auto; max-height: 15rem; font-family: 'IBM Plex Mono', monospace; }
+.intro-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1rem; }
+.intro-dots { display: flex; gap: .3125rem; }
+.intro-dots i { width: .4375rem; height: .4375rem; border-radius: .25rem; background: var(--border); transition: width .25s, background .25s; }
+.intro-dots i.on { width: 1.125rem; background: var(--green); }
+.intro-count { margin-right: auto; font: 600 .625rem 'IBM Plex Mono', monospace; letter-spacing: .08em; color: var(--muted); }
+#intro-skip { padding: .25rem 0; margin-right: .5rem; }
+.intro-picture .fd0 { --c: var(--green); }
+.intro-picture .fd1 { --c: var(--purple); }
+.intro-picture .fd2 { --c: var(--amber); }
+.pic-card rect { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.pic-card line { stroke: var(--border); }
+.pic-name { font-size: 13px; font-weight: 500; fill: var(--text); }
+.pic-port { fill: var(--c); }
+.pic-fd { font-size: 11px; font-weight: 600; fill: var(--c); }
+.pic-wire { stroke: var(--c); stroke-width: 2; }
+.pic-wire.idle { stroke-dasharray: 4 4; opacity: .6; }
+.pic-token { opacity: 0; }
+.pic-token rect { fill: var(--c); }
+.pic-token text { font-size: 11px; font-weight: 600; fill: var(--surface); }
+.pic-device rect, .pic-device > line { fill: var(--inset); stroke: var(--border); stroke-width: 1.2; }
+.pic-device .pic-key { fill: var(--border); stroke: none; }
+.pic-label { font: 500 10px var(--sans); fill: var(--muted); }
+.pic-out { font-size: 11px; fill: var(--c); }
+.pic-tag rect { fill: var(--surface); stroke: var(--c); stroke-width: 1.2; }
+.pic-tag text { font: 500 9.5px var(--sans); fill: var(--c); }
+.pic-number circle { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
+.pic-number text { font-size: 13px; font-weight: 600; fill: var(--c); }
+@media (prefers-reduced-motion: reduce) { .intro-picture * { animation: none !important; } }
+@media (max-width: 47.5em) {
+  .intro { padding: 1rem; }
+  .intro-slide { grid-template-columns: minmax(0, 1fr); }
+  .intro-figure { margin: 0 -.75rem; }
+  .intro-count { display: none; }
+  .intro-dots { margin-right: auto; }
+  #intro-skip { order: 1; width: 100%; margin: 0; }
+}
 /* The two drawings: the target above the editor, or beside the student's on wide screens. */
 .target-panel { position: relative; border: 1px dashed var(--border); border-radius: .6875rem; background: var(--surface); overflow: hidden; margin-bottom: .875rem; }
 .target-scroll { overflow-x: auto; }

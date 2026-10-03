@@ -2,6 +2,7 @@ import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
 import { compare, describe, starsFor } from './training.js';
 import { lessons } from './lessons.js';
+import { slides } from './intro.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -149,7 +150,7 @@ let currentSource = '';
 // Training mode: the level being played, the target's model, how the student's picture differs from
 // it (null while there is nothing to compare), and the hints taken. Viewer is what the editor held
 // before training started, put back on the way out.
-const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '' };
+const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '', slide: -1 };
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
 // Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
 // Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
@@ -1351,6 +1352,8 @@ $('#download').addEventListener('click', () => {
 let progress = {};
 try { progress = JSON.parse(localStorage.getItem('pipeviewer-training')) ?? {}; } catch {}
 const lessonStart = i => lessons[i].start ?? lessons[i - 1].target;
+// Levels are numbered from 0, as descriptors are; a level's button can show a label instead.
+const levelName = i => lessons[i].label ?? String(i);
 // Lesson text sets `backticks` as code.
 const prose = text => escape(text).replace(/`([^`]+)`/g, '<code>$1</code>');
 const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6L12 17l-5.38 2.85 1.03-6L3.3 9.6l6-.9z"/></svg>`;
@@ -1391,7 +1394,7 @@ function showLevels() {
   $('#levels').querySelectorAll(':scope > button').forEach(button => button.remove());
   $('#levels').insertAdjacentHTML('beforeend', lessons.map((lesson, i) => {
     const earned = progress[lesson.id] ?? 0, active = i === training.level;
-    return `<button type="button" data-level="${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="Level ${i + 1}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number">${i + 1}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
+    return `<button type="button" data-level="${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="Level ${i}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
   }).join(''));
   slide($('#levels'));
   const total = lessons.reduce((sum, lesson) => sum + (progress[lesson.id] ?? 0), 0);
@@ -1434,8 +1437,8 @@ function showCoach() {
       training.burst = false;
       const next = last
         ? `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`
-        : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${training.level + 2}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
-      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${training.level + 1} solved.</p><p>${prose(lesson.learned)}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+        : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${training.level + 1}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
+      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${training.level} solved.</p><p>${prose(lesson.learned)}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
     } else {
       const parts = [
         `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
@@ -1482,23 +1485,73 @@ function showTraining() {
   showCoach();
 }
 
-function loadLesson(i, { keep = false } = {}) {
+// A level with an intro opens on its explainer, unless the student is only starting it over.
+function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
   Object.assign(training, { level: i, hints: 0, matched: false, coach: '' });
-  $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i + 1}</span> ${escape(lesson.title)}`;
+  const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
+  $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
   $('#lesson-brief').innerHTML = prose(lesson.brief);
-  history.replaceState(null, '', `#training/${i + 1}`);
+  history.replaceState(null, '', `#training/${i}`);
   showTarget();
   // Moving on from a solved level keeps the student's own spelling, which the next level starts from.
   if (!(keep && lesson.start === undefined)) $('#pipeline').value = lessonStart(i);
   fitEditor();
   render();
+  if (lesson.intro && intro) return showSlide(0);
+  closeIntro();
   const editor = $('#pipeline');
   editor.focus({ preventScroll: true });
   editor.setSelectionRange(editor.value.length, editor.value.length);
 }
 
-function enterTraining(level = Math.max(0, lessons.findIndex(lesson => !progress[lesson.id]))) {
+// The n00b explainer takes the place of the exercise: one idea per slide, each with an example and
+// its moving picture, then the exercise.
+const ideaProse = text => prose(text).replace(/\b(stdin|stdout|stderr)\b(?![^<]*<\/code>)/g, (word, name) => `<b class="stream-word fd-${['stdin', 'stdout', 'stderr'].indexOf(name)}">${word}</b>`);
+function showSlide(n) {
+  const slide = slides[n], last = n === slides.length - 1;
+  training.slide = n;
+  document.documentElement.classList.add('explaining');
+  $('#intro').hidden = false;
+  $('#intro-count').textContent = `${n + 1} of ${slides.length}`;
+  $('#intro-slide').innerHTML = `<div class="intro-text"><h3>${escape(slide.title)}</h3><p>${ideaProse(slide.text)}</p>`
+    + (slide.quote ? `<blockquote><p>“${escape(slide.quote)}”</p><footer>${escape(slide.by)}</footer></blockquote>` : '')
+    + `<div class="intro-example"><code>$ ${escape(slide.example.command)}</code><p>${ideaProse(slide.example.note)}</p></div></div>`
+    + `<div class="intro-figure">${slide.picture()}</div>`;
+  $('#intro-dots').innerHTML = slides.map((_, i) => `<i${i === n ? ' class="on"' : ''}></i>`).join('');
+  $('#intro-back').hidden = !n;
+  $('#intro-next').innerHTML = last ? 'Your turn <span aria-hidden="true">→</span>' : 'Next';
+  $('#intro-skip').hidden = last;
+  $('#intro-next').focus({ preventScroll: true });
+}
+
+function closeIntro() {
+  training.slide = -1;
+  document.documentElement.classList.remove('explaining');
+  $('#intro').hidden = true;
+  $('#intro-slide').innerHTML = '';
+}
+
+// Leaving the explainer starts the exercise, and the tour of the training screen if it hasn't run.
+function startExercise() {
+  transition(() => loadLesson(training.level, { keep: true, intro: false })).then(() => { if (!toured()) startTour(); });
+}
+$('#intro-next').addEventListener('click', () => training.slide === slides.length - 1 ? startExercise() : showSlide(training.slide + 1));
+$('#intro-back').addEventListener('click', () => showSlide(Math.max(0, training.slide - 1)));
+$('#intro-skip').addEventListener('click', startExercise);
+document.addEventListener('keydown', event => {
+  if (training.slide < 0 || tourStep >= 0 || event.target.closest?.('textarea, input')) return;
+  if (event.key === 'ArrowRight') { event.preventDefault(); $('#intro-next').click(); }
+  else if (event.key === 'ArrowLeft' && training.slide) { event.preventDefault(); showSlide(training.slide - 1); }
+});
+
+// Training opens at the first unsolved level. Level 0 is skipped for anyone who has played before.
+const firstUnsolved = () => {
+  const played = lessons.some(lesson => progress[lesson.id]);
+  const i = lessons.findIndex(lesson => !progress[lesson.id] && !(lesson.intro && played));
+  return i < 0 ? 1 : i;
+};
+function enterTraining(level = firstUnsolved()) {
   if (!training.active) training.viewer = $('#pipeline').value;
   training.active = true;
   document.documentElement.classList.add('training');
@@ -1511,6 +1564,7 @@ function enterTraining(level = Math.max(0, lessons.findIndex(lesson => !progress
 function exitTraining() {
   if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
+  closeIntro();
   document.documentElement.classList.remove('training');
   $('#training').hidden = $('#target-panel').hidden = true;
   $('.example-rows').hidden = false;
@@ -1528,7 +1582,7 @@ const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(tr
 // Training opens and closes with a crossfade where the browser has view transitions. The tour runs
 // once the new page has faded in, the first time training opens.
 const transition = change => document.startViewTransition ? document.startViewTransition(change).finished.catch(() => {}) : Promise.resolve(change());
-const openTraining = level => transition(() => enterTraining(level)).then(() => { if (!toured()) startTour(); });
+const openTraining = level => transition(() => enterTraining(level)).then(() => { if (!toured() && training.slide < 0) startTour(); });
 $('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining());
 $('#exit-training').addEventListener('click', () => transition(exitTraining));
 $('#levels').addEventListener('click', event => {
@@ -1541,11 +1595,11 @@ $('#hint-buttons').addEventListener('click', event => {
   training.hints = Math.max(training.hints, Number(button.dataset.hint));
   showTraining();
 });
-$('#restart').addEventListener('click', () => loadLesson(training.level));
+$('#restart').addEventListener('click', () => loadLesson(training.level, { intro: false }));
 $('#coach').addEventListener('click', event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();
-  if (action === 'replay') loadLesson(0);
+  if (action === 'replay') loadLesson(1);
   if (action === 'viewer') exitTraining();
 });
 // Once the pictures match, Enter moves on rather than starting a new line.
@@ -1560,7 +1614,7 @@ $('#pipeline').addEventListener('keydown', event => {
 const trainingLink = () => /^#training(?:\/(\d+))?$/.exec(location.hash);
 addEventListener('hashchange', () => {
   const link = trainingLink();
-  if (link) openTraining(link[1] ? Number(link[1]) - 1 : undefined);
+  if (link) openTraining(link[1] ? Number(link[1]) : undefined);
   else if (training.active) exitTraining();
 });
 // The tour walks a first-time student through the training screen: everything dims but one part,
@@ -1653,4 +1707,4 @@ fitEditor();
 document.fonts?.ready.then(() => { fitEditor(); slideAll(); });
 addEventListener('resize', () => { fitEditor(); slideAll(); });
 render();
-if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) - 1 : undefined);
+if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) : undefined);
