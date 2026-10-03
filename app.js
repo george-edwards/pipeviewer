@@ -1658,9 +1658,11 @@ const tourSteps = [
     return `This draws your command, and redraws it as you type. Each card is a command, and its lines show where its stdin (0), stdout (1) and stderr (2) go.${now}`;
   } },
   { at: '#target-panel', title: 'Your goal', text: () => {
-    const first = training.differences?.find(d => d.kind === 'stream');
-    const spot = first ? ` Here, <code>${escape(first.command)}</code>’s ${escape(first.name)} ${first.fd === 0 ? 'comes from' : 'goes to'} ${escape(first.target)}.` : '';
-    return `Change your command until it looks like this.${spot} Rings mark each spot where the two differ.`;
+    const streams = training.differences?.filter(d => d.kind === 'stream') ?? [], first = streams[0];
+    // A file is named without "(overwrite)", the usual way to open one for writing.
+    const spot = first ? `, i.e., ${['input from', 'output to', 'errors to'][first.fd] ?? `fd ${first.fd} to`} ${escape(first.target.replace(/ \(overwrite\)$/, ''))}` : '';
+    const rings = streams.length ? ` The ring${streams.length === 1 ? ' shows' : 's show'} where your command differs.` : '';
+    return `Change your command until it looks like this${spot}.${rings}`;
   } },
   { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
 ];
