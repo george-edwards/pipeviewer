@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build Pipeviewer and deploy it to the web server.
 #
-#   ./deploy.sh   test, build, copy the site, write the nginx site file, and reload nginx
+#   ./deploy-jellyfin.sh   test, build, copy the site, write the nginx site file, and reload nginx
 #
 # The site is copied to a staging folder in your home directory on the server first, and then
 # installed with sudo, so sudo can ask for your password as usual. The nginx site file is written
