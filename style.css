@@ -359,10 +359,11 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .level-number { font-weight: 600; }
 /* DM Sans draws 0 like O, so a word with zeros in it, as n00b has, is set in Plex Mono. */
 .level-label { font: 600 .75rem 'IBM Plex Mono', monospace; }
-/* Unseen, level 0 takes stdin's green, as the Training button does: the place to start. When the
+/* Until it's solved, level 0 takes stdin's green, as the Training button does: the place to start. When the
    student looks stuck it pulses a few times, then keeps a green outline. */
-.level-buttons button.fresh { background: var(--green-bg); color: var(--green); }
-.level-buttons button.nudge { box-shadow: 0 0 0 1px var(--green); animation: n00b-nudge 1.6s ease-out .3s 3; }
+.level-buttons button.fresh:not(.active) { background: var(--green-bg); color: var(--green); }
+.level-buttons button.nudge { box-shadow: 0 0 0 1px var(--green); }
+.level-buttons button.nudge.pulse { animation: n00b-nudge 1.6s ease-out .15s 3; }
 @keyframes n00b-nudge { 0% { box-shadow: 0 0 0 1px var(--green), 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent); } 100% { box-shadow: 0 0 0 1px var(--green), 0 0 0 .625rem transparent; } }
 .lesson-label { font-family: 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
 .level-stars { display: inline-flex; gap: .0625rem; }
@@ -551,6 +552,8 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .tour-count { font: 600 .625rem 'IBM Plex Mono', monospace; letter-spacing: .08em; color: var(--green); }
 .tour-card h2 { margin: .25rem 0 .375rem; font-size: 1.125rem; }
 .tour-card p { margin: 0; font-size: .875rem; line-height: 1.6; color: var(--muted); }
+.tour-link { padding: 0; border: 0; background: none; color: var(--green); font-weight: 600; text-decoration: underline; text-underline-offset: .15em; }
+.tour-link:hover { text-decoration-thickness: 2px; }
 .tour-card code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
 .tour-actions { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
 .tour-actions .text-button { margin-right: auto; padding: .25rem 0; }

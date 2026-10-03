@@ -150,7 +150,7 @@ let currentSource = '';
 // Training mode: the level being played, the target's model, how the student's picture differs from
 // it (null while there is nothing to compare), and the hints taken. Viewer is what the editor held
 // before training started, put back on the way out.
-const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '', slide: -1, nudge: false };
+const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: [], earned: 0, burst: false, coach: '', viewer: '', slide: -1, nudge: false };
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
 // Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
 // Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
@@ -1389,28 +1389,29 @@ function markDifferences() {
   }
 }
 
-// Level 0 is never opened for the student. Until they've seen it, its button is tinted stdin's
-// green, and it pulses when they look stuck: a hint taken, a level restarted, or a level left
-// unmatched for a while. Solving a level unaided calms it again.
-let n00bSeen = false;
-try { n00bSeen = localStorage.getItem('pipeviewer-n00b') === 'seen'; } catch {}
+// Level 0 is never opened for the student. Until they've solved it, its button is tinted stdin's
+// green, and it pulses each time they look stuck: a hint taken, a level restarted, or a level
+// left unmatched for a while. It then keeps a green outline until they solve a level unaided.
+const n00bIndex = lessons.findIndex(lesson => lesson.intro);
+const n00bDone = () => !!progress[lessons[n00bIndex].id];
 let nudgeTimer = 0;
 function nudge() {
-  if (n00bSeen || !training.active || training.matched || training.level === 0 || training.nudge) return;
+  if (n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
   training.nudge = true;
   showLevels();
+  replay($(`#levels [data-level="${n00bIndex}"]`), 'pulse');
 }
-function seeN00b() {
-  n00bSeen = true;
-  training.nudge = false;
-  try { localStorage.setItem('pipeviewer-n00b', 'seen'); } catch {}
+// The timer counts only while the student can see the level, not while the tour covers it.
+function nudgeLater() {
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(() => tourStep >= 0 ? nudgeLater() : nudge(), 40000);
 }
 
 let levelsMarkup = '';
 function showLevels() {
   const markup = lessons.map((lesson, i) => {
     const earned = progress[lesson.id] ?? 0, active = i === training.level;
-    const classes = [active && 'active', lesson.intro && !n00bSeen && 'fresh', lesson.intro && training.nudge && 'nudge'].filter(Boolean).join(' ');
+    const classes = [active && 'active', lesson.intro && !n00bDone() && 'fresh', lesson.intro && training.nudge && 'nudge'].filter(Boolean).join(' ');
     return `<button type="button" data-level="${i}" aria-pressed="${active}"${classes ? ` class="${classes}"` : ''} title="Level ${i}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
   }).join('');
   // The buttons are rebuilt only when they change, so a pulse isn't restarted on every keystroke,
@@ -1427,9 +1428,9 @@ function showLevels() {
 
 // The stars still on offer, and which hints are showing.
 function showHints() {
-  $('#worth').innerHTML = `<span class="worth-label" aria-hidden="true">worth</span>${stars(starsFor(training.hints))}<span class="sr-only">Worth ${starsFor(training.hints)} stars</span>`;
+  $('#worth').innerHTML = `<span class="worth-label" aria-hidden="true">worth</span>${stars(starsFor(training.hints.length))}<span class="sr-only">Worth ${starsFor(training.hints.length)} star${starsFor(training.hints.length) === 1 ? '' : 's'}</span>`;
   $('#hint-buttons').querySelectorAll('[data-hint]').forEach(button => {
-    const shown = Number(button.dataset.hint) <= training.hints;
+    const shown = training.hints.includes(Number(button.dataset.hint));
     button.classList.toggle('active', shown);
     button.setAttribute('aria-pressed', shown);
     button.disabled = training.matched;
@@ -1448,7 +1449,7 @@ function differenceMarkup(difference) {
 // Its frame is rebuilt only when that changes, so its animations do not restart on every keystroke.
 function showCoach() {
   const lesson = lessons[training.level], coach = $('#coach'), source = $('#pipeline').value.trim();
-  const key = training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints}`;
+  const key = training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints.join(',')}`;
   if (key !== training.coach) {
     training.coach = key;
     if (training.matched) {
@@ -1469,7 +1470,7 @@ function showCoach() {
         `<div class="hint"><span class="row-label">HOW</span><p>${prose(lesson.how)}</p></div>`,
         `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">Type it in to see the pictures match.</span></p></div>`,
       ];
-      coach.innerHTML = training.hints ? `<div class="hints">${parts.slice(0, training.hints).join('')}</div>` : '';
+      coach.innerHTML = training.hints.length ? `<div class="hints">${training.hints.map(n => parts[n - 1]).join('')}</div>` : '';
     }
   }
   // The parts that follow the editor update in place.
@@ -1488,13 +1489,13 @@ function showTraining() {
   const differences = training.differences, matched = !!differences && !differences.length;
   if (matched && !training.matched) {
     const lesson = lessons[training.level];
-    training.earned = starsFor(training.hints);
+    training.earned = starsFor(training.hints.length);
     if (!(progress[lesson.id] >= training.earned)) {
       progress[lesson.id] = training.earned;
       try { localStorage.setItem('pipeviewer-training', JSON.stringify(progress)); } catch {}
     }
     training.burst = true;
-    if (!training.hints) training.nudge = false;
+    if (!training.hints.length) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
   }
   training.matched = matched;
@@ -1513,10 +1514,10 @@ function showTraining() {
 // A level with an intro opens on its explainer, unless the student is only starting it over.
 function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
-  Object.assign(training, { level: i, hints: 0, matched: false, coach: '' });
-  if (lesson.intro) seeN00b();
+  Object.assign(training, { level: i, hints: [], matched: false, coach: '' });
+  if (lesson.intro) training.nudge = false;
   clearTimeout(nudgeTimer);
-  if (!n00bSeen) nudgeTimer = setTimeout(nudge, 40000);
+  if (!n00bDone() && !lesson.intro) nudgeLater();
   const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
   $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
   $('#lesson-brief').innerHTML = prose(lesson.brief);
@@ -1619,8 +1620,9 @@ $('#levels').addEventListener('click', event => {
 });
 $('#hint-buttons').addEventListener('click', event => {
   const button = event.target.closest('[data-hint]');
-  if (!button || training.matched) return;
-  training.hints = Math.max(training.hints, Number(button.dataset.hint));
+  const hint = Number(button?.dataset.hint);
+  if (!button || training.matched || training.hints.includes(hint)) return;
+  training.hints = [...training.hints, hint].sort();
   nudge();
   showTraining();
 });
@@ -1652,7 +1654,7 @@ addEventListener('hashchange', () => {
 const tourSteps = [
   { at: '#training', title: 'Training mode engaged', text: () => `Each level shows a picture. Your job is to write the command that draws it. There are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>.` },
-  { at: '#results > .diagram-panel', title: 'Your picture', text: () => 'This draws your command, and redraws it as you type. If the picture makes no sense whatsoever then best to start on the <span class="lesson-label">n00b</span> level.' },
+  { at: '#results > .diagram-panel', title: 'Your picture', text: () => 'This draws your command, and redraws it as you type. If the picture makes no sense whatsoever then best to start on the <button type="button" class="tour-link lesson-label" data-n00b>n00b</button> level.' },
   { at: '#target-panel', title: 'Your goal', text: () => {
     const streams = training.differences?.filter(d => d.kind === 'stream') ?? [], first = streams[0];
     // A file is named without "(overwrite)", the usual way to open one for writing.
@@ -1720,6 +1722,11 @@ const tourNext = () => tourStep === tourSteps.length - 1 ? endTour() : showTourS
 $('#tour-next').addEventListener('click', tourNext);
 $('#tour-back').addEventListener('click', () => showTourStep(Math.max(0, tourStep - 1)));
 $('#tour-skip').addEventListener('click', endTour);
+$('#tour-text').addEventListener('click', event => {
+  if (!event.target.closest('[data-n00b]')) return;
+  endTour();
+  transition(() => loadLesson(n00bIndex)).then(() => $('#training').scrollIntoView({ block: 'start', behavior: 'smooth' }));
+});
 $('#tour-button').addEventListener('click', startTour);
 document.addEventListener('keydown', event => {
   if (tourStep < 0) return;
