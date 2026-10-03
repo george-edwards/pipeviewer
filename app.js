@@ -455,11 +455,13 @@ function drawPipeline(model, palette, colors, mono) {
   // With terminal tags, a stream to or from the terminal is drawn as a short line to a “terminal”
   // tag beside the port rather than a route to a shared box, much as circuit diagrams mark ground.
   // stdin's tag sits to the left of its port, the others' to the right. The line takes the port's
-  // colour and the tag the terminal stream's, so stdout sent on with >&2 ends in stderr's colour.
+  // colour and the tag the terminal stream's, so stdout sent on with >&2 ends in stderr's colour,
+  // under an "as stderr" caption.
   // A tag is a short line from the port to a pill beside it, to the left of stdin, otherwise right.
-  const pill = (p, fd, { line, color, fill, label, w, dashed, what, kind }, reason, tagged) => {
+  // A caption above the pill names where it lands when that isn't the port's own stream.
+  const pill = (p, fd, { line, color, fill, label, w, dashed, what, kind, caption }, reason, tagged) => {
     const [from, to, x] = fd === 0 ? [p.x - 36, p.x - 4, p.x - 36 - w] : [p.x, p.x + 36, p.x + 36];
-    paths.push(`<g class="stream-link${dashed ? ' unused-link' : ''}" data-key="${kind}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">${label}</text></g>`);
+    paths.push(`<g class="stream-link${dashed ? ' unused-link' : ''}" data-key="${kind}"${tagged}><title>${escape(`${what} ${reason}`)}</title><path class="link-hit" d="M ${Math.min(from, x)} ${p.y} H ${Math.max(to, x + w)}" fill="none" stroke="transparent" stroke-width="12"/><path d="M ${from} ${p.y} H ${to}" fill="none" stroke="${line}" stroke-width="2" ${dashed ? 'stroke-dasharray="5 5"' : ''}/><rect x="${x}" y="${p.y - 7}" width="${w}" height="14" rx="7" fill="${fill}" stroke="${color}"/><text x="${x + w / 2}" y="${p.y + 3}" text-anchor="middle" fill="${color}" font-size="8.5">${label}</text>${caption ? `<text x="${x + w / 2}" y="${p.y - 12}" text-anchor="middle" fill="${color}" font-size="11" font-weight="650">${caption}</text>` : ''}</g>`);
   };
   const ground = (p, fd, dest, inactive, reason, tagged) => {
     const stream = terminalStreams.indexOf(dest.id);
@@ -467,7 +469,7 @@ function drawPipeline(model, palette, colors, mono) {
       : fd === 0 ? `stdin reads the terminal’s ${names[stream]}.` : `${names[fd]} goes to the terminal’s ${names[stream]}.`;
     // Monospace text, in the terminal theme, needs a wider tag.
     pill(p, fd, { line: inactive ? palette.muted : colors[fd], color: inactive ? palette.muted : colors[stream], fill: inactive ? palette.inset : palette[['green-bg', 'purple-bg', 'amber-bg'][stream]],
-      label: 'terminal', w: mono ? 50 : 44, dashed: inactive, what, kind: dest.id }, reason, tagged);
+      label: 'terminal', w: mono ? 50 : 44, dashed: inactive, what, kind: dest.id, caption: fd && stream && fd !== stream ? `as ${names[stream]}` : '' }, reason, tagged);
   };
   // A closed descriptor ends in a grey “closed” tag, as nothing is at the other end to draw a box for.
   const closedTag = (p, fd, reason, tagged) => pill(p, fd, { line: palette.muted, color: palette.muted, fill: palette.inset,
