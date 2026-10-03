@@ -129,6 +129,7 @@ main { max-width: var(--content); margin: auto; padding: 2rem 2.5rem 2.5rem; }
 .editor-field { position: relative; flex: 1; min-width: 0; }
 textarea, .editor-mirror { padding: 0; font: .875rem/1.9 'IBM Plex Mono', monospace; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
 textarea { position: relative; display: block; resize: none; background: transparent; border: 0; width: 100%; min-height: 1.6625rem; max-height: 70vh; outline: none; color: var(--term-text); caret-color: var(--term-caret); }
+textarea::placeholder { color: var(--term-muted); opacity: .55; }
 .editor-mirror { position: absolute; top: 0; left: 0; overflow: hidden; color: transparent; pointer-events: none; }
 .editor-mirror mark { color: transparent; background: var(--term-mark); border-radius: .1875rem; box-shadow: 0 0 0 .125rem var(--term-mark); }
 /* A large resize handle; the native grabber is small and cannot be restyled everywhere. */

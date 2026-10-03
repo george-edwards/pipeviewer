@@ -1615,8 +1615,11 @@ const firstUnsolved = () => {
   const i = lessons.findIndex(lesson => !lesson.intro && !progress[lesson.id]);
   return i < 0 ? 1 : i;
 };
+// The editor's placeholder is an example for the viewer. In training it would hint at answers.
+const placeholder = $('#pipeline').placeholder;
 function enterTraining(level = firstUnsolved()) {
   if (!training.active) training.viewer = $('#pipeline').value;
+  $('#pipeline').placeholder = '';
   training.active = true;
   document.documentElement.classList.add('training');
   $('#training').hidden = $('#target-panel').hidden = false;
@@ -1638,6 +1641,7 @@ function exitTraining() {
   $('#target-diagram').innerHTML = '';
   history.replaceState(null, '', location.pathname + location.search);
   $('#pipeline').value = training.viewer;
+  $('#pipeline').placeholder = placeholder;
   fitEditor();
   render();
   $('#pipeline').focus({ preventScroll: true });
