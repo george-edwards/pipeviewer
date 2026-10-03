@@ -108,13 +108,11 @@ make |& grep -i error
   {
     syntax: 'a && b',
     summary: '[AND] run `b` only if `a` succeeded.',
-    more: `Logical AND: \`a\` and \`b\`. Should \`a\` fail, then \`b\` won’t even be executed, because the entire proposition has already failed. Use it to chain steps that each depend on the one before.
+    more: `Logical AND: \`a\` and \`b\`. Should \`a\` fail, then \`b\` won’t even be executed, because the proposition is already false once \`a\` fails.
 
 \`\`\`
 mkdir backup && cp notes.txt backup/
-\`\`\`
-
-If the folder can’t be made, nothing is copied.`,
+\`\`\``,
   },
   {
     syntax: 'a || b',
