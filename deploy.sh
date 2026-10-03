@@ -1,27 +1,22 @@
 #!/usr/bin/env bash
 # Build Pipeviewer and deploy it to the web server.
 #
-#   ./deploy.sh          test, build, copy the site, and reload nginx
-#   ./deploy.sh --nginx  also rewrite the nginx site file, even if it exists
+#   ./deploy.sh   test, build, copy the site, write the nginx site file, and reload nginx
 #
 # The site is copied to a staging folder in your home directory on the server first, and then
 # installed with sudo, so sudo can ask for your password as usual. The nginx site file is written
-# only when it's missing, because certbot edits it to add HTTPS and a rewrite would undo that.
+# on every deploy, using the *.offelbrook.com certificate; if nginx -t rejects it, the previous
+# file is put back.
 set -euo pipefail
 
 HOST=jellyfin
 NAME=pipeviewer
 DOMAIN=pipeviewer.offelbrook.com
 ROOT=/var/www/$NAME
+CERT=/etc/letsencrypt/live/offelbrook.com
 STAGE=.cache/$NAME-deploy   # relative to your home directory on the server
 
-rewrite_nginx=0
-for arg in "$@"; do
-  case $arg in
-    --nginx) rewrite_nginx=1 ;;
-    *) echo "usage: $0 [--nginx]" >&2; exit 2 ;;
-  esac
-done
+[ $# -eq 0 ] || { echo "usage: $0" >&2; exit 2; }
 
 cd "$(dirname "$0")"
 
@@ -41,6 +36,16 @@ server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name $DOMAIN;
+
+    ssl_certificate     $CERT/fullchain.pem;
+    ssl_certificate_key $CERT/privkey.pem;
 
     root $ROOT;
     index index.html;
@@ -66,16 +71,23 @@ mkdir -p $ROOT
 rsync -a --delete --chown=root:root --chmod=D755,F644 site/ $ROOT/
 
 available=/etc/nginx/sites-available/$NAME
-if [ ! -e "\$available" ] || [ $rewrite_nginx = 1 ]; then
-  echo "==> Writing \$available"
-  install -m 644 $NAME.nginx "\$available"
-else
-  echo "==> Keeping the existing \$available (pass --nginx to rewrite it)"
-fi
+echo "==> Writing \$available"
+[ -e "\$available" ] && cp -p "\$available" "\$available.previous"
+install -m 644 $NAME.nginx "\$available"
 ln -sfn "\$available" /etc/nginx/sites-enabled/$NAME
 
 echo "==> Testing and reloading nginx"
-nginx -t
+if ! nginx -t; then
+  if [ -e "\$available.previous" ]; then
+    mv "\$available.previous" "\$available"
+    echo "nginx -t failed, so the previous \$available is back and nginx was not reloaded." >&2
+  else
+    rm -f /etc/nginx/sites-enabled/$NAME "\$available"
+    echo "nginx -t failed, so the new site was removed and nginx was not reloaded." >&2
+  fi
+  exit 1
+fi
+rm -f "\$available.previous"
 systemctl reload nginx
 EOF
 
@@ -87,4 +99,4 @@ rsync -az "$extra/$NAME.nginx" "$extra/install.sh" "$HOST:$STAGE/"
 echo "==> Installing on $HOST (sudo may ask for your password)"
 ssh -t "$HOST" "sudo bash $STAGE/install.sh"
 
-echo "==> Deployed: http://$DOMAIN/"
+echo "==> Deployed: https://$DOMAIN/"
