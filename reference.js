@@ -119,7 +119,7 @@ If the folder can’t be made, nothing is copied.`,
   {
     syntax: 'a || b',
     summary: '[OR] run `b` only if `a` failed.',
-    more: `Logical OR: \`a\` or \`b\`. Should \`a\` succeed, then \`b\` won’t even be executed, because the entire proposition has already succeeded. Handy for a fallback, or an error message.
+    more: `Logical OR: \`a\` or \`b\`. Should \`a\` succeed, then \`b\` won’t even be executed, because the proposition is already true once \`a\` succeeds.
 
 \`\`\`
 mkdir backup || echo "couldn't make backup" >&2
