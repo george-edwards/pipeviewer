@@ -17,7 +17,7 @@ npm test       # Parser behaviour and redirect ordering
 npm run build # Static files in dist/
 ```
 
-Serve `dist/` with any static host. No build dependencies or backend are needed. The interface uses optional Google Fonts with local fallbacks.
+Serve `dist/` with any static host, at a domain's root or under a subpath such as `/pipeviewer/`: every path in the page is relative. Under a subpath, link to it with the trailing slash, which nginx adds itself when the folder is reached through `try_files $uri $uri/`. No build dependencies or backend are needed. The interface uses optional Google Fonts with local fallbacks.
 
 The **Tips & Tricks** button plays a recorded talk from `video/`, which is not in git. Put the `.webm` file there before building, and `npm run build` copies it to `dist/video/`. Your static host must support HTTP range requests so the player can seek. The dev server supports them.
 
