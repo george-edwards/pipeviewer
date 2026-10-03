@@ -150,7 +150,7 @@ let currentSource = '';
 // Training mode: the level being played, the target's model, how the student's picture differs from
 // it (null while there is nothing to compare), and the hints taken. Viewer is what the editor held
 // before training started, put back on the way out.
-const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '', slide: -1 };
+const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: 0, earned: 0, burst: false, coach: '', viewer: '', slide: -1, nudge: false };
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
 // Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
 // Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
@@ -1389,14 +1389,38 @@ function markDifferences() {
   }
 }
 
+// Level 0 is never opened for the student. Until they've seen it, its button is tinted stdin's
+// green, and it pulses when they look stuck: a hint taken, a level restarted, or a level left
+// unmatched for a while. Solving a level unaided calms it again.
+let n00bSeen = false;
+try { n00bSeen = localStorage.getItem('pipeviewer-n00b') === 'seen'; } catch {}
+let nudgeTimer = 0;
+function nudge() {
+  if (n00bSeen || !training.active || training.matched || training.level === 0 || training.nudge) return;
+  training.nudge = true;
+  showLevels();
+}
+function seeN00b() {
+  n00bSeen = true;
+  training.nudge = false;
+  try { localStorage.setItem('pipeviewer-n00b', 'seen'); } catch {}
+}
+
+let levelsMarkup = '';
 function showLevels() {
-  // The buttons are rebuilt around the thumb, which stays so it can slide to the new level.
-  $('#levels').querySelectorAll(':scope > button').forEach(button => button.remove());
-  $('#levels').insertAdjacentHTML('beforeend', lessons.map((lesson, i) => {
+  const markup = lessons.map((lesson, i) => {
     const earned = progress[lesson.id] ?? 0, active = i === training.level;
-    return `<button type="button" data-level="${i}" aria-pressed="${active}"${active ? ' class="active"' : ''} title="Level ${i}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
-  }).join(''));
-  slide($('#levels'));
+    const classes = [active && 'active', lesson.intro && !n00bSeen && 'fresh', lesson.intro && training.nudge && 'nudge'].filter(Boolean).join(' ');
+    return `<button type="button" data-level="${i}" aria-pressed="${active}"${classes ? ` class="${classes}"` : ''} title="Level ${i}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
+  }).join('');
+  // The buttons are rebuilt only when they change, so a pulse isn't restarted on every keystroke,
+  // and around the thumb, which stays so it can slide to the new level.
+  if (markup !== levelsMarkup) {
+    levelsMarkup = markup;
+    $('#levels').querySelectorAll(':scope > button').forEach(button => button.remove());
+    $('#levels').insertAdjacentHTML('beforeend', markup);
+    slide($('#levels'));
+  }
   const total = lessons.reduce((sum, lesson) => sum + (progress[lesson.id] ?? 0), 0);
   $('#star-total').innerHTML = `${star(true)}<span>${total}<span class="star-of"> / ${lessons.length * 3}</span></span><span class="sr-only"> stars</span>`;
 }
@@ -1470,6 +1494,7 @@ function showTraining() {
       try { localStorage.setItem('pipeviewer-training', JSON.stringify(progress)); } catch {}
     }
     training.burst = true;
+    if (!training.hints) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
   }
   training.matched = matched;
@@ -1489,6 +1514,9 @@ function showTraining() {
 function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
   Object.assign(training, { level: i, hints: 0, matched: false, coach: '' });
+  if (lesson.intro) seeN00b();
+  clearTimeout(nudgeTimer);
+  if (!n00bSeen) nudgeTimer = setTimeout(nudge, 40000);
   const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
   $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
   $('#lesson-brief').innerHTML = prose(lesson.brief);
@@ -1545,10 +1573,9 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'ArrowLeft' && training.slide) { event.preventDefault(); showSlide(training.slide - 1); }
 });
 
-// Training opens at the first unsolved level. Level 0 is skipped for anyone who has played before.
+// Training opens at the first unsolved level after level 0, which the student finds for themselves.
 const firstUnsolved = () => {
-  const played = lessons.some(lesson => progress[lesson.id]);
-  const i = lessons.findIndex(lesson => !progress[lesson.id] && !(lesson.intro && played));
+  const i = lessons.findIndex(lesson => !lesson.intro && !progress[lesson.id]);
   return i < 0 ? 1 : i;
 };
 function enterTraining(level = firstUnsolved()) {
@@ -1565,6 +1592,7 @@ function exitTraining() {
   if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
   closeIntro();
+  clearTimeout(nudgeTimer);
   document.documentElement.classList.remove('training');
   $('#training').hidden = $('#target-panel').hidden = true;
   $('.example-rows').hidden = false;
@@ -1593,9 +1621,10 @@ $('#hint-buttons').addEventListener('click', event => {
   const button = event.target.closest('[data-hint]');
   if (!button || training.matched) return;
   training.hints = Math.max(training.hints, Number(button.dataset.hint));
+  nudge();
   showTraining();
 });
-$('#restart').addEventListener('click', () => loadLesson(training.level, { intro: false }));
+$('#restart').addEventListener('click', () => { loadLesson(training.level, { intro: false }); nudge(); });
 $('#coach').addEventListener('click', event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();

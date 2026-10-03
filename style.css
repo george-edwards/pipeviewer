@@ -359,6 +359,11 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .level-number { font-weight: 600; }
 /* DM Sans draws 0 like O, so a word with zeros in it, as n00b has, is set in Plex Mono. */
 .level-label { font: 600 .75rem 'IBM Plex Mono', monospace; }
+/* Unseen, level 0 takes stdin's green, as the Training button does: the place to start. When the
+   student looks stuck it pulses a few times, then keeps a green outline. */
+.level-buttons button.fresh { background: var(--green-bg); color: var(--green); }
+.level-buttons button.nudge { box-shadow: 0 0 0 1px var(--green); animation: n00b-nudge 1.6s ease-out .3s 3; }
+@keyframes n00b-nudge { 0% { box-shadow: 0 0 0 1px var(--green), 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent); } 100% { box-shadow: 0 0 0 1px var(--green), 0 0 0 .625rem transparent; } }
 .lesson-label { font-family: 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
 .level-stars { display: inline-flex; gap: .0625rem; }
 .level-stars .star { width: .5rem; height: .5rem; }
