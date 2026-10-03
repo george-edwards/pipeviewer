@@ -108,7 +108,7 @@ make |& grep -i error
   {
     syntax: 'a && b',
     summary: '[AND] run `b` only if `a` succeeded.',
-    more: `Logical AND: \`a\` and \`b\`. Should \`a\` fail, then \`b\` won’t even be executed, because the entire premise has already failed. \`a\` succeeds when it exits with status 0. Use it to chain steps that each depend on the one before.
+    more: `Logical AND: \`a\` and \`b\`. Should \`a\` fail, then \`b\` won’t even be executed, because the entire premise has already failed. Use it to chain steps that each depend on the one before.
 
 \`\`\`
 mkdir backup && cp notes.txt backup/
