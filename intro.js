@@ -9,7 +9,8 @@
 // example  a command that shows the idea, and a note on what the picture shows.
 // picture  draws the example as SVG.
 // video    in place of an example and a picture, a YouTube film, shown as a tape until it's played:
-//          its id, the second to start at, and the label on the tape.
+//          its id, the second to start at, the label on the tape, and its chapters as [second,
+//          name] up to `end`. The chapter numbered `goal` is the one worth waiting for.
 
 const LOOP = 7;
 
@@ -143,7 +144,10 @@ export const slides = [
   },
   {
     title: 'Rewind to 1982',
-    text: 'Blow the dust off the VHS. Bell Labs filmed the people who built Unix, and here’s Brian Kernighan building a spelling checker out of programs that already exist, without writing a line of code.',
-    video: { id: 'XvDZLjaCJuw', start: 314, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'] },
+    text: 'Blow the dust off the VHS. Bell Labs filmed the people who built Unix. First Brian Kernighan builds a spelling checker the long way, with a temporary file for every step. Hang in there through a short bit about files: at 13:48 Lorinda Cherry builds it again with pipes, and the temporary files disappear.',
+    video: {
+      id: 'XvDZLjaCJuw', start: 314, end: 1000, label: ['THE UNIX SYSTEM', 'BELL LABS · 1982'],
+      chapters: [[314, 'Brian: temp files'], [665, 'files'], [793, 'Lorinda: pipes']], goal: 2,
+    },
   },
 ];

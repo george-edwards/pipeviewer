@@ -1584,10 +1584,31 @@ const tape = ({ label: [title, by] }) => `<div class="intro-video"><button type=
   <rect class="tape-window" x="60" y="92" width="200" height="56" rx="28"/>
   ${[100, 220].map(cx => `<g class="tape-reel"><circle cx="${cx}" cy="120" r="21"/>${[0, 60, 120].map(a => `<rect x="${cx - 2}" y="103" width="4" height="34" transform="rotate(${a} ${cx} 120)"/>`).join('')}<circle class="tape-hub" cx="${cx}" cy="120" r="6"/></g>`).join('')}
   <g class="tape-play"><circle cx="160" cy="120" r="19"/><path d="M154 109v22l18-11z"/></g></svg></button></div>`;
+// Once played, the film fills the slide, over a strip of its chapters drawn to scale. The chapter
+// worth waiting for is lit, and a playhead shows how far off it is.
 $('#intro-slide').addEventListener('click', event => {
   if (!event.target.closest('.tape')) return;
-  const { id, start, label } = slides[training.slide].video;
-  event.target.closest('.tape').outerHTML = `<iframe class="tape-player" src="https://www.youtube-nocookie.com/embed/${id}?start=${start}&autoplay=1&rel=0" title="${escape(label.join(', '))}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  const { id, start, end, label, chapters, goal } = slides[training.slide].video;
+  const strip = chapters.map(([from, name], i) => `<span class="chapter${i === goal ? ' goal' : ''}" style="flex-grow: ${(chapters[i + 1]?.[0] ?? end) - from}">${escape(name)}</span>`).join('');
+  event.target.closest('.tape').outerHTML = `<iframe class="tape-player" src="https://www.youtube-nocookie.com/embed/${id}?start=${start}&autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" title="${escape(label.join(', '))}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    + `<div class="chapters" aria-hidden="true">${strip}<i class="playhead"></i></div>`;
+  // The player reports its time once asked to. Like YouTube's own API, keep asking until it answers,
+  // since it may not be listening yet when it first loads.
+  const player = $('.tape-player');
+  const ask = () => player.isConnected && !player.dataset.answered && player.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 'film', channel: 'widget' }), 'https://www.youtube-nocookie.com');
+  player.addEventListener('load', () => { for (let i = 0; i < 20; i++) setTimeout(ask, i * 500); });
+});
+addEventListener('message', event => {
+  if (event.origin !== 'https://www.youtube-nocookie.com' || training.slide < 0) return;
+  let time;
+  try { time = JSON.parse(event.data)?.info?.currentTime; } catch { return; }
+  const film = slides[training.slide]?.video, head = $('.chapters .playhead');
+  if (typeof time !== 'number' || !film || !head) return;
+  const at = Math.min(1, Math.max(0, (time - film.start) / (film.end - film.start)));
+  $('.tape-player').dataset.answered = 'yes';
+  head.style.left = `${at * 100}%`;
+  head.classList.add('live');
+  $('.chapters .goal')?.classList.toggle('now', time >= film.chapters[film.goal][0] && time < film.end);
 });
 
 function closeIntro() {
