@@ -97,7 +97,7 @@ make &>> build.log
   {
     syntax: 'cmd |& next',
     summary: 'Pipe both output streams, applying the stderr copy after explicit redirects.',
-    more: `\`|&\` pipes stderr along with stdout. It’s short for \`2>&1 |\`, added after any redirects you wrote on \`cmd\`, so \`cmd 2> err.log |& next\` still sends stderr down the pipe.
+    more: `\`|&\` pipes stderr along with stdout. It’s short for \`2>&1 |\`, added after any redirects you wrote on \`cmd\`, so \`cmd 2> err.log |& next\` sends stderr down the pipe and not into \`err.log\`.
 
 \`\`\`
 make |& grep -i error
@@ -137,7 +137,7 @@ date ; ls
   {
     syntax: '2>&-',
     summary: 'Close a descriptor.',
-    more: `\`2>&-\` closes stderr, so the command has nothing at all there. Writing to a closed stream fails, whereas writing to \`/dev/null\` quietly succeeds, so \`2> /dev/null\` is usually what you want.
+    more: `\`2>&-\` closes stderr. Writing to a closed descriptor fails.
 
 \`\`\`
 ls nope 2>&-
