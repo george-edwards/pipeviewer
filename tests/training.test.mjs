@@ -45,3 +45,6 @@ test('every level starts away from its target, and its target parses on both sys
 test('each hint costs a star, down to one', () => {
   assert.deepEqual([0, 1, 2, 3].map(starsFor), [3, 2, 1, 1]);
 });
+test('|& draws the same picture as 2>&1 |', () => {
+  for (const platform of ['linux', 'macos']) assert.deepEqual(diff('make 2>&1 | tee build.log', 'make |& tee build.log', platform), []);
+});
