@@ -3,7 +3,6 @@ import { portUsage, pipeActivity, commands, ships } from './usage.js';
 import { compare, starsFor } from './training.js';
 import { lessons as plumbing } from './lessons.js';
 import { run, screenLines, sameLine, tools } from './sandbox.js';
-import { files as caseFiles, levels as caseLevels } from './cases.js';
 import { files as wayFiles, levels as wayLevels } from './unixway.js';
 import { slides } from './intro.js';
 import { reference } from './reference.js';
@@ -1379,26 +1378,23 @@ $('#download').addEventListener('click', () => {
 // command the student cannot see, and they edit their own command until its picture matches. Their
 // diagram is the usual one under the editor; the target's is drawn above the editor, or beside
 // theirs on wide screens. Each course keeps the best stars per level under the level's id.
-// name, audience, about and length are shown on the course's card in the picker, in this order.
-// A course with files runs the student's commands on them and compares output; one without compares
-// pictures. collects keeps a toolbox of the tools found, gauges shows what each command holds in
-// memory and how it exited, and next is the course its last level leads on to.
+// name, audience, about and length are shown on the course's card in the picker. A course with
+// files runs the student's commands on them and compares output; one without compares pictures.
+// gauges shows what each command holds in memory and how it exited, and next is the course its last
+// level leads on to. Toolbox, for newcomers, is a page of its own, toolbox.html.
 const tracks = {
-  toolbox: { levels: caseLevels, files: caseFiles, collects: true, next: 'unixway', store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1,
-    name: 'Toolbox', audience: 'New to the shell', about: 'Crack a whodunit with `ls`, `grep`, `sort` and friends, and see what small tools can do when you pipe them together.', length: 'about 10 minutes' },
   unixway: { levels: wayLevels, files: wayFiles, gauges: true, next: 'plumbing', store: 'pipeviewer-unixway', tour: 'pipeviewer-tour-unixway', hash: 'unixway', from: 1,
     name: 'The Unix Way', audience: 'Why it works like this', about: 'Everything is a file, small tools that do one thing well, and streams that hold only what they must. Plus a few things Windows does differently.', length: 'about 10 minutes' },
   plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0,
     name: 'Plumbing', audience: 'Know your way around', about: 'Match the pictures: send stdin, stdout and stderr through pipes, files and each other until the redirects are second nature.', length: 'from n00b to process substitution' },
 };
-const saved = { toolbox: {}, plumbing: {} };
+const saved = Object.fromEntries(Object.keys(tracks).map(name => [name, {}]));
 for (const name of Object.keys(tracks)) try { saved[name] = JSON.parse(localStorage.getItem(tracks[name].store)) ?? {}; } catch {}
-// A newcomer starts on Toolbox. Someone who has already played Plumbing goes back to it.
-let track = Object.keys(saved.plumbing).length ? 'plumbing' : 'toolbox';
+// Someone who has played Plumbing goes back to it; anyone else starts on The Unix Way.
+let track = Object.keys(saved.plumbing).length ? 'plumbing' : 'unixway';
 try { const chosen = localStorage.getItem('pipeviewer-track'); if (tracks[chosen]) track = chosen; } catch {}
 let lessons = tracks[track].levels, progress = saved[track];
 const runs = () => !!tracks[track].files;
-const collects = () => !!tracks[track].collects;
 // A level's field as it reads on the chosen system: some levels differ on macOS.
 const field = (lesson, key) => platform === 'macos' && lesson.mac?.[key] !== undefined ? lesson.mac[key] : lesson[key];
 const targetOf = lesson => field(lesson, 'target');
@@ -1419,8 +1415,7 @@ function setTrack(name) {
 }
 // The course switch, and the parts of the screen that differ between courses.
 function showTrack() {
-  document.documentElement.classList.toggle('toolbox', runs());
-  document.documentElement.classList.toggle('collects', collects());
+  document.documentElement.classList.toggle('runs', runs());
   document.documentElement.classList.toggle('gauged', !!tracks[track].gauges);
   $('#output-panel').hidden = !runs();
   $('#target-title').textContent = runs() ? 'Goal' : 'Target';
@@ -1433,9 +1428,8 @@ function showTrack() {
   const first = $('#hint-buttons [data-hint="1"]');
   first.dataset.plumbing ??= first.textContent;
   first.dataset.plumbingTitle ??= first.title;
-  first.textContent = runs() ? first.dataset.toolbox : first.dataset.plumbing;
-  first.title = runs() ? first.dataset.toolboxTitle : first.dataset.plumbingTitle;
-  toolbeltMarkup = '';
+  first.textContent = runs() ? first.dataset.runs : first.dataset.plumbing;
+  first.title = runs() ? first.dataset.runsTitle : first.dataset.plumbingTitle;
 }
 
 // Toolbox compares what reaches the terminal, line by line: each line of the goal that the
@@ -1538,17 +1532,6 @@ function showGauges(result) {
   }).join('');
 }
 
-// The toolbox: every tool the course hands over, collected as levels are solved. Tools still to
-// come are shown faintly, so the student can see what's ahead.
-const earnedTools = () => new Set(caseLevels.filter(level => saved.toolbox[level.id]).flatMap(level => level.tools));
-const allTools = [...new Set(caseLevels.flatMap(level => level.tools))];
-let toolbeltMarkup = '';
-function showToolbelt() {
-  if (!collects() || !training.active) return;
-  const earned = earnedTools();
-  const markup = allTools.map(name => `<li class="${earned.has(name) ? 'earned' : 'ahead'}${training.found?.includes(name) ? ' fresh' : ''}" title="${earned.has(name) ? `${escape(name)} ${escape(tools[name].summary)}` : 'Still to find'}"><code>${escape(name)}</code></li>`).join('');
-  if (markup !== toolbeltMarkup) $('#toolbelt').innerHTML = toolbeltMarkup = markup;
-}
 // A tool's card: what it does and, in a hint, the options worth knowing first.
 const toolCard = (name, options = true) => `<span class="tool-card"><code>${escape(name)}</code> ${escape(tools[name].summary)}${options && tools[name].options.length ? `<span class="tool-options">${tools[name].options.map(([flag, text]) => `<span><code>${escape(flag)}</code> ${escape(text)}</span>`).join('')}</span>` : ''}</span>`;
 
@@ -1660,12 +1643,11 @@ function showCoach() {
       training.burst = false;
       const following = tracks[tracks[track].next];
       const finale = following
-        ? `<p class="solved-finale">${collects() ? `You found ${earnedTools().size} tools and` : 'You earned'} <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="next-course">On to ${escape(following.name)} <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="courses">All courses</button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
+        ? `<p class="solved-finale">You earned <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="next-course">On to ${escape(following.name)} <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="courses">All courses</button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
         : `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
       const next = last ? finale
         : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${levelNumber(training.level + 1)}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
-      const found = collects() && training.found.length ? `<div class="found">${training.found.map(name => `<p><span class="found-label">New tool</span>${toolCard(name, false)}</p>`).join('')}</div>` : '';
-      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p>${found}<p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
     } else {
       const parts = [
         runs() ? `<div class="hint"><span class="row-label">${field(lesson, 'tools').length === 1 ? 'TOOL' : 'TOOLS'}</span>${field(lesson, 'tools').map(name => toolCard(name)).join('')}</div>` : `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
@@ -1690,14 +1672,13 @@ function showTraining() {
   if (!training.active) return;
   const differences = training.differences, matched = !!differences && !differences.length;
   if (matched && !training.matched) {
-    const lesson = lessons[training.level], before = earnedTools();
+    const lesson = lessons[training.level];
     training.earned = starsFor(training.hints.length);
     if (!(progress[lesson.id] >= training.earned)) {
       progress[lesson.id] = training.earned;
       try { localStorage.setItem(tracks[track].store, JSON.stringify(progress)); } catch {}
     }
     if (runs()) keepCommand(lesson.id, $('#pipeline').value.trim());
-    training.found = collects() ? lesson.tools.filter(name => !before.has(name)) : [];
     training.burst = true;
     if (!training.hints.length) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
@@ -1711,7 +1692,6 @@ function showTraining() {
   status.textContent = matched ? '✓ Matches the target' : differences ? `${differences.length} difference${differences.length === 1 ? '' : 's'}` : $('#pipeline').value.trim() ? 'Keep typing…' : 'Type a command';
   markDifferences();
   showScreens();
-  showToolbelt();
   showLevels();
   showHints();
   showCoach();
@@ -1720,7 +1700,7 @@ function showTraining() {
 // A level with an intro opens on its explainer, unless the student is only starting it over.
 function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
-  Object.assign(training, { level: i, hints: [], matched: false, coach: '', result: null, goal: null, revealed: new Set(), found: [] });
+  Object.assign(training, { level: i, hints: [], matched: false, coach: '', result: null, goal: null, revealed: new Set() });
   if (lesson.intro) training.nudge = false;
   clearTimeout(nudgeTimer);
   if (!runs() && !n00bDone() && !lesson.intro) nudgeLater();
@@ -1839,13 +1819,26 @@ function enterTraining(level = firstUnsolved()) {
 // the student's progress. Choosing one opens it at its first unsolved level.
 const coursePreviews = {
   unixway: () => `<ul class="course-preview gauges preview-gauges" aria-hidden="true">${[['seq', 0, ''], ['sort', 1, ' all'], ['head', 0, '']].map(([name, grows, all]) => `<li class="gauge${all}"><span class="light ok"></span><code>${name}</code><span class="bar"><i class="${grows ? 'grows' : ''}" style="width: ${grows ? 82 : 22}%"></i></span><span class="held">${grows ? 'all of it' : '≤ 64 KiB'}</span></li>`).join('')}</ul>`,
-  toolbox: () => `<pre class="course-preview screen goal" aria-hidden="true"><span class="line prompt-line">$ ls | grep txt</span>${['found-in-bin.txt', 'pantry-1500.txt', 'pantry-1510.txt', 'staff.txt'].map((name, i) => `<span class="line cycle" style="--i: ${i}"><i>${name}</i></span>`).join('')}</pre>`,
+  // Toolbox's preview is a real pipeline on the case, with its real counts.
+  toolbox: () => `<div class="course-preview preview-terminal" aria-hidden="true"><span class="preview-prompt">$ <span>grep kitchen swipes.log | cut -d ' ' -f 3 | sort | uniq -c | sort -rn</span></span><span class="preview-stages"><i>grep <b>153</b></i>|<i>cut <b>153</b></i>|<i>sort <b>153</b></i>|<i>uniq -c <b>15</b></i>|<i>sort -rn <b>15</b></i></span><span class="preview-out">19 tpham</span><span class="preview-out">19 jlee<i class="preview-cursor"></i></span></div>`,
   plumbing: () => `<svg class="course-preview course-pipes" viewBox="0 0 260 112" aria-hidden="true">
     <rect class="pic-card-body" x="70" y="18" width="96" height="76" rx="8"/><text class="course-cmd" x="82" y="40">make</text>
     <path class="course-stream fd0" d="M14 52H70"/><path class="course-stream fd1" d="M166 52H204"/><path class="course-stream fd2" d="M166 76H186V58H204"/>
     <circle class="course-port fd0" cx="70" cy="52" r="4"/><circle class="course-port fd1" cx="166" cy="52" r="4"/><circle class="course-port fd2" cx="166" cy="76" r="4"/>
     <rect class="course-file" x="204" y="40" width="46" height="24" rx="4"/><text class="course-file-name" x="227" y="56" text-anchor="middle">log</text></svg>`,
 };
+// Toolbox lives on its own page; its card reads the progress that page saves.
+const toolboxCourse = { href: 'toolbox.html', name: 'Toolbox', audience: 'New to the shell', about: 'Crack a whodunit in a pretend terminal with `ls`, `grep`, `sort` and friends, and see what small tools can do when you pipe them together.', length: 'about 10 minutes' };
+function toolboxCard() {
+  let session = null;
+  try { session = JSON.parse(localStorage.getItem('pipeviewer-toolbox-session')); } catch {}
+  const action = !session?.history?.length ? 'Start' : session.closed ? 'Play again' : 'Carry on';
+  return `<a class="course-card beginner" href="${toolboxCourse.href}">
+    <span class="course-audience">${escape(toolboxCourse.audience)}</span>${coursePreviews.toolbox()}
+    <span class="course-name">${escape(toolboxCourse.name)}</span><span class="course-about">${prose(toolboxCourse.about)}</span>
+    <span class="course-meta"><span>7 questions · ${escape(toolboxCourse.length)}</span>${session?.found ? `<span class="course-stars">✓ ${session.found} / ${session.of}</span>` : ''}</span>
+    <span class="course-go">${action} <span aria-hidden="true">→</span></span></a>`;
+}
 function showCourses() {
   training.choosing = true;
   closeIntro();
@@ -1853,11 +1846,11 @@ function showCourses() {
   document.documentElement.classList.add('choosing');
   $('#courses').hidden = false;
   history.replaceState(null, '', '#courses');
-  $('#course-cards').innerHTML = Object.entries(tracks).map(([name, course]) => {
+  $('#course-cards').innerHTML = toolboxCard() + Object.entries(tracks).map(([name, course]) => {
     const done = saved[name], earned = course.levels.reduce((sum, level) => sum + (done[level.id] ?? 0), 0), max = course.levels.length * 3;
     const next = course.levels.findIndex(level => !level.intro && !done[level.id]);
     const action = !earned ? 'Start' : next < 0 ? 'Play again' : `Continue at level ${next + course.from}`;
-    return `<button type="button" class="course-card${name === 'toolbox' ? ' beginner' : ''}" data-course="${name}">
+    return `<button type="button" class="course-card" data-course="${name}">
       <span class="course-audience">${escape(course.audience)}</span>${coursePreviews[name]()}
       <span class="course-name">${escape(course.name)}</span><span class="course-about">${prose(course.about)}</span>
       <span class="course-meta"><span>${course.levels.length} levels · ${escape(course.length)}</span>${earned ? `<span class="course-stars">${star(true)}${earned} / ${max}</span>` : ''}</span>
@@ -1882,7 +1875,7 @@ function exitTraining() {
   closeIntro();
   hideCourses();
   clearTimeout(nudgeTimer);
-  document.documentElement.classList.remove('training', 'toolbox');
+  document.documentElement.classList.remove('training', 'runs');
   $('#training').hidden = $('#target-panel').hidden = $('#output-panel').hidden = true;
   $('#goal').innerHTML = $('#output').innerHTML = '';
   $('.example-rows').hidden = false;
@@ -1904,6 +1897,7 @@ const transition = change => document.startViewTransition ? document.startViewTr
 const openTraining = (level, name = track) => transition(() => { if (name !== track) setTrack(name); enterTraining(level); }).then(() => { if (!training.choosing && !toured() && training.slide < 0) startTour(); });
 // Switching course starts the new one at its first unsolved level.
 function switchTrack(name) {
+  if (name === 'toolbox') return location.assign(toolboxCourse.href);
   if (name === track || tourStep >= 0) return;
   transition(() => { setTrack(name); closeIntro(); showTrack(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
 }
@@ -1942,11 +1936,12 @@ $('#pipeline').addEventListener('keydown', event => {
     nextLevel();
   }
 });
-// #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #toolbox and
-// #toolbox/3 do the same for Toolbox, and #courses opens the picker. So a link can send a colleague
-// straight there.
-const trainingLink = () => new RegExp(`^#(${Object.values(tracks).map(course => course.hash).join('|')}|courses)(?:/(\\d+))?$`).exec(location.hash);
+// #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #unixway and
+// #unixway/3 do the same for The Unix Way, and #courses opens the picker. #toolbox, from before Toolbox
+// had a page of its own, goes to that page. So a link can send a colleague straight there.
+const trainingLink = () => new RegExp(`^#(${Object.values(tracks).map(course => course.hash).join('|')}|courses|toolbox)(?:/(\\d+))?$`).exec(location.hash);
 const followLink = ([, hash, number]) => {
+  if (hash === 'toolbox') return location.replace(toolboxCourse.href);
   if (hash === 'courses') return training.choosing || openTraining(null);
   const name = Object.keys(tracks).find(key => tracks[key].hash === hash);
   openTraining(number === undefined ? undefined : Number(number) - tracks[name].from, name);
@@ -1959,13 +1954,7 @@ addEventListener('hashchange', () => {
 // The tour walks a first-time student through the training screen: everything dims but one part,
 // which a spotlight picks out while a card beside it explains it. The spotlight glides from part to
 // part and follows it while the page scrolls.
-const tourSteps = { toolbox: [
-  { at: '#training', title: 'Training mode engaged', text: () => `A case to crack with real Unix tools, each a small program that does one job. Every level hands you one, and there are ${lessons.length} levels, each worth up to three stars.` },
-  { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type, on the files in the case. Nothing leaves your browser.' },
-  { at: '#output-panel', title: 'What it prints', text: () => 'Whatever your command prints shows up here, as a terminal would show it. Errors come up in amber.' },
-  { at: '#target-panel', title: 'Your goal', text: () => 'The output you’re after, blacked out. Each line uncovers itself when yours matches it.' },
-  { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
-], unixway: [
+const tourSteps = { unixway: [
   { at: '#training', title: 'The Unix Way', text: () => `Why Unix works the way it does, one idea a level, tried out on a pretend machine. There are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type. Nothing leaves your browser.' },
   { at: '#output-panel', title: 'What it prints', text: () => 'Its output shows up here, errors in amber. Under it, each command gets a light for how it exited, and a gauge for how much it holds in memory at once.' },

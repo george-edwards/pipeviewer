@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePipeline } from '../parser.js';
 import { run, screenLines, sameLine, tools } from '../sandbox.js';
-import { files, levels } from '../cases.js';
+import { files, clues } from '../cases.js';
 
 const shell = (source, platform = 'linux', on = files) => run(parsePipeline(source, { platform }), on, { platform });
 // An empty editor prints nothing.
@@ -11,22 +11,25 @@ const out = (source, platform) => screen(source, platform).filter(line => line.f
 const err = (source, platform) => screen(source, platform).filter(line => line.fd === 2).map(line => line.text);
 const matches = (a, b) => a.length === b.length && a.every((line, i) => line.fd === b[i].fd && sameLine(line.text, b[i].text));
 
-test('every level’s target prints something, and no errors, on both systems', () => {
-  for (const level of levels) for (const platform of ['linux', 'macos']) {
-    const lines = screen(level.target, platform);
-    assert.ok(lines.length, level.id);
-    assert.deepEqual(lines.filter(line => line.fd === 2), [], `${level.id} on ${platform}`);
+// The note in the bin turns up by mail partway through, so the files grow by one.
+test('each question’s last nudge finds its answer, on both systems, with no errors', () => {
+  for (const clue of clues) for (const platform of ['linux', 'macos']) {
+    const example = clue.nudges.at(-1).try, result = shell(example, platform);
+    assert.ok(example, `${clue.id} ends with a command to try`);
+    assert.deepEqual(screenLines(result).filter(line => line.fd === 2), [], `${clue.id} on ${platform}`);
+    assert.ok(clue.found(screenLines(result).map(line => line.text).join('\n'), result), `${clue.id} on ${platform}: ${example}`);
   }
+  assert.equal(new Set(clues.map(clue => clue.id)).size, clues.length);
 });
-test('every level starts away from its target, and has the parts it needs', () => {
-  levels.forEach((level, i) => {
-    const start = level.start ?? levels[i - 1].target;
-    for (const platform of ['linux', 'macos']) assert.ok(!matches(screen(start, platform), screen(level.target, platform)), level.id);
-    for (const key of ['id', 'title', 'brief', 'target', 'how', 'learned']) assert.ok(level[key], `${level.id}: ${key}`);
-    for (const name of level.tools) assert.ok(tools[name], `${level.id}: card for ${name}`);
-  });
-  assert.equal(new Set(levels.map(level => level.id)).size, levels.length);
-  assert.equal(levels[0].start, '');
+test('other routes to an answer count too', () => {
+  const finds = (id, source) => { const result = shell(source); return clues.find(clue => clue.id === id).found(screenLines(result).map(line => line.text).join('\n'), result); };
+  assert.ok(finds('kitchen', "grep kitchen swipes.log | grep 2026-10-02T15:0 | awk '{print $3}' | sort -u"));
+  assert.ok(finds('kitchen', "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c"));
+  assert.ok(!finds('kitchen', 'grep kitchen swipes.log'));
+  assert.ok(finds('most', "grep 2026-10-02T15:0 swipes.log | grep kitchen | awk '{print $3}' | sort | uniq -c | sort -rn | head -n 1"));
+  assert.ok(finds('when', 'cat pantry-1500.txt pantry-1510.txt'));
+  assert.ok(!finds('look', 'cat README'));
+  assert.ok(finds('whois', 'grep ^jlee: staff.txt'));
 });
 test('the case comes out the same way every time', () => {
   assert.deepEqual(out("grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c | sort -rn | head -n 1").map(line => line.trim()), ['4 jlee']);

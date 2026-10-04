@@ -5,89 +5,13 @@
 // tool did to the text.
 import { parsePipeline } from './parser.js';
 import { run, screenLines, tools, known, splitLines } from './sandbox.js';
-import { files as caseFiles } from './cases.js';
+import { files as caseFiles, clues, mail } from './cases.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const prose = text => escape(text).replace(/`([^`]+)`/g, '<code>$1</code>');
 const printable = text => text.replace(/\0/g, '').replace(/[\x01-\x08\x0b-\x1f\x7f-\xff]/g, '�');
 const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
-
-// The case. Each clue is a question with a test of what reached the screen, the answer to note
-// down once it has, an optional tip, and nudges for a student who's stuck, from a pointer to a
-// command to try. The note in the bin turns up by mail once the student knows who went in most.
-const inWindow = splitLines(caseFiles['swipes.log']).filter(line => line.startsWith('2026-10-02T15:0') && line.includes('kitchen'));
-const suspects = [...new Set(inWindow.map(line => line.split(' ')[2]))];
-const shown = text => text.split('\n').map(line => line.trim()).filter(Boolean);
-const clues = [
-  {
-    id: 'look', question: 'What’s in the case file?',
-    found: (text, result) => result.commands.some(cmd => cmd.name === 'ls' && cmd.status === 0) && text.includes('swipes.log') && text.includes('staff.txt'),
-    answer: 'A README, the pantry’s lists from 15:00 and 15:10, a week of badge swipes, and a staff list.',
-    nudges: [{ text: 'Start by looking around. `ls` lists the files here: type it and press Enter.', try: 'ls' }],
-  },
-  {
-    id: 'brief', question: 'What happened?',
-    found: text => text.includes('CASE FILE: THE MISSING TIM TAMS') && text.includes('Find out who did it'),
-    answer: 'A new packet of Tim Tams vanished from the level 3 kitchen on Friday afternoon.',
-    nudges: [{ text: 'There’s a `README`. `cat` prints a file on the screen.', try: 'cat README' }],
-  },
-  {
-    id: 'when', question: 'When did the packet go?',
-    found: text => /Tim Tams\s+1 packet/.test(text) && /Tim Tams\s+0 packets/.test(text),
-    answer: 'On Friday, between 15:00 and 15:10.',
-    tip: '`diff` shows only the lines that changed between two files. It’s how `git` shows changes to code.',
-    nudges: [
-      { text: 'The smart pantry listed its shelves at 15:00 and at 15:10. What changed between the two lists?' },
-      { text: '`diff` compares two files and prints only the lines that differ.', try: 'diff pantry-1500.txt pantry-1510.txt' },
-    ],
-  },
-  {
-    id: 'kitchen', question: 'Who went into the kitchen in those ten minutes?',
-    found: text => {
-      const lines = shown(text), swipes = lines.filter(line => /^\d{4}-\d\d-\d\dT/.test(line));
-      if (swipes.length) return inWindow.every(line => lines.includes(line)) && swipes.every(line => inWindow.includes(line));
-      // Or just the names, alone or in a tally such as `4 jlee`.
-      const names = lines.map(line => line.replace(/^\d+\s+/, ''));
-      return names.length > 0 && names.every(name => suspects.includes(name)) && suspects.every(name => names.includes(name));
-    },
-    answer: `${suspects.join(', ')}. One name keeps coming up.`,
-    tip: 'Each `|` sent one command’s output into the next. Click the stages above a pipeline’s output to see what each one passed on.',
-    nudges: [
-      { text: '`swipes.log` has every badge swipe this week, too many to read. `head` shows just the first few.', try: 'head swipes.log' },
-      { text: 'Each swipe starts with its time, such as `2026-10-02T15:04:18`. `grep` keeps the lines that contain a pattern, so `2026-10-02T15:0` finds Friday, 15:00 to 15:09.', try: 'grep 2026-10-02T15:0 swipes.log' },
-      { text: 'Some of those were at other doors. Send the lines through a second `grep` with `|`, to keep the kitchen’s.', try: 'grep 2026-10-02T15:0 swipes.log | grep kitchen' },
-    ],
-  },
-  {
-    id: 'most', question: 'Who went in most often?',
-    found: text => /(^|\n)\s*4\s+jlee\s*(\n|$)/.test(text) || /(^|\n)jlee\s+4\s*(\n|$)/.test(text),
-    answer: 'jlee: four trips in eight minutes.',
-    tip: '`sort | uniq -c` is the shell’s tally. Add `| sort -rn | head -n 1` and it keeps just the top line.',
-    nudges: [
-      { text: 'Keep only the names: `cut -d \' \' -f 3` splits each line at spaces and keeps the third field.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3" },
-      { text: '`uniq -c` counts repeated lines, but only when they’re next to each other. So `sort` them first.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c" },
-    ],
-  },
-  {
-    id: 'whois', question: 'Who is jlee?',
-    found: text => shown(text).includes('jlee:Jo Lee:Hydrology:3'),
-    answer: 'Jo Lee, Hydrology, level 3.',
-    tip: '`grep jlee` also finds jleeson, because it matches inside words. `grep -w jlee` matches whole words only.',
-    nudges: [{ text: '`staff.txt` has a line for each person, as `username:name:team:floor`. Search it for jlee.', try: 'grep jlee staff.txt' }],
-  },
-  {
-    id: 'note', question: 'What does the note say?', mail: true,
-    found: text => text.includes('Sorry. I had a grant deadline'),
-    answer: 'A confession, and a promise of two new packets on Monday.',
-    tip: 'ROT13 moves each letter 13 places along the alphabet, so doing it twice gets you back where you started.',
-    nudges: [
-      { text: 'Have a look at it first.', try: 'cat found-in-bin.txt' },
-      { text: 'It’s ROT13: each letter swapped for the one 13 places along. `tr` swaps characters from one set to another, and reads only stdin, so feed it the file with `<`.', try: 'tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt' },
-    ],
-  },
-];
-const mail = 'Cleaners found a screwed-up note in the kitchen bin. It’s in found-in-bin.txt now, but it’s gibberish to us.';
 
 // The session: what the student has typed, which is all that's saved, since replaying it rebuilds
 // everything else; and, as it's replayed or typed, the clues found, the tools used and the nudges seen.
@@ -100,7 +24,8 @@ const files = () => {
   if (!state.mailed) delete all['found-in-bin.txt'];
   return all;
 };
-const save = () => { try { localStorage.setItem(SESSION, JSON.stringify({ history: state.history.slice(-200), nudges: state.nudges })); } catch {} };
+// Pipeviewer's course picker reads found and closed to show the student's progress.
+const save = () => { try { localStorage.setItem(SESSION, JSON.stringify({ history: state.history.slice(-200), nudges: state.nudges, found: state.found.size, of: clues.length, closed: state.closed })); } catch {} };
 const promptText = () => platform === 'macos' ? 'you@tearoom case %' : 'you@tearoom:~/case$';
 
 // The scrollback.
@@ -159,6 +84,7 @@ function execute(source, { replay = false } = {}) {
     system(`<b>CASE CLOSED.</b> Jo Lee, Hydrology, four trips in eight minutes, and a note in the bin to prove it. Solved in ${plural(state.history.length, 'command')}, with ${plural(state.used.size, 'tool')}.`, 'closed');
   }
   if (state.found.size !== before || fresh.length) showNotebook();
+  if (!replay && state.found.size !== before) save();
 }
 // One new tool gets its summary; several at once are listed together, with their cards in the notebook.
 const newTools = names => !names.length ? '' : names.length === 1

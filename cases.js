@@ -1,19 +1,6 @@
-// The Toolbox track: a short whodunit solved with small tools joined by pipes. Each level runs the
-// student's command in the sandbox on the case files below, and is solved when what reaches the
-// terminal matches what the target command prints. So any command with the same output passes:
-// `cat README` and `head -n 100 README` both solve level 2.
-//
-// id       stays fixed once published: progress is saved under it.
-// title    a few words, shown with the level number.
-// brief    what to do, shown above the output. Text in `backticks` is set as code.
-// start    the command in the editor when the level opens. Leave it out to start from the previous
-//          level's target.
-// target   the command whose output the student has to match. Its output is shown blacked out,
-//          line by line, until the student's own output matches it.
-// tools    the tools the level uses, shown as cards by the first hint. Each is added to the toolbox
-//          once a level that uses it is solved.
-// how      the syntax hint, shown when the student asks for it.
-// learned  shown once it is solved.
+// The Toolbox case: someone has emptied the Tim Tams in the level 3 kitchen. These are the files
+// the student investigates in toolbox.html's pretend terminal, and the questions in their case
+// notebook.
 
 // The week's badge swipes are made up from a fixed seed, so every student gets the same log. The
 // ten minutes that matter are written out by hand.
@@ -105,121 +92,78 @@ Two new packets on Monday, promise.
   'swipes.log': swipes(),
 };
 
-export const levels = [
+// The case. Each clue is a question with a test of what reached the screen, the answer to note
+// down once it has, an optional tip, and nudges for a student who's stuck, from a pointer to a
+// command to try. The note in the bin turns up by mail once the student knows who went in most.
+const inWindow = files['swipes.log'].trimEnd().split('\n').filter(line => line.startsWith('2026-10-02T15:0') && line.includes('kitchen'));
+const suspects = [...new Set(inWindow.map(line => line.split(' ')[2]))];
+const shown = text => text.split('\n').map(line => line.trim()).filter(Boolean);
+export const clues = [
   {
-    id: 'ls',
-    title: 'Open the case file',
-    tools: ['ls'],
-    start: '',
-    brief: 'Someone has eaten the Tim Tams from the level 3 kitchen, and you’ve been handed the case. Type `ls` to list the files in it.',
-    target: 'ls',
-    how: 'Type `ls`, short for “list”, and nothing else.',
-    learned: 'Six files. Unix tools have short names because people type them all day. If you forget what one does, `man` followed by its name shows its manual, here and on any real system. Try `man ls`.',
+    id: 'look', question: 'What’s in the case file?',
+    found: (text, result) => result.commands.some(cmd => cmd.name === 'ls' && cmd.status === 0) && text.includes('swipes.log') && text.includes('staff.txt'),
+    answer: 'A README, the pantry’s lists from 15:00 and 15:10, a week of badge swipes, and a staff list.',
+    nudges: [{ text: 'Start by looking around. `ls` lists the files here: type it and press Enter.', try: 'ls' }],
   },
   {
-    id: 'cat',
-    title: 'Read the brief',
-    tools: ['cat'],
-    start: '',
-    brief: '`cat` prints a file on the screen. Read the `README`.',
-    target: 'cat README',
-    how: 'Type `cat README`. Capitals matter: `readme` would be a different file.',
-    learned: '`cat` is short for concatenate. Give it several files and it prints one after another, as one stream.',
+    id: 'brief', question: 'What happened?',
+    found: text => text.includes('CASE FILE: THE MISSING TIM TAMS') && text.includes('Find out who did it'),
+    answer: 'A new packet of Tim Tams vanished from the level 3 kitchen on Friday afternoon.',
+    nudges: [{ text: 'There’s a `README`. `cat` prints a file on the screen.', try: 'cat README' }],
   },
   {
-    id: 'head',
-    title: 'Just the top',
-    tools: ['head'],
-    start: '',
-    brief: '`swipes.log` is too long to read. Try `cat` on it if you like. `head` prints just the start of a file. Show the first 3 lines of `swipes.log`.',
-    target: 'head -n 3 swipes.log',
-    how: 'Type `head -n 3 swipes.log`. Without `-n`, `head` shows 10 lines.',
-    learned: 'Each line is one swipe: when, which door, and whose badge. `tail` is `head`’s twin, so `tail -n 3 swipes.log` shows the last three swipes.',
+    id: 'when', question: 'When did the packet go?',
+    found: text => /Tim Tams\s+1 packet/.test(text) && /Tim Tams\s+0 packets/.test(text),
+    answer: 'On Friday, between 15:00 and 15:10.',
+    tip: '`diff` shows only the lines that changed between two files. It’s how `git` shows changes to code.',
+    nudges: [
+      { text: 'The smart pantry listed its shelves at 15:00 and at 15:10. What changed between the two lists?' },
+      { text: '`diff` compares two files and prints only the lines that differ.', try: 'diff pantry-1500.txt pantry-1510.txt' },
+    ],
   },
   {
-    id: 'wc',
-    title: 'How many?',
-    tools: ['wc'],
-    start: '',
-    brief: 'How many swipes are in the log? `wc` counts lines, words and bytes. Ask it for lines only.',
-    target: 'wc -l swipes.log',
-    how: 'Type `wc -l swipes.log`. `-l` means lines. `-w` would count words and `-c` bytes.',
-    learned: 'Hundreds of swipes in one week, too many to read one by one. From here on the tools do the reading.',
+    id: 'kitchen', question: 'Who went into the kitchen in those ten minutes?',
+    found: text => {
+      const lines = shown(text), swipes = lines.filter(line => /^\d{4}-\d\d-\d\dT/.test(line));
+      if (swipes.length) return inWindow.every(line => lines.includes(line)) && swipes.every(line => inWindow.includes(line));
+      // Or just the names, alone or in a tally such as `4 jlee`.
+      const names = lines.map(line => line.replace(/^\d+\s+/, ''));
+      return names.length > 0 && names.every(name => suspects.includes(name)) && suspects.every(name => names.includes(name));
+    },
+    answer: `${suspects.join(', ')}. One name keeps coming up.`,
+    tip: 'Each `|` sent one command’s output into the next. Click the stages above a pipeline’s output to see what each one passed on.',
+    nudges: [
+      { text: '`swipes.log` has every badge swipe this week, too many to read. `head` shows just the first few.', try: 'head swipes.log' },
+      { text: 'Each swipe starts with its time, such as `2026-10-02T15:04:18`. `grep` keeps the lines that contain a pattern, so `2026-10-02T15:0` finds Friday, 15:00 to 15:09.', try: 'grep 2026-10-02T15:0 swipes.log' },
+      { text: 'Some of those were at other doors. Send the lines through a second `grep` with `|`, to keep the kitchen’s.', try: 'grep 2026-10-02T15:0 swipes.log | grep kitchen' },
+    ],
   },
   {
-    id: 'diff',
-    title: 'When did it happen?',
-    tools: ['diff'],
-    start: '',
-    brief: 'The smart pantry listed its shelves at 15:00 and again at 15:10. `diff` compares two files and prints only the lines that changed. Compare the two lists.',
-    target: 'diff pantry-1500.txt pantry-1510.txt',
-    how: 'Type `diff pantry-1500.txt pantry-1510.txt`. Put the older file first.',
-    learned: '`<` marks the line in the first file and `>` what replaced it in the second. So the packet went between 15:00 and 15:10 on Friday. `git diff` shows changes to code the same way.',
+    id: 'most', question: 'Who went in most often?',
+    found: text => /(^|\n)\s*4\s+jlee\s*(\n|$)/.test(text) || /(^|\n)jlee\s+4\s*(\n|$)/.test(text),
+    answer: 'jlee: four trips in eight minutes.',
+    tip: '`sort | uniq -c` is the shell’s tally. Add `| sort -rn | head -n 1` and it keeps just the top line.',
+    nudges: [
+      { text: 'Keep only the names: `cut -d \' \' -f 3` splits each line at spaces and keeps the third field.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3" },
+      { text: '`uniq -c` counts repeated lines, but only when they’re next to each other. So `sort` them first.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c" },
+    ],
   },
   {
-    id: 'grep',
-    title: 'Ten minutes on Friday',
-    tools: ['grep'],
-    start: '',
-    brief: '`grep` prints the lines that contain a pattern. Every swipe from Friday 15:00 to 15:09 starts with `2026-10-02T15:0`. Find them all in `swipes.log`.',
-    target: 'grep 2026-10-02T15:0 swipes.log',
-    how: 'Type `grep 2026-10-02T15:0 swipes.log`. The pattern comes first, then the file.',
-    learned: 'You’ll use `grep` more than any other tool here. `-i` ignores case, `-v` keeps the lines that don’t match, and `-c` counts them instead of printing them.',
+    id: 'whois', question: 'Who is jlee?',
+    found: text => shown(text).includes('jlee:Jo Lee:Hydrology:3'),
+    answer: 'Jo Lee, Hydrology, level 3.',
+    tip: '`grep jlee` also finds jleeson, because it matches inside words. `grep -w jlee` matches whole words only.',
+    nudges: [{ text: '`staff.txt` has a line for each person, as `username:name:team:floor`. Search it for jlee.', try: 'grep jlee staff.txt' }],
   },
   {
-    id: 'pipe',
-    title: 'Only the kitchen',
-    tools: ['|'],
-    brief: 'Some of those swipes were at other doors. Pipe the lines into a second `grep` that keeps only the kitchen’s.',
-    target: 'grep 2026-10-02T15:0 swipes.log | grep kitchen',
-    how: 'Add `| grep kitchen` to the end. The second `grep` has no file name, so it reads its stdin, which the pipe fills with the first one’s output.',
-    learned: 'Two small filters, one after the other, and neither knows the other exists. The first writes lines and the second reads lines. That’s all a pipe does, and it works for any tools that read and write text.',
-  },
-  {
-    id: 'cut',
-    title: 'Names only',
-    tools: ['cut'],
-    brief: 'You only need the names. `cut` splits each line into fields and keeps the ones you ask for. Split at spaces, and keep field 3.',
-    target: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3",
-    how: 'Add `| cut -d \' \' -f 3`. `-d` sets the delimiter: a space, in quotes so the shell keeps it. `-f 3` keeps the third field.',
-    learned: '`cut` works on anything with a separator: `-d ,` for CSV, or `-d :` for files like `staff.txt`. Fields count from 1.',
-  },
-  {
-    id: 'tally',
-    title: 'Count the trips',
-    tools: ['sort', 'uniq'],
-    brief: 'Count how many times each person went in. `uniq -c` counts repeated lines, but only when the repeats are next to each other, so `sort` the names first.',
-    target: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c",
-    how: 'Add `| sort | uniq -c` to the end.',
-    learned: '`sort | uniq -c` is the shell’s tally. Four trips in eight minutes stands out.',
-  },
-  {
-    id: 'top',
-    title: 'Top of the list',
-    tools: ['sort', 'head'],
-    brief: 'With a bigger team the tally would run to pages. Put the most trips first with `sort -rn`, then keep only the top line.',
-    target: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c | sort -rn | head -n 1",
-    how: 'Add `| sort -rn | head -n 1`. `-n` sorts by number instead of alphabetically, and `-r` reverses the order, so the biggest comes first.',
-    learned: 'In 1986 Donald Knuth wrote several pages of careful code to find the most common words in a text. Doug McIlroy replied with six commands joined by pipes, built like yours: `tr | tr | sort | uniq -c | sort -rn | sed`. You just wrote seven.',
-  },
-  {
-    id: 'whole-word',
-    title: 'Who is jlee?',
-    tools: ['grep'],
-    start: '',
-    brief: '`staff.txt` has a line for each person: `username:name:team:floor`. Find jlee’s line, and only jlee’s.',
-    target: 'grep -w jlee staff.txt',
-    how: '`grep jlee staff.txt` finds `jleeson` too, because `grep` matches inside words. Add `-w` to match whole words only: `grep -w jlee staff.txt`.',
-    learned: 'Jo Lee, Hydrology, level 3. This colon-separated layout is old Unix: `/etc/passwd`, the list of users on every Unix system, looks just like `staff.txt`.',
-  },
-  {
-    id: 'tr',
-    title: 'The note in the bin',
-    tools: ['tr'],
-    start: 'cat found-in-bin.txt',
-    brief: 'Facilities found this note in the kitchen bin. It’s in ROT13, which swaps each letter for the one 13 further along the alphabet. `tr` translates characters from one set to another. Decode it.',
-    target: 'tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt',
-    how: '`tr` reads only stdin, so pipe the note in: `cat found-in-bin.txt | tr A-Za-z N-ZA-Mn-za-m`. Each letter of the first set becomes the letter in the same place in the second: A becomes N, and so on. `tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt` does the same without `cat`.',
-    learned: 'Case closed. None of these tools knows anything about biscuits or badges. Each does one small job on lines of text, and the pipes joined them into an investigation.',
+    id: 'note', question: 'What does the note say?', mail: true,
+    found: text => text.includes('Sorry. I had a grant deadline'),
+    answer: 'A confession, and a promise of two new packets on Monday.',
+    tip: 'ROT13 moves each letter 13 places along the alphabet, so doing it twice gets you back where you started.',
+    nudges: [
+      { text: 'Have a look at it first.', try: 'cat found-in-bin.txt' },
+      { text: 'It’s ROT13: each letter swapped for the one 13 places along. `tr` swaps characters from one set to another, and reads only stdin, so feed it the file with `<`.', try: 'tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt' },
+    ],
   },
 ];
+export const mail = 'Cleaners found a screwed-up note in the kitchen bin. It’s in found-in-bin.txt now, but it’s gibberish to us.';

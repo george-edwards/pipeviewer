@@ -592,11 +592,11 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 /* Toolbox: the student's screen under the editor, and the goal's beside it on wide windows, above
    the editor on narrow ones. The diagram follows, smaller, so the pipe being built is still drawn. */
 #goal { display: none; }
-.toolbox #goal { display: block; }
-.toolbox .target-scroll, .toolbox .diagram-panel .training-only { display: none !important; }
+.runs #goal { display: block; }
+.runs .target-scroll, .runs .diagram-panel .training-only { display: none !important; }
 .output-panel { border: 1px solid var(--term-border); border-radius: .6875rem; background: var(--term-bg); overflow: hidden; margin-top: .875rem; }
 .output-panel .diagram-toolbar { padding-bottom: .125rem; }
-.toolbox .target-panel { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.runs .target-panel { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
 .screen { margin: 0; padding: .625rem 1.1875rem .875rem; min-height: 4.75rem; max-height: 22rem; overflow: auto; font: .8125rem/1.55 'IBM Plex Mono', monospace; color: var(--term-text); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 8; transition: opacity .16s; }
 .screen .line { display: block; min-height: 1.55em; padding-left: .5rem; margin-left: -.5rem; border-left: 2px solid transparent; }
 .screen .line.fd-2 { color: var(--amber); }
@@ -622,10 +622,10 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .goal .line.fresh { animation: uncover .7s ease-out; }
 @keyframes uncover { 0% { background: var(--green-bg); color: var(--green); } 100% { background: transparent; } }
 @media (min-width: 64em) {
-  .training.toolbox .output-panel { grid-column: auto; order: 3; margin-top: 0; }
-  .training.toolbox #target-panel { order: 4; }
-  .training.toolbox #results > .diagram-panel { grid-column: 1 / -1; order: 5; margin-top: .875rem; }
-  .toolbox .screen { max-height: 26rem; }
+  .training.runs .output-panel { grid-column: auto; order: 3; margin-top: 0; }
+  .training.runs #target-panel { order: 4; }
+  .training.runs #results > .diagram-panel { grid-column: 1 / -1; order: 5; margin-top: .875rem; }
+  .runs .screen { max-height: 26rem; }
 }
 /* The Unix Way's gauges: per command, a light for its exit status and a bar, on a log scale, for
    how much it holds in memory at once. A command that holds all its input is amber; one over the
@@ -644,35 +644,34 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .gauge .held { color: var(--term-muted); text-align: right; font-variant-numeric: tabular-nums; }
 .gauge.all .held { color: var(--amber); }
 .gauge.over .held { color: var(--error); font-weight: 600; }
+.course-preview.preview-terminal { display: flex; flex-direction: column; justify-content: flex-start; gap: .1875rem; padding: .5rem .875rem; background: #11161f; color: #dbe2ee; font: .6875rem/1.4 'IBM Plex Mono', monospace; overflow: hidden; }
+.preview-prompt { color: #6fdcb4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-prompt span { color: #dbe2ee; }
+.preview-stages { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; color: #c3b4ff; white-space: nowrap; }
+.preview-stages i { font-style: normal; padding: 0 .3125rem; border: 1px solid #33405a; border-radius: .3125rem; color: #dbe2ee; animation: solved-in .4s ease-out both; }
+.preview-stages i:nth-of-type(2) { animation-delay: .25s; }
+.preview-stages i:nth-of-type(3) { animation-delay: .5s; }
+.preview-stages i:nth-of-type(4) { animation-delay: .75s; }
+.preview-stages i:nth-of-type(5) { animation-delay: 1s; }
+.preview-stages b { font-weight: 400; color: #8995a9; margin-left: .25rem; }
+.preview-cursor { margin-left: .5rem; display: inline-block; width: .5em; height: 1em; vertical-align: -.15em; background: #6fdcb4; animation: blink 1.1s steps(1) infinite; }
 .preview-gauges { display: grid; grid-template-columns: auto auto minmax(3rem, 1fr) auto; align-content: center; gap: .5rem .625rem; align-items: center; padding: .75rem 1rem; border: 0; margin: .25rem 0 .375rem; list-style: none; }
 .preview-gauges .bar i.grows { animation: grows 4s ease-in-out infinite; }
 @keyframes grows { 0%, 10% { width: 4%; } 70%, 100% { width: 82%; } }
-/* The toolbox: one chip per tool in the course. Tools still to come are faint outlines. */
-.toolbelt { display: none; list-style: none; flex-wrap: wrap; gap: .3125rem; margin: .875rem 0 0; padding: 0; }
-.collects .toolbelt { display: flex; }
-.explaining .toolbelt { display: none; }
-.toolbelt li { padding: .125rem .5rem; border-radius: .3125rem; font: 500 .75rem/1.5 'IBM Plex Mono', monospace; }
-.toolbelt li code { font: inherit; }
-.toolbelt .earned { background: var(--green-bg); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 35%, transparent); }
-.toolbelt .ahead { color: var(--muted); border: 1px dashed var(--border); opacity: .6; }
-.toolbelt .fresh { animation: star-pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }
 /* A tool's card, in the first hint and when a level hands the tool over. */
 .tool-card { display: block; margin-top: .25rem; }
 .tool-card > code { font-weight: 600; color: var(--green) !important; background: var(--green-bg) !important; }
 .tool-options { display: grid; grid-template-columns: max-content 1fr; gap: .125rem .875rem; margin-top: .375rem; }
 .tool-options span { display: contents; }
 .tool-options code { justify-self: start; }
-.found p { margin: .375rem 0; }
-.found-label { font: 600 .625rem var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--green); margin-right: .5rem; }
-.found .tool-card { display: inline; }
 /* The course picker stands in for the training screen until a course is chosen: one card per
    course, saying who it's for, with a small moving preview. The beginners' card takes stdin's green. */
-.choosing :is(.training-top > :not(#exit-training), .lesson, .toolbelt, .coach, .intro, #target-panel, .editor-panel, .output-panel, #results) { display: none !important; }
+.choosing :is(.training-top > :not(#exit-training), .lesson, .coach, .intro, #target-panel, .editor-panel, .output-panel, #results) { display: none !important; }
 .choosing .training-top { justify-content: flex-end; }
 .courses { margin-top: .25rem; }
 .courses-title { font-size: 1.375rem; letter-spacing: -.03em; margin-bottom: 1rem; }
 .course-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
-.course-card { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; padding: 1.125rem 1.25rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; animation: solved-in .4s ease-out both; }
+.course-card { text-decoration: none; display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; padding: 1.125rem 1.25rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; animation: solved-in .4s ease-out both; }
 .course-card:nth-child(2) { animation-delay: .06s; }
 .course-card:nth-child(3) { animation-delay: .12s; }
 .course-card:hover, .course-card:focus-visible { border-color: var(--purple); transform: translateY(-2px); box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .08); }
