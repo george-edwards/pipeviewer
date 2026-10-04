@@ -283,8 +283,50 @@ export const tools = {
   sudo: { summary: 'runs one command as root, the administrator', usage: 'sudo command', options: [] },
   cowsay: { summary: 'has a cow say something', usage: 'cowsay words…', options: [] },
   tty: { summary: 'prints the file name of the terminal on stdin', usage: 'tty', options: [] },
+  yes: { summary: 'prints a line over and over, until stopped', usage: 'yes [text]', options: [] },
+  pwd: { summary: 'prints the directory you’re in', usage: 'pwd', options: [] },
+  whoami: { summary: 'prints your username', usage: 'whoami', options: [] },
+  date: { summary: 'prints the date and time', usage: 'date [+format]', options: [['+%Y-%m-%d', 'a format of your own (not here)']] },
+  true: { summary: 'does nothing, successfully: exit status 0', usage: 'true', options: [] },
+  false: { summary: 'does nothing, unsuccessfully: exit status 1', usage: 'false', options: [] },
+  sleep: { summary: 'waits a number of seconds (here, not at all)', usage: 'sleep seconds', options: [] },
+  clear: { summary: 'clears the terminal screen', usage: 'clear', options: [] },
+  cd: { summary: 'changes directory (here there’s only one)', usage: 'cd [dir]', options: [] },
+  hostname: { summary: 'prints the machine’s name', usage: 'hostname', options: [] },
+  uname: { summary: 'prints the name of the system', usage: 'uname [-a]', options: [['-a', 'everything: kernel, machine name, version, hardware']] },
+  less: { summary: 'pages through a file a screen at a time (here, prints it)', usage: 'less file', options: [] },
+  more: { summary: 'pages through a file, the older less (here, prints it)', usage: 'more file', options: [] },
+  egrep: { summary: 'grep -E: grep with extended patterns', usage: 'egrep pattern [file…]', options: [] },
+  fgrep: { summary: 'grep -F: grep for fixed text, no patterns', usage: 'fgrep text [file…]', options: [] },
+  fortune: { summary: 'prints a random saying', usage: 'fortune', options: [] },
   printf: { summary: 'prints formatted text', usage: "printf 'format' [argument…]", options: [['%s', 'the next argument'], ['%d', 'the next argument, as a number'], ['\\n', 'a new line']] },
 };
+
+// --help, as GNU tools have it: usage, what the tool does, and its options, on stdout. The BSD
+// tools on macOS have no --help, so they reject it as an illegal option and print a usage line,
+// as they do for any other option they don't know. Package managers and sudo have their own
+// --help on both systems; the shell's echo, true, false and cd take it as an ordinary argument.
+const card = name => tools[name] ?? (name === 'apt-get' ? tools.apt : undefined);
+const ownHelp = new Set(['apt', 'apt-get', 'brew', 'sudo', 'man', 'cowsay', 'fortune']);
+const builtins = new Set(['echo', 'true', 'false', 'cd']);
+function helpText(name) {
+  const tool = card(name), summary = tool.summary[0].toUpperCase() + tool.summary.slice(1);
+  const options = [...tool.options, ['--help', 'show this help and exit']];
+  const width = Math.max(...options.map(([flag]) => flag.length));
+  return `Usage: ${tool.usage}\n${summary}.\n\n${options.map(([flag, text]) => `  ${flag.padEnd(width)}   ${text}`).join('\n')}\n\nFor the full manual, type: man ${name}\n`;
+}
+const asksForHelp = args => { const at = args.indexOf('--help'), end = args.indexOf('--'); return at >= 0 && (end < 0 || at < end); };
+function withHelp(name, tool, platform) {
+  if (!tool || builtins.has(name) || !card(name)) return tool;
+  return (args, stdin, ctx) => {
+    // sudo's own options stop at the command it runs, so `sudo apt --help` is apt's help.
+    if (name === 'sudo' ? args[0] !== '--help' : !asksForHelp(args)) return tool(args, stdin, ctx);
+    if (platform === 'macos' && !ownHelp.has(name)) return { out: '', err: `${name}: illegal option -- -\nusage: ${card(name).usage}\n`, status: 1 };
+    return { out: helpText(name), err: '', status: 0 };
+  };
+}
+// GNU errors end by suggesting --help; BSD ones print a usage line instead.
+const bsdErrors = (name, err) => err.replace(/^Usage: .*\n/m, '').replace(/^(?:[\w-]+: )?Try '([\w-]+) --help' for more information\.\n/m, (_, tool) => card(tool) ? `usage: ${card(tool).usage}\n` : '');
 
 function manPage(name) {
   const tool = tools[name];
@@ -897,7 +939,7 @@ export function run(model, files, { platform = 'linux', trace = false } = {}) {
     } else if (dest.type === 'pipe') buffers.set(dest.id, (buffers.get(dest.id) ?? '') + text);
   };
   // macOS has no apt, and no tac: the BSD tools spell it tail -r.
-  const lookup = name => platform === 'macos' && linuxOnly.has(name) ? undefined : commands[name] ?? (installed.has(name) ? packaged[name] : undefined);
+  const lookup = name => platform === 'macos' && linuxOnly.has(name) ? undefined : withHelp(name, commands[name] ?? (installed.has(name) ? packaged[name] : undefined), platform);
   let status = 0;
   for (const pipeline of model.pipelines) {
     if ((pipeline.operator === '&&' && status !== 0) || (pipeline.operator === '||' && status === 0)) {
@@ -961,6 +1003,7 @@ export function run(model, files, { platform = 'linux', trace = false } = {}) {
       };
       let result;
       try { result = tool(args, stdin, ctx); } catch (error) { result = { out: '', err: `${name}: ${error.message}\n`, status: 2 }; }
+      if (platform === 'macos' && !ownHelp.has(name)) result.err = bsdErrors(name, result.err);
       write(cmd.fds[2], result.err);
       write(cmd.fds[1], result.out);
       status = record.status = result.status;

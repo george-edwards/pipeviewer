@@ -84,3 +84,18 @@ test('the tools print their usual formats', () => {
   assert.equal(out('ls')[0], 'README  found-in-bin.txt  pantry-1500.txt  pantry-1510.txt  staff.txt  swipes.log');
   assert.equal(out('ls | head -n 1')[0], 'README');
 });
+test('--help works for every command on Linux, and is an illegal option for BSD tools on macOS', async () => {
+  const { known } = await import('../sandbox.js');
+  for (const name of known.filter(name => !['echo', 'true', 'false', 'cd'].includes(name))) {
+    const result = shell(`${name} --help`);
+    assert.equal(result.status, 0, name);
+    assert.match(result.terminal[0]?.text ?? '', /^Usage: /, name);
+  }
+  assert.deepEqual(out('echo --help'), ['--help']);
+  assert.match(out('sudo apt --help')[0], /^Usage: sudo apt install/);
+  assert.deepEqual(err('grep --help', 'macos'), ['grep: illegal option -- -', 'usage: grep [-ivcnw] pattern [file…]']);
+  assert.match(out('brew --help', 'macos')[0], /^Usage: brew/);
+  // The errors that suggest --help on Linux print a usage line on macOS instead.
+  assert.equal(err('tr a').at(-1), "Try 'tr --help' for more information.");
+  assert.equal(err('tr a', 'macos').at(-1), 'usage: tr [-d] [-s] SET1 [SET2]');
+});

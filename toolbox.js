@@ -218,6 +218,7 @@ function tutor(source, result, lines) {
     if (same) notes.push(`File names care about capitals: this one is <code>${escape(same)}</code>.`);
     else if (near) notes.push(`There’s no <code>${escape(file)}</code>. Did you mean <code>${escape(near)}</code>?`);
   }
+  if (/illegal option -- -$/m.test(errors) && /--help\b/.test(source)) notes.push('The BSD tools on macOS have no <code>--help</code>. Try <code>man</code> and the tool’s name instead, as in <code>man grep</code>, or switch to bash for the GNU tools.');
   if (/^tr: extra operand/m.test(errors)) notes.push('<code>tr</code> reads only stdin, never a file name. Feed it the file with <code>&lt; file</code>, or pipe it in with <code>cat file |</code>.');
   if (lines.length > SCREEN) notes.push(`That’s ${plural(lines.length, 'line')}, too many to read; here are the first ${SCREEN}. Try <code>head</code> to see the start, or <code>| wc -l</code> to count them.`);
   return notes;
