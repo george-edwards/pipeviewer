@@ -1460,6 +1460,30 @@ const lineCount = text => { const n = (text.match(/\n/g) ?? []).length + (text &
 // Bytes a terminal can't show come out as �, and NULs as nothing, roughly as a terminal shows them.
 const printable = text => text.replace(/\0/g, '').replace(/[\x01-\x08\x0b-\x1f\x7f-\xff]/g, '�');
 const size = n => n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KiB` : `${(n / (1 << 20)).toFixed(1)} MiB`;
+// The student's screen keeps a scrollback, as a terminal does: each earlier level they've solved,
+// its command as they wrote it and what it printed, dimmed above the command they're working on.
+// So a clue found in one level is still on screen in the next. Each solved spelling is kept under
+// the level's id, and its output is worked out afresh, on the chosen system, when a level opens.
+const SCROLLBACK_LINES = 20;
+const commandsKey = () => `${tracks[track].store}-commands`;
+const solvedCommands = () => { try { return JSON.parse(localStorage.getItem(commandsKey())) ?? {}; } catch { return {}; } };
+function keepCommand(id, command) {
+  const kept = solvedCommands();
+  kept[id] = command;
+  try { localStorage.setItem(commandsKey(), JSON.stringify(kept)); } catch {}
+}
+const promptSign = () => platform === 'macos' ? '%' : '$';
+function buildScrollback() {
+  const kept = solvedCommands();
+  training.scrollback = lessons.slice(0, training.level).filter(lesson => progress[lesson.id]).map(lesson => {
+    const command = kept[lesson.id] ?? targetOf(lesson);
+    let lines;
+    try { lines = screenLines(run(parsePipeline(command, { platform }), tracks[track].files, { platform })); } catch { return ''; }
+    const more = lines.length - SCROLLBACK_LINES;
+    return `<span class="line prompt-line past">${promptSign()} ${escape(command)}</span>${lines.slice(0, SCROLLBACK_LINES).map(line => `<span class="line past fd-${line.fd}">${escape(printable(line.text)) || ' '}</span>`).join('')}${more > 0 ? `<span class="screen-note past">… ${more.toLocaleString()} more line${more === 1 ? '' : 's'}</span>` : ''}`;
+  }).join('');
+  training.pin = true;
+}
 function showScreens() {
   if (!runs() || !training.active) return;
   const goal = training.goal ?? [], result = training.result, mine = result ? screenLines(result) : [];
@@ -1470,7 +1494,15 @@ function showScreens() {
     const more = mine.length > SCREEN_LINES ? `<span class="screen-note">… and ${(mine.length - SCREEN_LINES).toLocaleString()} more lines</span>` : '';
     const wrote = (result?.written ?? []).map(file => `<span class="screen-note wrote">→ ${escape(file)} <span>${lineCount(result.files[file])}</span></span>`).join('');
     const notes = (result?.notes ?? []).map(note => `<span class="screen-note">${escape(note)}</span>`).join('');
-    $('#output').innerHTML = shown + more + wrote + notes;
+    const source = $('#pipeline').value.trim(), screen = $('#output');
+    // `clear` clears the scrollback, as it would a terminal.
+    const cleared = result?.commands.some(cmd => cmd.name === 'clear' && cmd.status === 0);
+    const live = `<span class="line prompt-line">${promptSign()} ${escape(source)}${source ? '' : '<i class="cursor"></i>'}</span>`;
+    // The screen stays scrolled to the bottom, unless the student has scrolled up to read.
+    const pin = training.pin || screen.scrollHeight - screen.scrollTop - screen.clientHeight < 24;
+    screen.innerHTML = (cleared ? '' : training.scrollback ?? '') + live + shown + more + wrote + notes;
+    if (pin) screen.scrollTop = screen.scrollHeight;
+    training.pin = false;
     showGauges(result);
   }
   const hits = goal.filter((_, i) => lineMatches(mine, goal, i)).length;
@@ -1487,7 +1519,8 @@ function showScreens() {
   status.classList.toggle('differs', !training.matched && !!result);
   const heavy = (training.differences ?? []).find(d => d.kind === 'memory');
   status.textContent = training.matched ? '✓ Matches the goal' : !$('#pipeline').value.trim() ? 'Type a command' : stale ? 'Keep typing…'
-    : heavy && hits === goal.length && mine.length === goal.length ? `Output matches, but ${heavy.name} holds ${size(heavy.held)}` : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
+    : heavy && hits === goal.length && mine.length === goal.length ? `Output matches, but ${heavy.name} holds ${size(heavy.held)}`
+    : hits === goal.length && mine.length > goal.length ? `${mine.length - goal.length} line${mine.length - goal.length === 1 ? '' : 's'} too many` : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
 }
 
 // Under the output, a gauge for each command: a light for its exit status, and a bar, on a log
@@ -1528,7 +1561,7 @@ function showTarget() {
   $('#lesson-brief').innerHTML = prose(field(lesson, 'brief'));
   try { training.model = parsePipeline(targetOf(lesson), { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
   // In a course that runs commands the goal is what the target prints, as the chosen system's tools print it.
-  if (runs()) { training.goal = screenLines(run(training.model, tracks[track].files, { platform })); return; }
+  if (runs()) { training.goal = screenLines(run(training.model, tracks[track].files, { platform })); buildScrollback(); return; }
   host.innerHTML = diagram(training.model).replace(/\b(svg-title|svg-desc)\b/g, 'target-$1').replace(/(id="|url\(#)arrow-/g, '$1target-arrow-');
   fit(host, host.querySelector('svg'));
   frame();
@@ -1663,6 +1696,7 @@ function showTraining() {
       progress[lesson.id] = training.earned;
       try { localStorage.setItem(tracks[track].store, JSON.stringify(progress)); } catch {}
     }
+    if (runs()) keepCommand(lesson.id, $('#pipeline').value.trim());
     training.found = collects() ? lesson.tools.filter(name => !before.has(name)) : [];
     training.burst = true;
     if (!training.hints.length) training.nudge = false;
