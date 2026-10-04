@@ -265,6 +265,8 @@ function buildPipeline(tokens, inherited, context, substitution, { first = 0, pr
     cmd.command = words.join(' ');
     // The words as the command receives them, after quote removal, so 'a b' and "a b" compare equal.
     cmd.args = argv.map(token => token.value);
+    // Which words were left unquoted with a * ? or [ in them, so a runner can expand them as globs.
+    cmd.globs = argv.map(token => !!token.dynamic && /[*?[]/.test(token.raw));
     // Redirects apply before the command runs, so /dev/fd/3 names whatever 3< <(…) opened.
     const substitutionPath = token => !token.dynamic && fds[token.value.match(/^\/(?:dev|proc\/self)\/fd\/(\d+)$/)?.[1]]?.type === 'procsub';
     const paths = argv.map(token => !token.procsub && substitutionPath(token) ? { ...token, procsub: true } : token);

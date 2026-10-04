@@ -1,7 +1,9 @@
 import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './parser.js';
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
 import { compare, starsFor } from './training.js';
-import { lessons } from './lessons.js';
+import { lessons as plumbing } from './lessons.js';
+import { run, screenLines, sameLine, tools } from './sandbox.js';
+import { files as caseFiles, levels as caseLevels } from './cases.js';
 import { slides } from './intro.js';
 import { reference } from './reference.js';
 
@@ -976,6 +978,7 @@ function render() {
     showVariations();
     showRedirectStyle();
     training.differences = null;
+    training.result = null;
     showTraining();
     return;
   }
@@ -984,7 +987,7 @@ function render() {
     currentSource = $('#pipeline').value;
     targets = inspectTargets(currentModel);
     hovered = null;
-    training.differences = training.active && training.model ? compare(training.model, currentModel) : null;
+    training.differences = training.active && training.model ? check(currentModel) : null;
     $('#error').hidden = true;
     $('#results').classList.remove('stale', 'empty');
     const jobCount = currentModel.all.filter(cmd => cmd.substitution?.kind === 'job').length;
@@ -1370,24 +1373,120 @@ $('#download').addEventListener('click', () => {
   const a = document.createElement('a'); a.href = url; a.download = 'pipeline.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-// Training: each level shows the picture of a command the student cannot see, and they edit their
-// own command until its picture matches. Their diagram is the usual one under the editor; the
-// target's is drawn above the editor, or beside theirs on wide screens. Best stars per level are
-// kept under the level's id.
-let progress = {};
-try { progress = JSON.parse(localStorage.getItem('pipeviewer-training')) ?? {}; } catch {}
+// Training has two courses. In Toolbox each level runs the student's command on the case files and
+// compares what it prints with what the target prints. In Plumbing each level shows the picture of a
+// command the student cannot see, and they edit their own command until its picture matches. Their
+// diagram is the usual one under the editor; the target's is drawn above the editor, or beside
+// theirs on wide screens. Each course keeps the best stars per level under the level's id.
+const tracks = {
+  toolbox: { levels: caseLevels, store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1 },
+  plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0 },
+};
+const saved = { toolbox: {}, plumbing: {} };
+for (const name of Object.keys(tracks)) try { saved[name] = JSON.parse(localStorage.getItem(tracks[name].store)) ?? {}; } catch {}
+// A newcomer starts on Toolbox. Someone who has already played Plumbing goes back to it.
+let track = Object.keys(saved.plumbing).length ? 'plumbing' : 'toolbox';
+try { const chosen = localStorage.getItem('pipeviewer-track'); if (tracks[chosen]) track = chosen; } catch {}
+let lessons = tracks[track].levels, progress = saved[track];
+const toolbox = () => track === 'toolbox';
+// Plumbing numbers its levels from 0, as descriptors are; Toolbox from 1. A level's button can show
+// a label instead.
+const levelNumber = i => i + tracks[track].from;
 const lessonStart = i => lessons[i].start ?? lessons[i - 1].target;
-// Levels are numbered from 0, as descriptors are; a level's button can show a label instead.
-const levelName = i => lessons[i].label ?? String(i);
+const levelName = i => lessons[i].label ?? String(levelNumber(i));
 const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6L12 17l-5.38 2.85 1.03-6L3.3 9.6l6-.9z"/></svg>`;
 const stars = n => [0, 1, 2].map(i => star(i < n)).join('');
 const cheers = ['Nailed it.', 'Spot on.', 'Clean pipes.', 'Exactly right.', 'Plumbing works.'];
+
+function setTrack(name) {
+  track = name;
+  lessons = tracks[name].levels;
+  progress = saved[name];
+  try { localStorage.setItem('pipeviewer-track', name); } catch {}
+}
+// The course switch, and the parts of the screen that differ between courses.
+function showTrack() {
+  document.documentElement.classList.toggle('toolbox', toolbox());
+  $('#output-panel').hidden = !toolbox();
+  $('#target-title').textContent = toolbox() ? 'Goal' : 'Target';
+  $('#track-switch').querySelectorAll('[data-track]').forEach(button => {
+    const active = button.dataset.track === track;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active);
+  });
+  slide($('#track-switch'));
+  const first = $('#hint-buttons [data-hint="1"]');
+  first.dataset.plumbing ??= first.textContent;
+  first.dataset.plumbingTitle ??= first.title;
+  first.textContent = toolbox() ? first.dataset.toolbox : first.dataset.plumbing;
+  first.title = toolbox() ? first.dataset.toolboxTitle : first.dataset.plumbingTitle;
+  toolbeltMarkup = '';
+}
+
+// Toolbox compares what reaches the terminal, line by line: each line of the goal that the
+// student's output matches in the same place is a line put right.
+function check(model) {
+  if (!toolbox()) return compare(training.model, model);
+  training.result = run(model, caseFiles, { platform });
+  const mine = screenLines(training.result), goal = training.goal ?? [], differences = [];
+  for (let i = 0; i < Math.max(mine.length, goal.length); i++) if (!lineMatches(mine, goal, i)) differences.push({ kind: 'line', index: i });
+  return differences;
+}
+const lineMatches = (mine, goal, i) => !!mine[i] && !!goal[i] && mine[i].fd === goal[i].fd && sameLine(mine[i].text, goal[i].text);
+
+// The student's screen shows what their command printed, stderr in its own colour, then any files
+// it wrote and anything the sandbox did differently from a terminal. The goal shows the target's
+// lines blacked out word by word, and uncovers each one the student's output matches.
+const SCREEN_LINES = 400;
+const lineCount = text => { const n = (text.match(/\n/g) ?? []).length + (text && !text.endsWith('\n') ? 1 : 0); return `${n.toLocaleString()} line${n === 1 ? '' : 's'}`; };
+function showScreens() {
+  if (!toolbox() || !training.active) return;
+  const goal = training.goal ?? [], result = training.result, mine = result ? screenLines(result) : [];
+  const stale = $('#results').classList.contains('stale');
+  $('#output-panel').classList.toggle('stale', stale);
+  if (!stale) {
+    const shown = mine.slice(0, SCREEN_LINES).map((line, i) => `<span class="line fd-${line.fd}${lineMatches(mine, goal, i) ? ' hit' : ''}">${escape(line.text) || ' '}</span>`).join('');
+    const more = mine.length > SCREEN_LINES ? `<span class="screen-note">… and ${(mine.length - SCREEN_LINES).toLocaleString()} more lines</span>` : '';
+    const wrote = (result?.written ?? []).map(file => `<span class="screen-note wrote">→ ${escape(file)} <span>${lineCount(result.files[file])}</span></span>`).join('');
+    const notes = (result?.notes ?? []).map(note => `<span class="screen-note">${escape(note)}</span>`).join('');
+    $('#output').innerHTML = shown + more + wrote + notes;
+  }
+  const hits = goal.filter((_, i) => lineMatches(mine, goal, i)).length;
+  $('#goal').innerHTML = goal.map((line, i) => {
+    if (!training.matched && !lineMatches(mine, goal, i)) return `<span class="line hidden fd-${line.fd}" aria-hidden="true">${escape(line.text).replace(/\S+/g, word => `<i>${word}</i>`) || ' '}</span>`;
+    const fresh = !training.revealed.has(i);
+    training.revealed.add(i);
+    return `<span class="line shown fd-${line.fd}${fresh ? ' fresh' : ''}">${escape(line.text) || ' '}</span>`;
+  }).join('') + `<span class="sr-only">${goal.length} line${goal.length === 1 ? '' : 's'}, ${hits} matched</span>`;
+  // A line covered again stays covered until it matches again, when it is uncovered afresh.
+  for (const i of training.revealed) if (!training.matched && !lineMatches(mine, goal, i)) training.revealed.delete(i);
+  const status = $('#output-status');
+  status.classList.toggle('matched', training.matched);
+  status.classList.toggle('differs', !training.matched && !!result);
+  status.textContent = training.matched ? '✓ Matches the goal' : !$('#pipeline').value.trim() ? 'Type a command' : stale ? 'Keep typing…' : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
+}
+
+// The toolbox: every tool the course hands over, collected as levels are solved. Tools still to
+// come are shown faintly, so the student can see what's ahead.
+const earnedTools = () => new Set(caseLevels.filter(level => saved.toolbox[level.id]).flatMap(level => level.tools));
+const allTools = [...new Set(caseLevels.flatMap(level => level.tools))];
+let toolbeltMarkup = '';
+function showToolbelt() {
+  if (!toolbox() || !training.active) return;
+  const earned = earnedTools();
+  const markup = allTools.map(name => `<li class="${earned.has(name) ? 'earned' : 'ahead'}${training.found?.includes(name) ? ' fresh' : ''}" title="${earned.has(name) ? `${escape(name)} ${escape(tools[name].summary)}` : 'Still to find'}"><code>${escape(name)}</code></li>`).join('');
+  if (markup !== toolbeltMarkup) $('#toolbelt').innerHTML = toolbeltMarkup = markup;
+}
+// A tool's card: what it does and, in a hint, the options worth knowing first.
+const toolCard = (name, options = true) => `<span class="tool-card"><code>${escape(name)}</code> ${escape(tools[name].summary)}${options && tools[name].options.length ? `<span class="tool-options">${tools[name].options.map(([flag, text]) => `<span><code>${escape(flag)}</code> ${escape(text)}</span>`).join('')}</span>` : ''}</span>`;
 
 // The target gets ids of its own, so arrowheads and titles in one drawing never resolve to the other.
 function showTarget() {
   if (!training.active) return;
   const host = $('#target-diagram');
   try { training.model = parsePipeline(lessons[training.level].target, { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
+  // In Toolbox the goal is what the target prints, as the chosen system's tools print it.
+  if (toolbox()) { training.goal = screenLines(run(training.model, caseFiles, { platform })); return; }
   host.innerHTML = diagram(training.model).replace(/\b(svg-title|svg-desc)\b/g, 'target-$1').replace(/(id="|url\(#)arrow-/g, '$1target-arrow-');
   fit(host, host.querySelector('svg'));
   frame();
@@ -1404,6 +1503,7 @@ function markDifferences() {
     svg.classList.toggle('flowing', training.active && training.matched);
     if (!training.active) continue;
     for (const difference of training.differences ?? []) {
+      if (difference.kind === 'line') continue;
       if (difference.kind === 'stream') {
         const dot = svg.querySelector(`[data-command="${difference.key}"][data-fd="${difference.fd}"] .port-dot`);
         dot?.insertAdjacentHTML('afterend', `<circle class="diff-ring" cx="${dot.getAttribute('cx')}" cy="${dot.getAttribute('cy')}" r="10" fill="none"/>`);
@@ -1415,11 +1515,11 @@ function markDifferences() {
 // Level 0 is never opened for the student. Until they've solved it, its button is tinted stdin's
 // green, and it pulses each time they look stuck: a hint taken, a level restarted, or a level
 // left unmatched for a while. It then keeps a green outline until they solve a level unaided.
-const n00bIndex = lessons.findIndex(lesson => lesson.intro);
-const n00bDone = () => !!progress[lessons[n00bIndex].id];
+const n00bIndex = plumbing.findIndex(lesson => lesson.intro);
+const n00bDone = () => !!saved.plumbing[plumbing[n00bIndex].id];
 let nudgeTimer = 0;
 function nudge() {
-  if (n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
+  if (toolbox() || n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
   training.nudge = true;
   showLevels();
   replay($(`#levels [data-level="${n00bIndex}"]`), 'pulse');
@@ -1435,7 +1535,7 @@ function showLevels() {
   const markup = lessons.map((lesson, i) => {
     const earned = progress[lesson.id] ?? 0, active = i === training.level;
     const classes = [active && 'active', lesson.intro && !n00bDone() && 'fresh', lesson.intro && training.nudge && 'nudge'].filter(Boolean).join(' ');
-    return `<button type="button" data-level="${i}" aria-pressed="${active}"${classes ? ` class="${classes}"` : ''} title="Level ${i}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
+    return `<button type="button" data-level="${i}" aria-pressed="${active}"${classes ? ` class="${classes}"` : ''} title="Level ${levelNumber(i)}: ${escape(lesson.title)}${earned ? ` · ${earned} of 3 stars` : ''}"><span class="level-number${lessons[i].label ? ' level-label' : ''}">${escape(levelName(i))}</span><span class="level-stars${earned ? '' : ' unearned'}">${stars(earned)}</span></button>`;
   }).join('');
   // The buttons are rebuilt only when they change, so a pulse isn't restarted on every keystroke,
   // and around the thumb, which stays so it can slide to the new level.
@@ -1472,7 +1572,7 @@ function differenceMarkup(difference) {
 // Its frame is rebuilt only when that changes, so its animations do not restart on every keystroke.
 function showCoach() {
   const lesson = lessons[training.level], coach = $('#coach'), source = $('#pipeline').value.trim();
-  const key = training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints.join(',')}`;
+  const key = `${track}:${training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints.join(',')}`}`;
   if (key !== training.coach) {
     training.coach = key;
     if (training.matched) {
@@ -1483,15 +1583,18 @@ function showCoach() {
         return `<span class="spark fd-${i % 3}" style="--dx: ${(Math.cos(angle) * reach * 1.6).toFixed(1)}px; --dy: ${(Math.sin(angle) * reach - 8).toFixed(1)}px; --delay: ${(i % 5) * 0.03}s" aria-hidden="true">${i % 3}</span>`;
       }).join('') : '';
       training.burst = false;
-      const next = last
-        ? `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`
-        : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${training.level + 1}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
-      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${training.level} solved.</p><p>${prose(lesson.learned)}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+      const finale = toolbox()
+        ? `<p class="solved-finale">You found ${earnedTools().size} tools and <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'} Plumbing is next: where streams go when they don’t go down a pipe.</p><div class="solved-actions"><button type="button" class="next-button" data-coach="plumbing">On to Plumbing <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
+        : `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
+      const next = last ? finale
+        : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${levelNumber(training.level + 1)}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
+      const found = toolbox() && training.found.length ? `<div class="found">${training.found.map(name => `<p><span class="found-label">New tool</span>${toolCard(name, false)}</p>`).join('')}</div>` : '';
+      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(lesson.learned)}</p>${found}<p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
     } else {
       const parts = [
-        `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
+        toolbox() ? `<div class="hint"><span class="row-label">${lesson.tools.length === 1 ? 'TOOL' : 'TOOLS'}</span>${lesson.tools.map(name => toolCard(name)).join('')}</div>` : `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
         `<div class="hint"><span class="row-label">HOW</span><p>${prose(lesson.how)}</p></div>`,
-        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">Type it in to see the pictures match.</span></p></div>`,
+        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">${toolbox() ? 'Type it in to see the output match.' : 'Type it in to see the pictures match.'}</span></p></div>`,
       ];
       coach.innerHTML = training.hints.length ? `<div class="hints">${training.hints.map(n => parts[n - 1]).join('')}</div>` : '';
     }
@@ -1500,7 +1603,7 @@ function showCoach() {
   const spelling = $('#solved-spelling');
   if (spelling) {
     const same = source.replace(/\s+/g, ' ') === lesson.target;
-    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(lesson.target)}</code>, which draws the same picture.`;
+    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(lesson.target)}</code>, which ${toolbox() ? 'prints the same' : 'draws the same picture'}.`;
   }
   const list = $('#diff-list');
   if (list) list.innerHTML = training.differences ? training.differences.map(differenceMarkup).join('') : `<li class="diff-shape">${source ? 'Finish the command to compare it with the target.' : 'Type a command to compare it with the target.'}</li>`;
@@ -1511,12 +1614,13 @@ function showTraining() {
   if (!training.active) return;
   const differences = training.differences, matched = !!differences && !differences.length;
   if (matched && !training.matched) {
-    const lesson = lessons[training.level];
+    const lesson = lessons[training.level], before = earnedTools();
     training.earned = starsFor(training.hints.length);
     if (!(progress[lesson.id] >= training.earned)) {
       progress[lesson.id] = training.earned;
-      try { localStorage.setItem('pipeviewer-training', JSON.stringify(progress)); } catch {}
+      try { localStorage.setItem(tracks[track].store, JSON.stringify(progress)); } catch {}
     }
+    training.found = toolbox() ? lesson.tools.filter(name => !before.has(name)) : [];
     training.burst = true;
     if (!training.hints.length) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
@@ -1529,6 +1633,8 @@ function showTraining() {
   status.classList.toggle('differs', !!differences?.length);
   status.textContent = matched ? '✓ Matches the target' : differences ? `${differences.length} difference${differences.length === 1 ? '' : 's'}` : $('#pipeline').value.trim() ? 'Keep typing…' : 'Type a command';
   markDifferences();
+  showScreens();
+  showToolbelt();
   showLevels();
   showHints();
   showCoach();
@@ -1537,14 +1643,14 @@ function showTraining() {
 // A level with an intro opens on its explainer, unless the student is only starting it over.
 function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
-  Object.assign(training, { level: i, hints: [], matched: false, coach: '' });
+  Object.assign(training, { level: i, hints: [], matched: false, coach: '', result: null, goal: null, revealed: new Set(), found: [] });
   if (lesson.intro) training.nudge = false;
   clearTimeout(nudgeTimer);
-  if (!n00bDone() && !lesson.intro) nudgeLater();
+  if (!toolbox() && !n00bDone() && !lesson.intro) nudgeLater();
   const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
-  $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${i}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
+  $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${levelNumber(i)}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
   $('#lesson-brief').innerHTML = prose(lesson.brief);
-  history.replaceState(null, '', `#training/${i}`);
+  history.replaceState(null, '', `#${tracks[track].hash}/${levelNumber(i)}`);
   showTarget();
   // Moving on from a solved level keeps the student's own spelling, which the next level starts from.
   if (!(keep && lesson.start === undefined)) $('#pipeline').value = lessonStart(i);
@@ -1634,7 +1740,7 @@ document.addEventListener('keydown', event => {
 // Training opens at the first unsolved level after level 0, which the student finds for themselves.
 const firstUnsolved = () => {
   const i = lessons.findIndex(lesson => !lesson.intro && !progress[lesson.id]);
-  return i < 0 ? 1 : i;
+  return i < 0 ? (toolbox() ? 0 : 1) : i;
 };
 // The editor's placeholder is an example for the viewer. In training it would hint at answers.
 const placeholder = $('#pipeline').placeholder;
@@ -1646,7 +1752,8 @@ function enterTraining(level = firstUnsolved()) {
   $('#training').hidden = $('#target-panel').hidden = false;
   $('.example-rows').hidden = true;
   $('#training-button').setAttribute('aria-pressed', 'true');
-  loadLesson(Math.min(level, lessons.length - 1));
+  showTrack();
+  loadLesson(Math.max(0, Math.min(level, lessons.length - 1)));
 }
 
 function exitTraining() {
@@ -1654,8 +1761,9 @@ function exitTraining() {
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
   closeIntro();
   clearTimeout(nudgeTimer);
-  document.documentElement.classList.remove('training');
-  $('#training').hidden = $('#target-panel').hidden = true;
+  document.documentElement.classList.remove('training', 'toolbox');
+  $('#training').hidden = $('#target-panel').hidden = $('#output-panel').hidden = true;
+  $('#goal').innerHTML = $('#output').innerHTML = '';
   $('.example-rows').hidden = false;
   slideAll();
   $('#training-button').setAttribute('aria-pressed', 'false');
@@ -1672,7 +1780,16 @@ const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(tr
 // Training opens and closes with a crossfade where the browser has view transitions. The tour runs
 // once the new page has faded in, the first time training opens.
 const transition = change => document.startViewTransition ? document.startViewTransition(change).finished.catch(() => {}) : Promise.resolve(change());
-const openTraining = level => transition(() => enterTraining(level)).then(() => { if (!toured() && training.slide < 0) startTour(); });
+const openTraining = (level, name = track) => transition(() => { if (name !== track) setTrack(name); enterTraining(level); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+// Switching course starts the new one at its first unsolved level.
+function switchTrack(name) {
+  if (name === track || tourStep >= 0) return;
+  transition(() => { setTrack(name); closeIntro(); showTrack(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+}
+$('#track-switch').addEventListener('click', event => {
+  const button = event.target.closest('[data-track]');
+  if (button) switchTrack(button.dataset.track);
+});
 $('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining());
 $('#exit-training').addEventListener('click', () => transition(exitTraining));
 $('#levels').addEventListener('click', event => {
@@ -1691,7 +1808,8 @@ $('#restart').addEventListener('click', () => { loadLesson(training.level, { int
 $('#coach').addEventListener('click', event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();
-  if (action === 'replay') loadLesson(1);
+  if (action === 'replay') loadLesson(toolbox() ? 0 : 1);
+  if (action === 'plumbing') switchTrack('plumbing');
   if (action === 'viewer') exitTraining();
 });
 // Once the pictures match, Enter moves on rather than starting a new line.
@@ -1701,18 +1819,28 @@ $('#pipeline').addEventListener('keydown', event => {
     nextLevel();
   }
 });
-// #training opens training at the first unsolved level, and #training/2 at level 2, so a link can
-// send a colleague straight there.
-const trainingLink = () => /^#training(?:\/(\d+))?$/.exec(location.hash);
+// #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #toolbox and
+// #toolbox/3 do the same for Toolbox. So a link can send a colleague straight there.
+const trainingLink = () => /^#(training|toolbox)(?:\/(\d+))?$/.exec(location.hash);
+const followLink = ([, hash, number]) => {
+  const name = hash === 'toolbox' ? 'toolbox' : 'plumbing';
+  openTraining(number === undefined ? undefined : Number(number) - tracks[name].from, name);
+};
 addEventListener('hashchange', () => {
   const link = trainingLink();
-  if (link) openTraining(link[1] ? Number(link[1]) : undefined);
+  if (link) followLink(link);
   else if (training.active) exitTraining();
 });
 // The tour walks a first-time student through the training screen: everything dims but one part,
 // which a spotlight picks out while a card beside it explains it. The spotlight glides from part to
 // part and follows it while the page scrolls.
-const tourSteps = [
+const tourSteps = { toolbox: [
+  { at: '#training', title: 'Training mode engaged', text: () => `A case to crack with real Unix tools, each a small program that does one job. Every level hands you one, and there are ${lessons.length} levels, each worth up to three stars.` },
+  { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type, on the files in the case. Nothing leaves your browser.' },
+  { at: '#output-panel', title: 'What it prints', text: () => 'Whatever your command prints shows up here, as a terminal would show it. Errors come up in amber.' },
+  { at: '#target-panel', title: 'Your goal', text: () => 'The output you’re after, blacked out. Each line uncovers itself when yours matches it.' },
+  { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
+], plumbing: [
   { at: '#training', title: 'Training mode engaged', text: () => `Each level shows a picture. Your job is to write the command that draws it. There are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>.` },
   { at: '#results > .diagram-panel', title: 'Your picture', text: () => 'This draws your command, and redraws it as you type. If the picture makes no sense whatsoever then best to start on the <button type="button" class="tour-link lesson-label" data-n00b>n00b</button> level.' },
@@ -1724,14 +1852,15 @@ const tourSteps = [
     return `Change your command until it looks like this${spot}.${rings}`;
   } },
   { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
-];
+] };
 let tourStep = -1, tourFrame = 0;
-const toured = () => { try { return localStorage.getItem('pipeviewer-tour') === 'done'; } catch { return true; } };
+const steps = () => tourSteps[track];
+const toured = () => { try { return localStorage.getItem(tracks[track].tour) === 'done'; } catch { return true; } };
 
 function showTourStep(n) {
   tourStep = n;
-  const step = tourSteps[n], last = n === tourSteps.length - 1;
-  $('#tour-count').textContent = `${n + 1} of ${tourSteps.length}`;
+  const step = steps()[n], last = n === steps().length - 1;
+  $('#tour-count').textContent = `${n + 1} of ${steps().length}`;
   $('#tour-title').textContent = step.title;
   $('#tour-text').innerHTML = step.text();
   $('#tour-back').hidden = !n;
@@ -1747,7 +1876,7 @@ function showTourStep(n) {
 // window has no room below.
 function placeTour() {
   if (tourStep < 0) return;
-  const spot = $(tourSteps[tourStep].at).getBoundingClientRect(), card = $('#tour-card'), pad = 8, gap = 14;
+  const spot = $(steps()[tourStep].at).getBoundingClientRect(), card = $('#tour-card'), pad = 8, gap = 14;
   const box = { left: spot.left - pad, top: spot.top - pad, width: spot.width + pad * 2, height: spot.height + pad * 2 };
   Object.assign($('#tour-spot').style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
   const { offsetWidth: w, offsetHeight: h } = card;
@@ -1770,7 +1899,7 @@ function startTour() {
 function endTour() {
   if (tourStep < 0) return;
   tourStep = -1;
-  try { localStorage.setItem('pipeviewer-tour', 'done'); } catch {}
+  try { localStorage.setItem(tracks[track].tour, 'done'); } catch {}
   $('#tour').classList.remove('open');
   setTimeout(() => { if (tourStep < 0) { $('#tour').hidden = true; cancelAnimationFrame(tourFrame); } }, 300);
   const editor = $('#pipeline');
@@ -1779,7 +1908,7 @@ function endTour() {
   editor.setSelectionRange(editor.value.length, editor.value.length);
 }
 
-const tourNext = () => tourStep === tourSteps.length - 1 ? endTour() : showTourStep(tourStep + 1);
+const tourNext = () => tourStep === steps().length - 1 ? endTour() : showTourStep(tourStep + 1);
 $('#tour-next').addEventListener('click', tourNext);
 $('#tour-back').addEventListener('click', () => showTourStep(Math.max(0, tourStep - 1)));
 $('#tour-skip').addEventListener('click', endTour);
@@ -1804,4 +1933,4 @@ document.fonts?.ready.then(() => { fitEditor(); slideAll(); });
 document.fonts?.addEventListener('loadingdone', () => { fitEditor(); slideAll(); });
 addEventListener('resize', () => { fitEditor(); slideAll(); });
 render();
-if (trainingLink()) openTraining(trainingLink()[1] ? Number(trainingLink()[1]) : undefined);
+if (trainingLink()) followLink(trainingLink());

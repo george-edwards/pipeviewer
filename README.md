@@ -25,7 +25,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Features
 
-- **Training** mode, from the green button in the header, teaches redirects by picture. Each level shows the diagram of a command the student can't see, and they edit a starting command until their own diagram matches it. See [Training](#training).
+- **Training** mode, from the green button in the header, has two courses. **Toolbox** is a short whodunit for people new to the shell: each level hands over a tool such as `grep`, `cut` or `uniq`, runs the student's command on pretend files, and is solved when it prints what the target prints. **Plumbing** teaches redirects by picture: each level shows the diagram of a command the student can't see, and they edit a starting command until their own diagram matches it. See [Training](#training).
 
 - Light, dark and terminal themes. The terminal theme is phosphor green on black, all monospace. The page follows the system's light or dark theme until you pick one with the theme button, which shows the current theme, steps through the three, and remembers your choice. In the terminal theme the command editor is a black terminal too. The editor names the shell the header's shell switch picks, and a faint Tux or apple watermark behind the page shows which system is being mapped.
 - Coloured stream diagram with zoom controls, middle-click drag to pan, per-command descriptor mappings, and SVG export. On wide windows the page uses the full width so long pipelines need less scrolling.
@@ -49,6 +49,20 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Training
 
+A switch at the top of the training screen picks the course: **Toolbox** or **Plumbing**. Each keeps its own levels, stars and tour. A newcomer starts on Toolbox; someone who has already played Plumbing goes back to it, and the last course chosen is remembered.
+
+### Toolbox
+
+Someone has emptied the Tim Tams in the level 3 kitchen, and the student has the case file: a README, the smart pantry's lists from 15:00 and 15:10, a week of badge swipes, a staff list, and a note found in the bin. Twelve levels, numbered from 1, take about ten minutes and hand over one tool or idea each: `ls`, `cat`, `head`, `wc`, `diff`, `grep`, `|`, `cut`, `sort` and `uniq`, `sort -rn | head`, `grep -w`, and `tr` to decode the note, which is in ROT13. Levels 7 to 10 grow one pipeline a stage at a time, so the student watches a list of swipes narrow down to one name.
+
+The student's command runs as they type, in a sandbox in the page (`sandbox.js`), and what it prints appears under the editor as a terminal would show it, with stderr in amber. Beside it, the goal is the target's output blacked out word by word, so its shape shows: how many lines, how many words on each. Each line uncovers when the student's line in the same place matches it, and the level is solved when every line matches. Lines are compared by their words, so `uniq -c`'s GNU and BSD padding both pass, and any command that prints the same solves the level: `grep -w jlee staff.txt` and `grep ^jlee: staff.txt` alike. The diagram stays below, so the pipe being built is still drawn.
+
+The sandbox runs the parsed command line, so redirects, pipes, `&&`, `||` and globs behave as the diagram says, on a copy of the case files. The shell empties a file it writes to before the pipeline runs, so `sort f > f` leaves `f` empty, as it would for real. It has `ls`, `cat`, `head`, `tail`, `wc`, `grep` (basic and extended patterns), `sort`, `uniq`, `cut`, `tr`, `diff` (normal and `-u`), `sed` (`s`, `d`, `p` and `q`), a small `awk` that prints fields, `tee`, `echo`, `rev`, `tac`, `nl`, `seq`, `yes`, and `man`, whose pages are the same cards the hints show. Their output and errors follow GNU coreutils, or the BSD tools' spacing for `wc` and `uniq -c` in macOS mode. An unknown command gets Bash's or zsh's `command not found`. A command that would read the keyboard, such as `grep jlee` with no file, says so instead of hanging, and files a command writes are listed under its output. Process substitutions and `parallel` jobs aren't run.
+
+The hints are **Which tool?**, which shows the cards for the level's tools, **Show me how** and **Answer**, each costing a star as in Plumbing. A row of chips under the brief is the toolbox: each tool is filled in once a level that uses it is solved, and the ones still to come are faint outlines. A solved level shows any new tool's card, and the last one offers Plumbing next.
+
+### Plumbing
+
 Levels are numbered from 0, as descriptors are. Level 0, **n00b**, is for complete beginners. It opens on short slides, each with one idea, an example command and a small animated picture: every program has stdin, stdout and stderr; they are numbered 0, 1 and 2; a pipe joins 1 on the left to 0 on the right; and McIlroy's 1964 garden-hose memo, with a three-command pipe. A last slide, *Rewind to 1982*, holds a drawn VHS tape of Bell Labs' 1982 film *The UNIX System*: clicking it plays *Making Computers Easier to Use* from YouTube (youtube-nocookie.com) at 5:14, where Brian Kernighan builds a spelling checker out of existing programs, using temporary files. Once played, the film fills the slide, over a strip of its chapters drawn to scale: Brian's temporary files, a section on files, and Lorinda Cherry's pipes, which are lit in purple. A playhead follows the film, from the time the player reports, and the pipes chapter pulses once it's reached. Nothing loads from YouTube until the tape is clicked, and leaving the slide stops it. **Your turn** then hands over to an ordinary level, where the student pipes `ls` into `head -n 3`. Arrow keys step through the slides, and **Skip to the exercise** jumps ahead. Training never opens on level 0: it starts at level 1, with the tour, so the student finds level 0 for themselves. Until they solve it, its button is tinted stdin's green, like the Training button. Each time they look stuck (they take a hint, restart a level, or leave a level unmatched for 40 seconds, not counting time in the tour) it pulses a few times, and it keeps a green outline until they solve a level without hints. The tour's picture step links to it.
 
 Training opens with a crossfade. The first time a level's exercise is shown, a short tour dims the page and moves a spotlight from the training bar, to the command, to its picture, to the target, to the hints, with a card explaining each. **Show me around** runs it again.
@@ -61,11 +75,13 @@ A level is worth three stars. There are three hints: **What's different?** lists
 
 The shell switch in the header works in training too: the target is redrawn as the chosen shell runs it.
 
-Link to `/#training` to open training at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2.
+Link to `/#training` to open Plumbing at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2. `/#toolbox` and `/#toolbox/3` do the same for Toolbox.
 
 ### Adding a level
 
 Levels are listed in `lessons.js`, in the order they're played. Each has an `id` (keep it fixed once published, since progress is saved under it), a `title`, a `brief`, a `target`, a `how` hint and a `learned` note shown once it's solved. `start` is the command in the editor when the level opens; leave it out to start from the previous level's target. Text in backticks is set as code. `label` replaces the level's number on its button, and `intro: true` shows the slides in `intro.js` before the exercise. Each slide there has a `title`, `text`, an `example` command with a `note`, an optional `quote`, and a `picture` that draws it. `npm test` checks that every target parses under both shells and that no level starts out already solved.
+
+Toolbox levels are listed in `cases.js`, with the case files they run on. They have the same fields, minus `label` and `intro`, plus `tools`: the tools whose cards the first hint shows and which go into the toolbox once the level is solved. Each needs a card in `tools` in `sandbox.js`. `npm test` runs every target on both systems and checks that it prints something and no errors, and that no level starts out solved. The swipe log is made from a fixed seed, so the case comes out the same every time; the ten minutes that matter are written out by hand.
 
 ## macOS and zsh
 
