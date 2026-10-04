@@ -61,6 +61,14 @@ The sandbox runs the parsed command line, so redirects, pipes, `&&`, `||` and gl
 
 The hints are **Which tool?**, which shows the cards for the level's tools, **Show me how** and **Answer**, each costing a star as in Plumbing. A row of chips under the brief is the toolbox: each tool is filled in once a level that uses it is solved, and the ones still to come are faint outlines. A solved level shows any new tool's card, and the last one offers Plumbing next.
 
+### Toolbox, the standalone page
+
+`toolbox.html` is a second take on Toolbox, built from a blank slate and kept apart from the training screen so the two can be compared. It shares only the sandbox, the parser and the case files.
+
+The terminal is the whole exercise. Commands run on Enter, ↑ and ↓ walk the history, Tab completes a command or file name (listing the choices when there are several), Ctrl-C abandons the line, and `clear` or Ctrl-L clears the screen. `help` lists the tools and `history` the commands typed. There are no levels: a case notebook beside the terminal holds seven questions (what's in the case file, what happened, when, who went into the kitchen, who went in most, who jlee is, and what the note says), and each is ticked off when its answer reaches the screen, however the student got it there. The open question offers nudges one at a time, from a pointer to a command to try, which a click puts in the terminal. Once the student knows who went in most, Facilities send mail and `found-in-bin.txt` appears.
+
+A pipeline's output carries an X-ray: a chip for each stage with how many lines it passed on, amber if it complained, and a click shows what that stage wrote. The first time a tool works, a chip says what it does, and it joins **Your tools**, whose cards open in the notebook. Under an error, a note explains the usual slips: a mistyped command (`grpe`, did you mean `grep`?), a file name with the wrong capitals, `tr` given a file name, or output too long to read. The session is saved as the commands typed, and replayed on the next visit; **Start over** clears it. On narrow screens the notebook folds to a line above the terminal.
+
 ### The Unix Way
 
 Twelve levels, numbered from 1, each try out one idea on a pretend machine, with the same output, goal and hints as Toolbox. Everything is a file: `echo hello > /dev/tty` reaches the screen, `/dev/null` keeps nothing, `head -c 12 /dev/urandom | base64` makes a password, `grep -c processor /proc/cpuinfo` counts the processors, and `cut -d: -f1 /etc/passwd` lists the users. Do one thing well: Kernighan's spelling checker from the 1982 film, `tr | tr | sort -u | comm -23 - words.txt`, finds the four typos in a memo. Streams: a million random bytes go through `base64` while no command holds more than a pipe's buffer, and a level asks for the biggest of 100,000 numbers without `sort` holding them all. Then quiet success (`cp && diff && echo same`), settings as text files under `/etc` rather than a registry, and `sudo apt install cowsay` (`brew install cowsay` on macOS) from one central repository.
@@ -83,7 +91,7 @@ A level is worth three stars. There are three hints: **What's different?** lists
 
 The shell switch in the header works in training too: the target is redrawn as the chosen shell runs it.
 
-Link to `/#training` to open Plumbing at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2. `/#toolbox`, `/#toolbox/3`, `/#unixway` and `/#unixway/3` do the same for Toolbox and The Unix Way, and `/#courses` opens the picker.
+Link to `/#training` to open Plumbing at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2. `/#toolbox`, `/#toolbox/3`, `/#unixway` and `/#unixway/3` do the same for Toolbox and The Unix Way, and `/#courses` opens the picker. The standalone Toolbox is at `/toolbox.html`.
 
 ### Adding a level
 

@@ -1,0 +1,209 @@
+/* Toolbox: a terminal and a case notebook, side by side. The page follows Pipeviewer's light, dark
+   and terminal themes; the terminal itself stays dark in all three, as most terminals are. */
+:root {
+  color-scheme: light;
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --page: #f3f5f9;
+  --surface: #ffffff;
+  --inset: #edf0f6;
+  --text: #202634;
+  --muted: #566174;
+  --border: #ccd2df;
+  --green: #0d7160;
+  --green-bg: #e0f3ed;
+  --purple: #5838b5;
+  --purple-bg: #eee8fa;
+  --amber: #8c4d05;
+  --focus: #8865df;
+  --term-bg: #11161f;
+  --term-edge: #263042;
+  --term-text: #dbe2ee;
+  --term-muted: #8995a9;
+  --term-prompt: #6fdcb4;
+  --term-amber: #ffc579;
+  --term-purple: #c3b4ff;
+  --term-chip: #1b2331;
+  --term-chip-edge: #33405a;
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--page);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #11151d;
+  --surface: #1b2230;
+  --inset: #242d3e;
+  --text: #edf1f8;
+  --muted: #b7c1d3;
+  --border: #445169;
+  --green: #62d8ba;
+  --green-bg: #163b35;
+  --purple: #b9a7ff;
+  --purple-bg: #342c52;
+  --amber: #ffc579;
+  --focus: #b9a7ff;
+  --term-bg: #0b0f15;
+  --term-edge: #2a3446;
+}
+:root[data-theme="terminal"] {
+  color-scheme: dark;
+  --sans: 'IBM Plex Mono', monospace;
+  --page: #020604;
+  --surface: #050d08;
+  --inset: #0a1a10;
+  --text: #b6f2c4;
+  --muted: #74c48a;
+  --border: #1f5532;
+  --green: #4dff88;
+  --green-bg: #0c3519;
+  --purple: #d3a2ff;
+  --purple-bg: #2c1a40;
+  --amber: #ffc247;
+  --focus: #4dff88;
+  --term-bg: #000;
+  --term-edge: #2b7a46;
+  --term-text: #c4ffd2;
+  --term-muted: #5fae75;
+  --term-prompt: #4dff88;
+  --term-amber: #ffc247;
+  --term-purple: #d3a2ff;
+  --term-chip: #04140a;
+  --term-chip-edge: #1f5532;
+}
+[data-theme="terminal"] body { text-shadow: 0 0 .35em rgb(77 255 136 / .2); }
+[data-theme="terminal"] *, [data-theme="terminal"] *::before { border-radius: 0 !important; }
+
+* { box-sizing: border-box; }
+body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: var(--page); }
+button { font: inherit; color: inherit; cursor: pointer; }
+code, kbd { font-family: var(--mono); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The header: a way home, the title, and three small controls. */
+.bar { display: flex; align-items: center; gap: 1rem 1.5rem; flex-wrap: wrap; padding: .75rem max(1rem, calc((100vw - 90rem) / 2)); border-bottom: 1px solid var(--border); background: var(--surface); }
+.home { display: flex; align-items: center; gap: .5rem; color: var(--muted); text-decoration: none; font-weight: 600; font-size: .875rem; }
+.home:hover { color: var(--text); }
+.bar h1 { margin: 0; font-size: 1.0625rem; letter-spacing: -.02em; display: flex; align-items: baseline; gap: .625rem; flex-wrap: wrap; }
+.bar h1 span { font-size: .8125rem; font-weight: 450; color: var(--muted); letter-spacing: 0; }
+.bar-actions { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+.shells { display: flex; padding: .1875rem; gap: .125rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--inset); }
+.shells button { border: 0; background: none; padding: .25rem .625rem; border-radius: .3125rem; font: 500 .75rem var(--mono); color: var(--muted); }
+.shells button[aria-pressed="true"] { background: var(--surface); color: var(--purple); box-shadow: 0 0 0 1px var(--border); }
+.quiet { border: 0; background: none; color: var(--muted); font-size: .8125rem; padding: .25rem; }
+.quiet:hover { color: var(--text); }
+
+/* The desk: the terminal takes the room, the notebook a column beside it. */
+.desk { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 21rem; grid-template-rows: minmax(0, 1fr); gap: 1.25rem; padding: 1.25rem max(1rem, calc((100vw - 90rem) / 2)); }
+
+/* The terminal. */
+.terminal { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--term-edge); border-radius: .875rem; background: var(--term-bg); color: var(--term-text); font: .875rem/1.55 var(--mono); box-shadow: 0 1rem 2.5rem rgb(10 15 25 / .18); overflow: hidden; cursor: text; }
+.scrollback { flex: 1; min-height: 0; overflow-y: auto; padding: 1rem 1.25rem .25rem; overscroll-behavior: contain; }
+.entry { margin-bottom: .625rem; }
+.cmdline { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ps, .prompt { color: var(--term-prompt); font-weight: 500; }
+.typed { color: var(--term-text); }
+.interrupt { color: var(--term-muted); margin-left: .25rem; }
+.out { margin: .125rem 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 8; }
+.out span { display: block; min-height: 1.55em; }
+.out .fd-2 { color: var(--term-amber); }
+.out b { font-weight: 500; color: var(--term-muted); }
+.out b.used { color: var(--term-prompt); }
+.tutor { margin: .375rem 0 0; padding-left: .875rem; border-left: 2px solid var(--term-purple); color: var(--term-purple); font: .8125rem/1.5 var(--sans); max-width: 46rem; }
+.tutor code { color: var(--term-text); background: var(--term-chip); padding: .0625rem .3125rem; border-radius: .25rem; }
+.new-tool { display: inline-flex; align-items: baseline; gap: .5rem; margin: .5rem 0 0; padding: .25rem .625rem; border: 1px solid color-mix(in srgb, var(--term-prompt) 40%, transparent); border-radius: .5rem; color: var(--term-muted); font: .8125rem/1.4 var(--sans); animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.new-tool span { font: 600 .625rem var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--term-prompt); }
+.new-tool code { color: var(--term-prompt); font-weight: 600; }
+.sys { margin: 0 0 .625rem; color: var(--term-muted); font: .8125rem/1.5 var(--sans); }
+.sys b { color: var(--term-text); font-weight: 600; }
+.sys kbd { font-size: .75rem; padding: 0 .3125rem; border: 1px solid var(--term-chip-edge); border-bottom-width: 2px; border-radius: .25rem; }
+.sys.noted { color: var(--term-prompt); animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.sys.noted b { color: var(--term-prompt); }
+.tick { font-weight: 700; margin-right: .25rem; }
+.sys.mail { padding: .75rem 1rem; border: 1px dashed var(--term-amber); border-radius: .625rem; color: var(--term-text); max-width: 40rem; animation: pop .5s cubic-bezier(.3, 1.6, .5, 1); }
+.sys.mail b { color: var(--term-amber); }
+.sys.mail .signed { color: var(--term-muted); }
+.mail-icon { color: var(--term-amber); margin-right: .25rem; }
+.sys.closed { padding: .875rem 1rem; border: 1px solid var(--term-prompt); border-radius: .625rem; background: color-mix(in srgb, var(--term-prompt) 10%, transparent); color: var(--term-text); font-size: .875rem; max-width: 40rem; }
+.sys.closed b { color: var(--term-prompt); letter-spacing: .06em; }
+@keyframes pop { from { opacity: 0; transform: translateY(.25rem) scale(.97); } }
+
+/* The X-ray: a pipeline's stages as chips, each with how much it passed on. */
+.xray { display: flex; flex-wrap: wrap; align-items: center; gap: .3125rem; margin: .375rem 0 .25rem; }
+.stage { display: inline-flex; align-items: baseline; gap: .5rem; padding: .1875rem .5625rem; border: 1px solid var(--term-chip-edge); border-radius: .4375rem; background: var(--term-chip); color: var(--term-text); font: .75rem/1.4 var(--mono); }
+.stage:hover, .stage[aria-expanded="true"] { border-color: var(--term-purple); }
+.stage[aria-expanded="true"] { background: color-mix(in srgb, var(--term-purple) 16%, var(--term-chip)); }
+.stage .count { color: var(--term-muted); font-family: var(--sans); font-size: .6875rem; white-space: nowrap; }
+.stage.trouble .count { color: var(--term-amber); }
+.pipe { color: var(--term-purple); font-weight: 600; }
+.peek { margin: .25rem 0 .375rem; padding: .5rem .75rem; max-height: 14rem; overflow: auto; border-left: 2px solid var(--term-purple); background: var(--term-chip); font: .8125rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.peek span { display: block; min-height: 1.5em; }
+.peek .fd-2 { color: var(--term-amber); }
+.peek-head { color: var(--term-purple); font: .75rem var(--sans); margin-bottom: .25rem; }
+.peek-more { color: var(--term-muted); font: italic .75rem var(--sans); }
+
+/* The input line, with the prompt, at the foot of the terminal. */
+.input-line { display: flex; align-items: baseline; gap: .625rem; padding: .625rem 1.25rem .375rem; border-top: 1px solid var(--term-edge); }
+.input-line .prompt { flex-shrink: 0; white-space: nowrap; }
+#command { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--term-text); font: inherit; caret-color: var(--term-prompt); padding: 0; }
+.keys { margin: 0; padding: 0 1.25rem .625rem; color: var(--term-muted); font: .6875rem var(--sans); }
+.keys kbd { font-size: .625rem; padding: 0 .25rem; border: 1px solid var(--term-chip-edge); border-radius: .1875rem; }
+.keys code { color: var(--term-text); }
+
+/* The case notebook. */
+.notebook { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 1.125rem 1.125rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); }
+.notes-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; padding: 0; border: 0; background: none; cursor: default; text-align: left; }
+.notes-head h2 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
+.tally { font: 600 .75rem var(--mono); color: var(--green); background: var(--green-bg); padding: .125rem .5rem; border-radius: 1rem; }
+.clues { list-style: none; margin: .875rem 0 0; padding: 0; display: grid; gap: .5rem; }
+.clue { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: .625rem; padding: .625rem .75rem; border: 1px solid transparent; border-radius: .625rem; font-size: .8125rem; line-height: 1.5; }
+.mark { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid var(--border); font: 600 .6875rem var(--mono); color: var(--muted); }
+.question { margin: .125rem 0 0; font-weight: 600; }
+.clue.found .mark { background: var(--green); border-color: var(--green); color: var(--surface); }
+.clue.found .question { font-weight: 500; color: var(--muted); }
+.answer { margin: .25rem 0 0; color: var(--text); font-weight: 550; }
+.tip { margin: .375rem 0 0; color: var(--muted); font-size: .75rem; }
+.clue.now { border-color: var(--purple); background: var(--purple-bg); }
+.clue.now .mark { border-color: var(--purple); color: var(--purple); animation: beckon 2.4s ease-in-out infinite; }
+@keyframes beckon { 50% { box-shadow: 0 0 0 .3125rem color-mix(in srgb, var(--purple) 18%, transparent); } }
+.clue.ahead { opacity: .55; }
+.clue.locked { opacity: .5; }
+.clue.locked .mark { border-style: dashed; }
+.clue.locked .question { font-weight: 450; font-style: italic; }
+.clue code, .card code { font-size: .75rem; padding: .0625rem .3125rem; border-radius: .25rem; background: var(--inset); color: var(--text); }
+.nudges { margin: .375rem 0 0; padding-left: 1rem; display: grid; gap: .375rem; }
+.nudges li { animation: pop .35s ease-out; }
+.try { display: inline; margin-top: .25rem; padding: .0625rem .4375rem; border: 1px solid var(--purple); border-radius: .3125rem; background: var(--surface); color: var(--purple); font: .75rem var(--mono); text-align: left; overflow-wrap: anywhere; }
+.try:hover { background: var(--purple); color: var(--surface); }
+.stuck { margin-top: .375rem; padding: .1875rem .625rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); color: var(--muted); font-size: .75rem; }
+.stuck:hover { color: var(--purple); border-color: var(--purple); }
+.closed-card { padding: .875rem 1rem; border: 1px solid var(--green); border-radius: .625rem; background: var(--green-bg); font-size: .8125rem; line-height: 1.5; }
+.closed-card p { margin: 0 0 .375rem; }
+.closed-card a { color: var(--green); font-weight: 600; }
+.kit { margin-top: auto; padding-top: 1.25rem; }
+.kit h3 { margin: 0 0 .5rem; font: 600 .625rem var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tools { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3125rem; }
+.tools button { padding: .125rem .5rem; border: 1px solid color-mix(in srgb, var(--green) 35%, transparent); border-radius: .3125rem; background: var(--green-bg); color: var(--green); font: 500 .75rem var(--mono); }
+.tools .none { color: var(--muted); font-size: .75rem; }
+.card { margin-top: .625rem; padding: .625rem .75rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--inset); font-size: .75rem; line-height: 1.5; }
+.card p { margin: 0 0 .25rem; }
+.card .usage { font-family: var(--mono); color: var(--muted); }
+.card dl { display: grid; grid-template-columns: max-content 1fr; gap: .125rem .75rem; margin: .375rem 0 0; }
+.card dt { font-family: var(--mono); color: var(--green); }
+.card dd { margin: 0; }
+
+/* Narrow screens: the notebook folds to a line above the terminal and opens on a tap. */
+@media (max-width: 52em) {
+  body { height: auto; min-height: 100dvh; }
+  .desk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: .75rem 1rem 1rem; gap: .75rem; }
+  .notebook { order: -1; padding: .75rem 1rem; }
+  .notes-head { cursor: pointer; }
+  .notes-head::after { content: '▾'; margin-left: .5rem; color: var(--muted); transition: transform .2s; }
+  .notes-head[aria-expanded="false"]::after { transform: rotate(-90deg); }
+  .notes-head[aria-expanded="false"] ~ * { display: none; }
+  .terminal { height: 75dvh; }
+  .bar h1 span { display: none; }
+  #command { font-size: 16px; }
+  .keys { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

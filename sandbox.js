@@ -874,7 +874,9 @@ function expand(word, files) {
 export const BUFFER = 64 * 1024;
 const holdsAll = new Set(['sort', 'tac', 'shuf', 'diff']);
 
-export function run(model, files, { platform = 'linux' } = {}) {
+// With trace, each command's record keeps what it wrote to stdout and stderr, so a pipeline can be
+// shown stage by stage.
+export function run(model, files, { platform = 'linux', trace = false } = {}) {
   const fs = withSystem(files, platform);
   const terminal = [], written = new Map(), notes = new Map(), buffers = new Map(), ran = [], installed = new Set();
   const shell = platform === 'macos' ? 'zsh' : 'bash';
@@ -965,6 +967,7 @@ export function run(model, files, { platform = 'linux' } = {}) {
       const own = name === 'sudo' ? args[0] : name;
       record.all = holdsAll.has(own);
       record.held = record.all ? taken : Math.min(taken, BUFFER);
+      if (trace) Object.assign(record, { out: result.out.slice(0, MAX), err: result.err.slice(0, MAX), command: cmd.command });
     }
   }
   // Files written and still there, not counting directories made by mkdir.
@@ -982,3 +985,4 @@ export function screenLines(result) {
 export const sameLine = (a, b) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
 
 export const known = Object.keys(commands);
+export { lines as splitLines };

@@ -2,7 +2,7 @@ import { mkdir, copyFile, cp, readdir, readFile, writeFile } from 'node:fs/promi
 import { existsSync } from 'node:fs';
 const modules = ['app.js', 'parser.js', 'usage.js', 'training.js', 'lessons.js', 'intro.js', 'reference.js', 'sandbox.js', 'cases.js', 'unixway.js'];
 await mkdir('dist', { recursive: true });
-await Promise.all([...modules, 'index.html', 'style.css', 'favicon.svg', 'apple-touch-icon.png'].map(file => copyFile(file, `dist/${file}`)));
+await Promise.all([...modules, 'index.html', 'style.css', 'toolbox.html', 'toolbox.css', 'toolbox.js', 'favicon.svg', 'apple-touch-icon.png'].map(file => copyFile(file, `dist/${file}`)));
 await cp('commands', 'dist/commands', { recursive: true });
 // app.js reaches the command rules three imports deep, so the browser would find them one level at a
 // time. Listing every module up front lets it fetch them all at once.
