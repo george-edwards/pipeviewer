@@ -155,7 +155,7 @@ let currentSource = '';
 // Training mode: the level being played, the target's model, how the student's picture differs from
 // it (null while there is nothing to compare), and the hints taken. Viewer is what the editor held
 // before training started, put back on the way out.
-const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: [], earned: 0, burst: false, coach: '', viewer: '', slide: -1, nudge: false };
+const training = { active: false, level: 0, model: null, differences: null, matched: false, hints: [], earned: 0, burst: false, coach: '', viewer: '', slide: -1, nudge: false, choosing: false };
 // Linux maps GNU tools under Bash; macOS maps the BSD and Apple tools under zsh.
 // Until the viewer picks one, the switch matches their own system: macOS on Apple devices, and
 // Linux elsewhere, since Windows users mostly reach Bash through WSL or Git Bash.
@@ -1378,9 +1378,12 @@ $('#download').addEventListener('click', () => {
 // command the student cannot see, and they edit their own command until its picture matches. Their
 // diagram is the usual one under the editor; the target's is drawn above the editor, or beside
 // theirs on wide screens. Each course keeps the best stars per level under the level's id.
+// name, audience, about and length are shown on the course's card in the picker.
 const tracks = {
-  toolbox: { levels: caseLevels, store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1 },
-  plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0 },
+  toolbox: { levels: caseLevels, store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1,
+    name: 'Toolbox', audience: 'New to the shell', about: 'Crack a whodunit with `ls`, `grep`, `sort` and friends, and see what small tools can do when you pipe them together.', length: 'about 10 minutes' },
+  plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0,
+    name: 'Plumbing', audience: 'Know your way around', about: 'Match the pictures: send stdin, stdout and stderr through pipes, files and each other until the redirects are second nature.', length: 'from n00b to process substitution' },
 };
 const saved = { toolbox: {}, plumbing: {} };
 for (const name of Object.keys(tracks)) try { saved[name] = JSON.parse(localStorage.getItem(tracks[name].store)) ?? {}; } catch {}
@@ -1744,6 +1747,7 @@ const firstUnsolved = () => {
 };
 // The editor's placeholder is an example for the viewer. In training it would hint at answers.
 const placeholder = $('#pipeline').placeholder;
+// Called with null, training opens on the course picker rather than a level.
 function enterTraining(level = firstUnsolved()) {
   if (!training.active) training.viewer = $('#pipeline').value;
   $('#pipeline').placeholder = '';
@@ -1753,13 +1757,56 @@ function enterTraining(level = firstUnsolved()) {
   $('.example-rows').hidden = true;
   $('#training-button').setAttribute('aria-pressed', 'true');
   showTrack();
+  if (level === null) return showCourses();
+  hideCourses();
   loadLesson(Math.max(0, Math.min(level, lessons.length - 1)));
 }
+
+// The course picker: a card for each course, saying who it's for, with a small moving preview and
+// the student's progress. Choosing one opens it at its first unsolved level.
+const coursePreviews = {
+  toolbox: () => `<pre class="course-preview screen goal" aria-hidden="true"><span class="line prompt-line">$ ls | grep txt</span>${['found-in-bin.txt', 'pantry-1500.txt', 'pantry-1510.txt', 'staff.txt'].map((name, i) => `<span class="line cycle" style="--i: ${i}"><i>${name}</i></span>`).join('')}</pre>`,
+  plumbing: () => `<svg class="course-preview course-pipes" viewBox="0 0 260 112" aria-hidden="true">
+    <rect class="pic-card-body" x="70" y="18" width="96" height="76" rx="8"/><text class="course-cmd" x="82" y="40">make</text>
+    <path class="course-stream fd0" d="M14 52H70"/><path class="course-stream fd1" d="M166 52H204"/><path class="course-stream fd2" d="M166 76H186V58H204"/>
+    <circle class="course-port fd0" cx="70" cy="52" r="4"/><circle class="course-port fd1" cx="166" cy="52" r="4"/><circle class="course-port fd2" cx="166" cy="76" r="4"/>
+    <rect class="course-file" x="204" y="40" width="46" height="24" rx="4"/><text class="course-file-name" x="227" y="56" text-anchor="middle">log</text></svg>`,
+};
+function showCourses() {
+  training.choosing = true;
+  closeIntro();
+  clearTimeout(nudgeTimer);
+  document.documentElement.classList.add('choosing');
+  $('#courses').hidden = false;
+  history.replaceState(null, '', '#courses');
+  $('#course-cards').innerHTML = Object.entries(tracks).map(([name, course]) => {
+    const done = saved[name], earned = course.levels.reduce((sum, level) => sum + (done[level.id] ?? 0), 0), max = course.levels.length * 3;
+    const next = course.levels.findIndex(level => !level.intro && !done[level.id]);
+    const action = !earned ? 'Start' : next < 0 ? 'Play again' : `Continue at level ${next + course.from}`;
+    return `<button type="button" class="course-card${name === 'toolbox' ? ' beginner' : ''}" data-course="${name}">
+      <span class="course-audience">${escape(course.audience)}</span>${coursePreviews[name]()}
+      <span class="course-name">${escape(course.name)}</span><span class="course-about">${prose(course.about)}</span>
+      <span class="course-meta"><span>${course.levels.length} levels · ${escape(course.length)}</span>${earned ? `<span class="course-stars">${star(true)}${earned} / ${max}</span>` : ''}</span>
+      <span class="course-go">${action} <span aria-hidden="true">→</span></span></button>`;
+  }).join('');
+  $(`#course-cards [data-course="${track}"]`)?.focus({ preventScroll: true });
+}
+function hideCourses() {
+  training.choosing = false;
+  document.documentElement.classList.remove('choosing');
+  $('#courses').hidden = true;
+}
+$('#course-cards').addEventListener('click', event => {
+  const name = event.target.closest('[data-course]')?.dataset.course;
+  if (!name) return;
+  transition(() => { setTrack(name); showTrack(); hideCourses(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+});
 
 function exitTraining() {
   if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
   closeIntro();
+  hideCourses();
   clearTimeout(nudgeTimer);
   document.documentElement.classList.remove('training', 'toolbox');
   $('#training').hidden = $('#target-panel').hidden = $('#output-panel').hidden = true;
@@ -1780,7 +1827,7 @@ const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(tr
 // Training opens and closes with a crossfade where the browser has view transitions. The tour runs
 // once the new page has faded in, the first time training opens.
 const transition = change => document.startViewTransition ? document.startViewTransition(change).finished.catch(() => {}) : Promise.resolve(change());
-const openTraining = (level, name = track) => transition(() => { if (name !== track) setTrack(name); enterTraining(level); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+const openTraining = (level, name = track) => transition(() => { if (name !== track) setTrack(name); enterTraining(level); }).then(() => { if (!training.choosing && !toured() && training.slide < 0) startTour(); });
 // Switching course starts the new one at its first unsolved level.
 function switchTrack(name) {
   if (name === track || tourStep >= 0) return;
@@ -1790,7 +1837,8 @@ $('#track-switch').addEventListener('click', event => {
   const button = event.target.closest('[data-track]');
   if (button) switchTrack(button.dataset.track);
 });
-$('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining());
+// The Training button opens the picker, so every student sees which courses there are.
+$('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining(null));
 $('#exit-training').addEventListener('click', () => transition(exitTraining));
 $('#levels').addEventListener('click', event => {
   const button = event.target.closest('[data-level]');
@@ -1820,9 +1868,11 @@ $('#pipeline').addEventListener('keydown', event => {
   }
 });
 // #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #toolbox and
-// #toolbox/3 do the same for Toolbox. So a link can send a colleague straight there.
-const trainingLink = () => /^#(training|toolbox)(?:\/(\d+))?$/.exec(location.hash);
+// #toolbox/3 do the same for Toolbox, and #courses opens the picker. So a link can send a colleague
+// straight there.
+const trainingLink = () => /^#(training|toolbox|courses)(?:\/(\d+))?$/.exec(location.hash);
 const followLink = ([, hash, number]) => {
+  if (hash === 'courses') return training.choosing || openTraining(null);
   const name = hash === 'toolbox' ? 'toolbox' : 'plumbing';
   openTraining(number === undefined ? undefined : Number(number) - tracks[name].from, name);
 };

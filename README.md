@@ -49,7 +49,7 @@ The **Tips & Tricks** button plays a recorded talk from `video/`, which is not i
 
 ## Training
 
-A switch at the top of the training screen picks the course: **Toolbox** or **Plumbing**. Each keeps its own levels, stars and tour. A newcomer starts on Toolbox; someone who has already played Plumbing goes back to it, and the last course chosen is remembered.
+The Training button opens on a picker with a card for each course, so everyone sees that there's more than one: **Toolbox** for people new to the shell, and **Plumbing** for people who know their way around and want their redirects sharp. Each card says who it's for, plays a small looping preview, and shows the student's stars and where they'd carry on. Once in, a switch at the top of the training screen moves between courses. Each course keeps its own levels, stars and tour. The cards are drawn from `tracks` in `app.js`, so a new course gets its card with its entry there.
 
 ### Toolbox
 
@@ -75,7 +75,7 @@ A level is worth three stars. There are three hints: **What's different?** lists
 
 The shell switch in the header works in training too: the target is redrawn as the chosen shell runs it.
 
-Link to `/#training` to open Plumbing at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2. `/#toolbox` and `/#toolbox/3` do the same for Toolbox.
+Link to `/#training` to open Plumbing at the first unsolved level, to `/#training/0` for the n00b slides, or to `/#training/2` for level 2. `/#toolbox` and `/#toolbox/3` do the same for Toolbox, and `/#courses` opens the picker.
 
 ### Adding a level
 
