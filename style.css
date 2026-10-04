@@ -620,9 +620,29 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
   .training.toolbox #results > .diagram-panel { grid-column: 1 / -1; order: 5; margin-top: .875rem; }
   .toolbox .screen { max-height: 26rem; }
 }
+/* The Unix Way's gauges: per command, a light for its exit status and a bar, on a log scale, for
+   how much it holds in memory at once. A command that holds all its input is amber; one over the
+   level's limit turns the error colour. */
+.gauges { display: none; list-style: none; margin: 0; padding: .375rem 1.1875rem .875rem; border-top: 1px dashed var(--term-border); }
+.gauged .gauges:not(:empty) { display: grid; grid-template-columns: auto auto minmax(4rem, 1fr) auto; gap: .3125rem .625rem; align-items: center; }
+.gauge { display: contents; font: .75rem 'IBM Plex Mono', monospace; color: var(--term-text); }
+.gauge .light { width: .5625rem; height: .5625rem; border-radius: 50%; background: var(--term-muted); }
+.gauge .light.ok { background: var(--green); box-shadow: 0 0 .375rem var(--green); }
+.gauge .light.failed { background: var(--error); box-shadow: 0 0 .375rem var(--error); }
+.gauge .light.skipped { background: transparent; border: 1px solid var(--term-muted); }
+.gauge .bar { height: .4375rem; border-radius: .25rem; background: var(--inset); overflow: hidden; }
+.gauge .bar i { display: block; height: 100%; border-radius: inherit; background: var(--green); transition: width .4s cubic-bezier(.3, 1, .4, 1); }
+.gauge.all .bar i { background: var(--amber); }
+.gauge.over .bar i { background: var(--error); }
+.gauge .held { color: var(--term-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.gauge.all .held { color: var(--amber); }
+.gauge.over .held { color: var(--error); font-weight: 600; }
+.preview-gauges { display: grid; grid-template-columns: auto auto minmax(3rem, 1fr) auto; align-content: center; gap: .5rem .625rem; align-items: center; padding: .75rem 1rem; border: 0; margin: .25rem 0 .375rem; list-style: none; }
+.preview-gauges .bar i.grows { animation: grows 4s ease-in-out infinite; }
+@keyframes grows { 0%, 10% { width: 4%; } 70%, 100% { width: 82%; } }
 /* The toolbox: one chip per tool in the course. Tools still to come are faint outlines. */
 .toolbelt { display: none; list-style: none; flex-wrap: wrap; gap: .3125rem; margin: .875rem 0 0; padding: 0; }
-.toolbox .toolbelt { display: flex; }
+.collects .toolbelt { display: flex; }
 .explaining .toolbelt { display: none; }
 .toolbelt li { padding: .125rem .5rem; border-radius: .3125rem; font: 500 .75rem/1.5 'IBM Plex Mono', monospace; }
 .toolbelt li code { font: inherit; }

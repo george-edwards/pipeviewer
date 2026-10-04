@@ -4,6 +4,7 @@ import { compare, starsFor } from './training.js';
 import { lessons as plumbing } from './lessons.js';
 import { run, screenLines, sameLine, tools } from './sandbox.js';
 import { files as caseFiles, levels as caseLevels } from './cases.js';
+import { files as wayFiles, levels as wayLevels } from './unixway.js';
 import { slides } from './intro.js';
 import { reference } from './reference.js';
 
@@ -1378,10 +1379,15 @@ $('#download').addEventListener('click', () => {
 // command the student cannot see, and they edit their own command until its picture matches. Their
 // diagram is the usual one under the editor; the target's is drawn above the editor, or beside
 // theirs on wide screens. Each course keeps the best stars per level under the level's id.
-// name, audience, about and length are shown on the course's card in the picker.
+// name, audience, about and length are shown on the course's card in the picker, in this order.
+// A course with files runs the student's commands on them and compares output; one without compares
+// pictures. collects keeps a toolbox of the tools found, gauges shows what each command holds in
+// memory and how it exited, and next is the course its last level leads on to.
 const tracks = {
-  toolbox: { levels: caseLevels, store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1,
+  toolbox: { levels: caseLevels, files: caseFiles, collects: true, next: 'unixway', store: 'pipeviewer-toolbox', tour: 'pipeviewer-tour-toolbox', hash: 'toolbox', from: 1,
     name: 'Toolbox', audience: 'New to the shell', about: 'Crack a whodunit with `ls`, `grep`, `sort` and friends, and see what small tools can do when you pipe them together.', length: 'about 10 minutes' },
+  unixway: { levels: wayLevels, files: wayFiles, gauges: true, next: 'plumbing', store: 'pipeviewer-unixway', tour: 'pipeviewer-tour-unixway', hash: 'unixway', from: 1,
+    name: 'The Unix Way', audience: 'Why it works like this', about: 'Everything is a file, small tools that do one thing well, and streams that hold only what they must. Plus a few things Windows does differently.', length: 'about 10 minutes' },
   plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0,
     name: 'Plumbing', audience: 'Know your way around', about: 'Match the pictures: send stdin, stdout and stderr through pipes, files and each other until the redirects are second nature.', length: 'from n00b to process substitution' },
 };
@@ -1391,11 +1397,15 @@ for (const name of Object.keys(tracks)) try { saved[name] = JSON.parse(localStor
 let track = Object.keys(saved.plumbing).length ? 'plumbing' : 'toolbox';
 try { const chosen = localStorage.getItem('pipeviewer-track'); if (tracks[chosen]) track = chosen; } catch {}
 let lessons = tracks[track].levels, progress = saved[track];
-const toolbox = () => track === 'toolbox';
+const runs = () => !!tracks[track].files;
+const collects = () => !!tracks[track].collects;
+// A level's field as it reads on the chosen system: some levels differ on macOS.
+const field = (lesson, key) => platform === 'macos' && lesson.mac?.[key] !== undefined ? lesson.mac[key] : lesson[key];
+const targetOf = lesson => field(lesson, 'target');
 // Plumbing numbers its levels from 0, as descriptors are; Toolbox from 1. A level's button can show
 // a label instead.
 const levelNumber = i => i + tracks[track].from;
-const lessonStart = i => lessons[i].start ?? lessons[i - 1].target;
+const lessonStart = i => field(lessons[i], 'start') ?? targetOf(lessons[i - 1]);
 const levelName = i => lessons[i].label ?? String(levelNumber(i));
 const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6L12 17l-5.38 2.85 1.03-6L3.3 9.6l6-.9z"/></svg>`;
 const stars = n => [0, 1, 2].map(i => star(i < n)).join('');
@@ -1409,9 +1419,11 @@ function setTrack(name) {
 }
 // The course switch, and the parts of the screen that differ between courses.
 function showTrack() {
-  document.documentElement.classList.toggle('toolbox', toolbox());
-  $('#output-panel').hidden = !toolbox();
-  $('#target-title').textContent = toolbox() ? 'Goal' : 'Target';
+  document.documentElement.classList.toggle('toolbox', runs());
+  document.documentElement.classList.toggle('collects', collects());
+  document.documentElement.classList.toggle('gauged', !!tracks[track].gauges);
+  $('#output-panel').hidden = !runs();
+  $('#target-title').textContent = runs() ? 'Goal' : 'Target';
   $('#track-switch').querySelectorAll('[data-track]').forEach(button => {
     const active = button.dataset.track === track;
     button.classList.toggle('active', active);
@@ -1421,18 +1433,21 @@ function showTrack() {
   const first = $('#hint-buttons [data-hint="1"]');
   first.dataset.plumbing ??= first.textContent;
   first.dataset.plumbingTitle ??= first.title;
-  first.textContent = toolbox() ? first.dataset.toolbox : first.dataset.plumbing;
-  first.title = toolbox() ? first.dataset.toolboxTitle : first.dataset.plumbingTitle;
+  first.textContent = runs() ? first.dataset.toolbox : first.dataset.plumbing;
+  first.title = runs() ? first.dataset.toolboxTitle : first.dataset.plumbingTitle;
   toolbeltMarkup = '';
 }
 
 // Toolbox compares what reaches the terminal, line by line: each line of the goal that the
 // student's output matches in the same place is a line put right.
 function check(model) {
-  if (!toolbox()) return compare(training.model, model);
-  training.result = run(model, caseFiles, { platform });
+  if (!runs()) return compare(training.model, model);
+  training.result = run(model, tracks[track].files, { platform });
   const mine = screenLines(training.result), goal = training.goal ?? [], differences = [];
   for (let i = 0; i < Math.max(mine.length, goal.length); i++) if (!lineMatches(mine, goal, i)) differences.push({ kind: 'line', index: i });
+  // A level can also cap how much any one command holds.
+  const limit = lessons[training.level].memory;
+  if (limit) for (const cmd of training.result.commands) if (cmd.held > limit) differences.push({ kind: 'memory', name: cmd.name, held: cmd.held });
   return differences;
 }
 const lineMatches = (mine, goal, i) => !!mine[i] && !!goal[i] && mine[i].fd === goal[i].fd && sameLine(mine[i].text, goal[i].text);
@@ -1442,31 +1457,52 @@ const lineMatches = (mine, goal, i) => !!mine[i] && !!goal[i] && mine[i].fd === 
 // lines blacked out word by word, and uncovers each one the student's output matches.
 const SCREEN_LINES = 400;
 const lineCount = text => { const n = (text.match(/\n/g) ?? []).length + (text && !text.endsWith('\n') ? 1 : 0); return `${n.toLocaleString()} line${n === 1 ? '' : 's'}`; };
+// Bytes a terminal can't show come out as �, and NULs as nothing, roughly as a terminal shows them.
+const printable = text => text.replace(/\0/g, '').replace(/[\x01-\x08\x0b-\x1f\x7f-\xff]/g, '�');
+const size = n => n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KiB` : `${(n / (1 << 20)).toFixed(1)} MiB`;
 function showScreens() {
-  if (!toolbox() || !training.active) return;
+  if (!runs() || !training.active) return;
   const goal = training.goal ?? [], result = training.result, mine = result ? screenLines(result) : [];
   const stale = $('#results').classList.contains('stale');
   $('#output-panel').classList.toggle('stale', stale);
   if (!stale) {
-    const shown = mine.slice(0, SCREEN_LINES).map((line, i) => `<span class="line fd-${line.fd}${lineMatches(mine, goal, i) ? ' hit' : ''}">${escape(line.text) || ' '}</span>`).join('');
+    const shown = mine.slice(0, SCREEN_LINES).map((line, i) => `<span class="line fd-${line.fd}${lineMatches(mine, goal, i) ? ' hit' : ''}">${escape(printable(line.text)) || ' '}</span>`).join('');
     const more = mine.length > SCREEN_LINES ? `<span class="screen-note">… and ${(mine.length - SCREEN_LINES).toLocaleString()} more lines</span>` : '';
     const wrote = (result?.written ?? []).map(file => `<span class="screen-note wrote">→ ${escape(file)} <span>${lineCount(result.files[file])}</span></span>`).join('');
     const notes = (result?.notes ?? []).map(note => `<span class="screen-note">${escape(note)}</span>`).join('');
     $('#output').innerHTML = shown + more + wrote + notes;
+    showGauges(result);
   }
   const hits = goal.filter((_, i) => lineMatches(mine, goal, i)).length;
   $('#goal').innerHTML = goal.map((line, i) => {
-    if (!training.matched && !lineMatches(mine, goal, i)) return `<span class="line hidden fd-${line.fd}" aria-hidden="true">${escape(line.text).replace(/\S+/g, word => `<i>${word}</i>`) || ' '}</span>`;
+    if (!training.matched && !lineMatches(mine, goal, i)) return `<span class="line hidden fd-${line.fd}" aria-hidden="true">${escape(printable(line.text)).replace(/\S+/g, word => `<i>${word}</i>`) || ' '}</span>`;
     const fresh = !training.revealed.has(i);
     training.revealed.add(i);
-    return `<span class="line shown fd-${line.fd}${fresh ? ' fresh' : ''}">${escape(line.text) || ' '}</span>`;
+    return `<span class="line shown fd-${line.fd}${fresh ? ' fresh' : ''}">${escape(printable(line.text)) || ' '}</span>`;
   }).join('') + `<span class="sr-only">${goal.length} line${goal.length === 1 ? '' : 's'}, ${hits} matched</span>`;
   // A line covered again stays covered until it matches again, when it is uncovered afresh.
   for (const i of training.revealed) if (!training.matched && !lineMatches(mine, goal, i)) training.revealed.delete(i);
   const status = $('#output-status');
   status.classList.toggle('matched', training.matched);
   status.classList.toggle('differs', !training.matched && !!result);
-  status.textContent = training.matched ? '✓ Matches the goal' : !$('#pipeline').value.trim() ? 'Type a command' : stale ? 'Keep typing…' : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
+  const heavy = (training.differences ?? []).find(d => d.kind === 'memory');
+  status.textContent = training.matched ? '✓ Matches the goal' : !$('#pipeline').value.trim() ? 'Type a command' : stale ? 'Keep typing…'
+    : heavy && hits === goal.length && mine.length === goal.length ? `Output matches, but ${heavy.name} holds ${size(heavy.held)}` : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
+}
+
+// Under the output, a gauge for each command: a light for its exit status, and a bar, on a log
+// scale, for how much of its input it held at once. A command that streams holds about one pipe
+// buffer whatever passes through; one that must see everything holds all of it.
+function showGauges(result) {
+  const host = $('#gauges');
+  if (!tracks[track].gauges || !result?.commands.length) { host.innerHTML = ''; return; }
+  const limit = lessons[training.level].memory;
+  host.innerHTML = result.commands.map(cmd => {
+    const skipped = cmd.status === null, width = cmd.held ? Math.min(100, Math.max(4, (Math.log2(cmd.held) - 6) / (24 - 6) * 100)) : 0;
+    const light = skipped ? 'skipped' : cmd.status === 0 ? 'ok' : 'failed';
+    const says = skipped ? 'didn’t run' : `exit ${cmd.status}`;
+    return `<li class="gauge${cmd.all ? ' all' : ''}${limit && cmd.held > limit ? ' over' : ''}" title="${escape(cmd.name)}: ${says}${skipped ? '' : `, holds ${cmd.all ? 'all its input' : 'one buffer at most'}`}"><span class="light ${light}" aria-label="${says}"></span><code>${escape(cmd.name)}</code><span class="bar"><i style="width: ${width.toFixed(1)}%"></i></span><span class="held">${skipped ? '–' : cmd.all ? size(cmd.held) : cmd.held ? `≤ ${size(cmd.held)}` : '0 B'}</span></li>`;
+  }).join('');
 }
 
 // The toolbox: every tool the course hands over, collected as levels are solved. Tools still to
@@ -1475,7 +1511,7 @@ const earnedTools = () => new Set(caseLevels.filter(level => saved.toolbox[level
 const allTools = [...new Set(caseLevels.flatMap(level => level.tools))];
 let toolbeltMarkup = '';
 function showToolbelt() {
-  if (!toolbox() || !training.active) return;
+  if (!collects() || !training.active) return;
   const earned = earnedTools();
   const markup = allTools.map(name => `<li class="${earned.has(name) ? 'earned' : 'ahead'}${training.found?.includes(name) ? ' fresh' : ''}" title="${earned.has(name) ? `${escape(name)} ${escape(tools[name].summary)}` : 'Still to find'}"><code>${escape(name)}</code></li>`).join('');
   if (markup !== toolbeltMarkup) $('#toolbelt').innerHTML = toolbeltMarkup = markup;
@@ -1487,9 +1523,12 @@ const toolCard = (name, options = true) => `<span class="tool-card"><code>${esca
 function showTarget() {
   if (!training.active) return;
   const host = $('#target-diagram');
-  try { training.model = parsePipeline(lessons[training.level].target, { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
-  // In Toolbox the goal is what the target prints, as the chosen system's tools print it.
-  if (toolbox()) { training.goal = screenLines(run(training.model, caseFiles, { platform })); return; }
+  const lesson = lessons[training.level];
+  // The brief can differ between systems, so it follows the shell switch.
+  $('#lesson-brief').innerHTML = prose(field(lesson, 'brief'));
+  try { training.model = parsePipeline(targetOf(lesson), { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
+  // In a course that runs commands the goal is what the target prints, as the chosen system's tools print it.
+  if (runs()) { training.goal = screenLines(run(training.model, tracks[track].files, { platform })); return; }
   host.innerHTML = diagram(training.model).replace(/\b(svg-title|svg-desc)\b/g, 'target-$1').replace(/(id="|url\(#)arrow-/g, '$1target-arrow-');
   fit(host, host.querySelector('svg'));
   frame();
@@ -1522,7 +1561,7 @@ const n00bIndex = plumbing.findIndex(lesson => lesson.intro);
 const n00bDone = () => !!saved.plumbing[plumbing[n00bIndex].id];
 let nudgeTimer = 0;
 function nudge() {
-  if (toolbox() || n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
+  if (runs() || n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
   training.nudge = true;
   showLevels();
   replay($(`#levels [data-level="${n00bIndex}"]`), 'pulse');
@@ -1586,18 +1625,19 @@ function showCoach() {
         return `<span class="spark fd-${i % 3}" style="--dx: ${(Math.cos(angle) * reach * 1.6).toFixed(1)}px; --dy: ${(Math.sin(angle) * reach - 8).toFixed(1)}px; --delay: ${(i % 5) * 0.03}s" aria-hidden="true">${i % 3}</span>`;
       }).join('') : '';
       training.burst = false;
-      const finale = toolbox()
-        ? `<p class="solved-finale">You found ${earnedTools().size} tools and <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'} Plumbing is next: where streams go when they don’t go down a pipe.</p><div class="solved-actions"><button type="button" class="next-button" data-coach="plumbing">On to Plumbing <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
+      const following = tracks[tracks[track].next];
+      const finale = following
+        ? `<p class="solved-finale">${collects() ? `You found ${earnedTools().size} tools and` : 'You earned'} <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="next-course">On to ${escape(following.name)} <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="courses">All courses</button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
         : `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
       const next = last ? finale
         : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${levelNumber(training.level + 1)}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
-      const found = toolbox() && training.found.length ? `<div class="found">${training.found.map(name => `<p><span class="found-label">New tool</span>${toolCard(name, false)}</p>`).join('')}</div>` : '';
-      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(lesson.learned)}</p>${found}<p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+      const found = collects() && training.found.length ? `<div class="found">${training.found.map(name => `<p><span class="found-label">New tool</span>${toolCard(name, false)}</p>`).join('')}</div>` : '';
+      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p>${found}<p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
     } else {
       const parts = [
-        toolbox() ? `<div class="hint"><span class="row-label">${lesson.tools.length === 1 ? 'TOOL' : 'TOOLS'}</span>${lesson.tools.map(name => toolCard(name)).join('')}</div>` : `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
-        `<div class="hint"><span class="row-label">HOW</span><p>${prose(lesson.how)}</p></div>`,
-        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(lesson.target)}</code> <span class="answer-note">${toolbox() ? 'Type it in to see the output match.' : 'Type it in to see the pictures match.'}</span></p></div>`,
+        runs() ? `<div class="hint"><span class="row-label">${field(lesson, 'tools').length === 1 ? 'TOOL' : 'TOOLS'}</span>${field(lesson, 'tools').map(name => toolCard(name)).join('')}</div>` : `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
+        `<div class="hint"><span class="row-label">HOW</span><p>${prose(field(lesson, 'how'))}</p></div>`,
+        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(targetOf(lesson))}</code> <span class="answer-note">${runs() ? 'Type it in to see the output match.' : 'Type it in to see the pictures match.'}</span></p></div>`,
       ];
       coach.innerHTML = training.hints.length ? `<div class="hints">${training.hints.map(n => parts[n - 1]).join('')}</div>` : '';
     }
@@ -1605,8 +1645,8 @@ function showCoach() {
   // The parts that follow the editor update in place.
   const spelling = $('#solved-spelling');
   if (spelling) {
-    const same = source.replace(/\s+/g, ' ') === lesson.target;
-    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(lesson.target)}</code>, which ${toolbox() ? 'prints the same' : 'draws the same picture'}.`;
+    const same = source.replace(/\s+/g, ' ') === targetOf(lesson);
+    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(targetOf(lesson))}</code>, which ${runs() ? 'prints the same' : 'draws the same picture'}.`;
   }
   const list = $('#diff-list');
   if (list) list.innerHTML = training.differences ? training.differences.map(differenceMarkup).join('') : `<li class="diff-shape">${source ? 'Finish the command to compare it with the target.' : 'Type a command to compare it with the target.'}</li>`;
@@ -1623,14 +1663,14 @@ function showTraining() {
       progress[lesson.id] = training.earned;
       try { localStorage.setItem(tracks[track].store, JSON.stringify(progress)); } catch {}
     }
-    training.found = toolbox() ? lesson.tools.filter(name => !before.has(name)) : [];
+    training.found = collects() ? lesson.tools.filter(name => !before.has(name)) : [];
     training.burst = true;
     if (!training.hints.length) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
   }
   training.matched = matched;
   // Once solved, the target's own command is shown with its picture.
-  $('#target-panel .panel-hint').innerHTML = matched ? `<code>${escape(lessons[training.level].target)}</code>` : '';
+  $('#target-panel .panel-hint').innerHTML = matched ? `<code>${escape(targetOf(lessons[training.level]))}</code>` : '';
   const status = $('#match-status');
   status.classList.toggle('matched', matched);
   status.classList.toggle('differs', !!differences?.length);
@@ -1649,10 +1689,9 @@ function loadLesson(i, { keep = false, intro = true } = {}) {
   Object.assign(training, { level: i, hints: [], matched: false, coach: '', result: null, goal: null, revealed: new Set(), found: [] });
   if (lesson.intro) training.nudge = false;
   clearTimeout(nudgeTimer);
-  if (!toolbox() && !n00bDone() && !lesson.intro) nudgeLater();
+  if (!runs() && !n00bDone() && !lesson.intro) nudgeLater();
   const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
   $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${levelNumber(i)}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
-  $('#lesson-brief').innerHTML = prose(lesson.brief);
   history.replaceState(null, '', `#${tracks[track].hash}/${levelNumber(i)}`);
   showTarget();
   // Moving on from a solved level keeps the student's own spelling, which the next level starts from.
@@ -1743,7 +1782,7 @@ document.addEventListener('keydown', event => {
 // Training opens at the first unsolved level after level 0, which the student finds for themselves.
 const firstUnsolved = () => {
   const i = lessons.findIndex(lesson => !lesson.intro && !progress[lesson.id]);
-  return i < 0 ? (toolbox() ? 0 : 1) : i;
+  return i < 0 ? (runs() ? 0 : 1) : i;
 };
 // The editor's placeholder is an example for the viewer. In training it would hint at answers.
 const placeholder = $('#pipeline').placeholder;
@@ -1765,6 +1804,7 @@ function enterTraining(level = firstUnsolved()) {
 // The course picker: a card for each course, saying who it's for, with a small moving preview and
 // the student's progress. Choosing one opens it at its first unsolved level.
 const coursePreviews = {
+  unixway: () => `<ul class="course-preview gauges preview-gauges" aria-hidden="true">${[['seq', 0, ''], ['sort', 1, ' all'], ['head', 0, '']].map(([name, grows, all]) => `<li class="gauge${all}"><span class="light ok"></span><code>${name}</code><span class="bar"><i class="${grows ? 'grows' : ''}" style="width: ${grows ? 82 : 22}%"></i></span><span class="held">${grows ? 'all of it' : '≤ 64 KiB'}</span></li>`).join('')}</ul>`,
   toolbox: () => `<pre class="course-preview screen goal" aria-hidden="true"><span class="line prompt-line">$ ls | grep txt</span>${['found-in-bin.txt', 'pantry-1500.txt', 'pantry-1510.txt', 'staff.txt'].map((name, i) => `<span class="line cycle" style="--i: ${i}"><i>${name}</i></span>`).join('')}</pre>`,
   plumbing: () => `<svg class="course-preview course-pipes" viewBox="0 0 260 112" aria-hidden="true">
     <rect class="pic-card-body" x="70" y="18" width="96" height="76" rx="8"/><text class="course-cmd" x="82" y="40">make</text>
@@ -1856,8 +1896,9 @@ $('#restart').addEventListener('click', () => { loadLesson(training.level, { int
 $('#coach').addEventListener('click', event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();
-  if (action === 'replay') loadLesson(toolbox() ? 0 : 1);
-  if (action === 'plumbing') switchTrack('plumbing');
+  if (action === 'replay') loadLesson(runs() ? 0 : 1);
+  if (action === 'next-course') switchTrack(tracks[track].next);
+  if (action === 'courses') transition(showCourses);
   if (action === 'viewer') exitTraining();
 });
 // Once the pictures match, Enter moves on rather than starting a new line.
@@ -1870,10 +1911,10 @@ $('#pipeline').addEventListener('keydown', event => {
 // #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #toolbox and
 // #toolbox/3 do the same for Toolbox, and #courses opens the picker. So a link can send a colleague
 // straight there.
-const trainingLink = () => /^#(training|toolbox|courses)(?:\/(\d+))?$/.exec(location.hash);
+const trainingLink = () => new RegExp(`^#(${Object.values(tracks).map(course => course.hash).join('|')}|courses)(?:/(\\d+))?$`).exec(location.hash);
 const followLink = ([, hash, number]) => {
   if (hash === 'courses') return training.choosing || openTraining(null);
-  const name = hash === 'toolbox' ? 'toolbox' : 'plumbing';
+  const name = Object.keys(tracks).find(key => tracks[key].hash === hash);
   openTraining(number === undefined ? undefined : Number(number) - tracks[name].from, name);
 };
 addEventListener('hashchange', () => {
@@ -1888,6 +1929,12 @@ const tourSteps = { toolbox: [
   { at: '#training', title: 'Training mode engaged', text: () => `A case to crack with real Unix tools, each a small program that does one job. Every level hands you one, and there are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type, on the files in the case. Nothing leaves your browser.' },
   { at: '#output-panel', title: 'What it prints', text: () => 'Whatever your command prints shows up here, as a terminal would show it. Errors come up in amber.' },
+  { at: '#target-panel', title: 'Your goal', text: () => 'The output you’re after, blacked out. Each line uncovers itself when yours matches it.' },
+  { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
+], unixway: [
+  { at: '#training', title: 'The Unix Way', text: () => `Why Unix works the way it does, one idea a level, tried out on a pretend machine. There are ${lessons.length} levels, each worth up to three stars.` },
+  { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type. Nothing leaves your browser.' },
+  { at: '#output-panel', title: 'What it prints', text: () => 'Its output shows up here, errors in amber. Under it, each command gets a light for how it exited, and a gauge for how much it holds in memory at once.' },
   { at: '#target-panel', title: 'Your goal', text: () => 'The output you’re after, blacked out. Each line uncovers itself when yours matches it.' },
   { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
 ], plumbing: [

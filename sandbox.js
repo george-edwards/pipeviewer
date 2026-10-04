@@ -51,13 +51,82 @@ const missing = (name, file) => `${name}: ${file}: No such file or directory\n`;
 function inputs(name, operands, stdin, ctx) {
   const read = [], errors = [];
   for (const file of operands.length ? operands : ['-']) {
-    if (file === '-') { read.push({ file, text: ctx.readStdin(stdin) }); continue; }
+    if (file === '-' || file === '/dev/stdin') { read.push({ file, text: ctx.readStdin(stdin) }); continue; }
     const text = ctx.files[file];
-    if (text === undefined) errors.push(missing(name, file));
-    else read.push({ file, text });
+    if (text === undefined) errors.push(isDir(ctx.files, file) ? `${name}: ${file}: Is a directory\n` : missing(name, file));
+    else {
+      if (endless.has(file) && name !== 'head') ctx.note('endless', `${file} never runs dry: a real one keeps going until whatever reads it stops. This sandbox stops at 1.5 MiB.`);
+      ctx.took(text.length);
+      read.push({ file, text });
+    }
   }
   return { read, err: errors.join(''), status: errors.length ? 1 : 0 };
 }
+
+// Paths. Files in the case folder have plain names; the system's have absolute paths, and a
+// directory is any path that others start with.
+const isDir = (files, path) => path === '/' || path === '.' || Object.keys(files).some(key => key.startsWith(`${path.replace(/\/+$/, '')}/`));
+const children = (files, path) => {
+  const prefix = path === '.' ? '' : path === '/' ? '/' : `${path.replace(/\/+$/, '')}/`;
+  return [...new Set(Object.keys(files).filter(key => prefix ? key.startsWith(prefix) : !key.startsWith('/')).map(key => key.slice(prefix.length).split('/')[0]).filter(Boolean))].sort();
+};
+
+// Devices. Reading /dev/zero or /dev/urandom never ends on a real system; here each holds 1.5 MiB,
+// enough for any level. The random bytes come from a fixed seed, so an answer can be checked.
+const DEVICE = 3 << 19;
+const endless = new Set(['/dev/zero', '/dev/urandom', '/dev/random']);
+let noise = null;
+function randomBytes() {
+  if (noise) return noise;
+  let seed = 0x2545f491;
+  const parts = [];
+  for (let at = 0; at < DEVICE; at += 8192) {
+    const part = new Uint8Array(Math.min(8192, DEVICE - at));
+    for (let i = 0; i < part.length; i++) { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; part[i] = seed & 255; }
+    parts.push(String.fromCharCode(...part));
+  }
+  return noise = parts.join('');
+}
+const devices = { '/dev/null': () => '', '/dev/zero': () => '\0'.repeat(DEVICE), '/dev/urandom': randomBytes, '/dev/random': randomBytes, '/dev/tty': () => '', '/dev/stdin': () => '', '/dev/stdout': () => '', '/dev/stderr': () => '' };
+
+// The rest of the system, as text files: Linux has /proc, which macOS doesn't.
+const passwd = ['root:x:0:0:root:/root:/bin/bash', 'daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin', 'bin:x:2:2:bin:/bin:/usr/sbin/nologin', 'sys:x:3:3:sys:/dev:/usr/sbin/nologin', 'www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin', 'sshd:x:110:65534::/run/sshd:/usr/sbin/nologin', 'you:x:1000:1000:You:/home/you:/bin/bash'];
+// macOS keeps its users in a directory service; its /etc/passwd lists only system accounts.
+const macPasswd = `##
+# User Database
+#
+# Note that this file is consulted directly only when the system is running
+# in single-user mode.  At other times this information is provided by
+# Open Directory.
+##
+nobody:*:-2:-2:Unprivileged User:/var/empty:/usr/bin/false
+root:*:0:0:System Administrator:/var/root:/bin/sh
+daemon:*:1:1:System Services:/var/root:/usr/bin/false
+_www:*:70:70:World Wide Web Server:/Library/WebServer:/usr/bin/false
+_sshd:*:75:75:sshd Privilege separation:/var/empty:/usr/bin/false
+`;
+function system(platform) {
+  const files = {
+    '/etc/passwd': platform === 'macos' ? macPasswd : `${passwd.join('\n')}\n`,
+    '/etc/hostname': 'tearoom\n',
+    '/etc/shells': '/bin/sh\n/bin/bash\n/bin/zsh\n',
+    '/etc/ssh/sshd_config': `# This is the sshd server system-wide configuration file.\n# See sshd_config(5) for more information.\n\nPort 22\nPermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nX11Forwarding yes\nPrintMotd no\nSubsystem sftp /usr/lib/openssh/sftp-server\n`,
+  };
+  if (platform !== 'macos') {
+    files['/proc/cpuinfo'] = Array.from({ length: 8 }, (_, i) => `processor\t: ${i}\nvendor_id\t: SandboxCPU\nmodel name\t: Pretend CPU @ 3.00GHz\ncpu MHz\t\t: 3000.000\ncache size\t: 16384 KB\ncpu cores\t: 8\n`).join('\n');
+    files['/proc/meminfo'] = 'MemTotal:       16303440 kB\nMemFree:         9137220 kB\nMemAvailable:   12698344 kB\nSwapTotal:       2097148 kB\n';
+    files['/proc/uptime'] = '86400.00 600000.00\n';
+    files['/proc/version'] = 'Linux version 6.8.0-sandbox (you@tearoom) #1 SMP\n';
+  }
+  return files;
+}
+function withSystem(files, platform) {
+  const fs = { ...system(platform), ...files };
+  // Writes to a device go nowhere; reads give what the device gives.
+  for (const [path, read] of Object.entries(devices)) Object.defineProperty(fs, path, { get: read, set() {}, enumerable: true, configurable: true });
+  return fs;
+}
+const isDevice = path => path in devices;
 
 // Patterns. grep and sed take basic regular expressions, where ( ) { } | + ? are plain characters
 // unless escaped; -E makes them extended, as JavaScript's are. Bracket classes such as [:digit:] and
@@ -167,7 +236,15 @@ function hunks(a, b) {
 
 const pad = (n, width) => String(n).padStart(width);
 const numeric = line => { const m = line.match(/^\s*([-+]?(?:\d+\.?\d*|\.\d+))/); return m ? Number(m[1]) : 0; };
-const bytes = text => new TextEncoder().encode(text).length;
+// Bytes, counting characters up to 0xff as one each, as raw bytes from a device are kept, and
+// anything above as its UTF-8 length.
+const bytes = text => {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); n += c < 0x100 ? 1 : c < 0x800 ? 2 : c >= 0xd800 && c < 0xdc00 ? 2 : c >= 0xdc00 && c < 0xe000 ? 2 : 3; }
+  return n;
+};
+const toBytes = text => /[^\x00-\xff]/.test(text) ? String.fromCharCode(...new TextEncoder().encode(text)) : text;
+const fromBytes = raw => { try { return /[\x80-\xff]/.test(raw) ? new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(raw, c => c.charCodeAt(0))) : raw; } catch { return raw; } };
 
 // Manual pages for `man`, and the cards the lessons show. summary is one line; options are the
 // handful worth knowing first.
@@ -193,6 +270,20 @@ export const tools = {
   nl: { summary: 'numbers lines', usage: 'nl [file…]', options: [] },
   seq: { summary: 'prints a sequence of numbers', usage: 'seq [first] last', options: [] },
   man: { summary: 'shows the manual for a command', usage: 'man command', options: [] },
+  base64: { summary: 'turns any bytes into plain letters and digits, and back', usage: 'base64 [-d] [file]', options: [['-d', 'decode'], ['-w 0', 'don’t wrap the lines (GNU)']] },
+  comm: { summary: 'compares two sorted lists, line by line', usage: 'comm [-123] file1 file2', options: [['-1', 'hide lines only in file1'], ['-2', 'hide lines only in file2'], ['-3', 'hide lines in both'], ['-', 'as a file name: read stdin']] },
+  sysctl: { summary: 'reads the kernel’s settings', usage: 'sysctl [-n] name', options: [['-n', 'just the value'], ['hw.ncpu', 'number of CPUs (macOS)']] },
+  cp: { summary: 'copies a file, and says nothing if it worked', usage: 'cp source destination', options: [['-r', 'copy a directory and everything in it']] },
+  mv: { summary: 'moves or renames a file', usage: 'mv source destination', options: [] },
+  rm: { summary: 'removes files, for good: there’s no bin', usage: 'rm [-r] [-f] file…', options: [['-r', 'directories and everything in them'], ['-f', 'no complaints about missing files']] },
+  mkdir: { summary: 'makes a directory', usage: 'mkdir [-p] dir…', options: [['-p', 'make parents too, and don’t mind if it exists']] },
+  touch: { summary: 'creates an empty file, or updates its time', usage: 'touch file…', options: [] },
+  apt: { summary: 'installs software from Debian’s or Ubuntu’s repositories', usage: 'sudo apt install package', options: [['install', 'download and install'], ['search', 'look for a package'], ['remove', 'uninstall']] },
+  brew: { summary: 'installs software from Homebrew’s repository', usage: 'brew install package', options: [['install', 'download and install'], ['search', 'look for a package'], ['uninstall', 'remove']] },
+  sudo: { summary: 'runs one command as root, the administrator', usage: 'sudo command', options: [] },
+  cowsay: { summary: 'has a cow say something', usage: 'cowsay words…', options: [] },
+  tty: { summary: 'prints the file name of the terminal on stdin', usage: 'tty', options: [] },
+  printf: { summary: 'prints formatted text', usage: "printf 'format' [argument…]", options: [['%s', 'the next argument'], ['%d', 'the next argument, as a number'], ['\\n', 'a new line']] },
 };
 
 function manPage(name) {
@@ -214,8 +305,13 @@ const commands = {
   ls(args, stdin, ctx) {
     const { opts, operands, error } = getopt(args, 'la1AhtrS', '', { all: 'a' });
     if (error) return fail('ls', error);
-    const names = Object.keys(ctx.files).filter(name => !name.includes('/') && (opts.a || !name.startsWith('.'))).sort();
+    const names = children(ctx.files, '.').filter(name => opts.a || !name.startsWith('.'));
     let err = '', status = 0;
+    // A directory given on its own is listed; files are listed by name.
+    if (operands.length === 1 && isDir(ctx.files, operands[0])) {
+      const list = children(ctx.files, operands[0]).filter(name => opts.a || !name.startsWith('.'));
+      return { out: list.length ? (ctx.tty && !opts['1'] && !opts.l ? `${list.join('  ')}\n` : joined(list)) : '', err: '', status: 0 };
+    }
     const shown = operands.length ? operands.filter(name => {
       if (ctx.files[name] !== undefined) return true;
       err += ctx.platform === 'macos' ? `ls: ${name}: No such file or directory\n` : `ls: cannot access '${name}': No such file or directory\n`;
@@ -224,9 +320,9 @@ const commands = {
     }) : (opts.a ? ['.', '..', ...names] : names);
     if (opts.r) shown.reverse();
     if (opts.l) {
-      const size = name => name === '.' || name === '..' ? 4096 : bytes(ctx.files[name]);
+      const size = name => name === '.' || name === '..' || isDir(ctx.files, name) ? 4096 : isDevice(name) ? 0 : bytes(ctx.files[name]);
       const width = Math.max(...shown.map(name => String(size(name)).length), 1);
-      const row = name => `${name === '.' || name === '..' ? 'drwxr-xr-x 2' : '-rw-r--r-- 1'} you you ${pad(size(name), width)} Oct  2 15:30 ${name}`;
+      const row = name => `${name === '.' || name === '..' || isDir(ctx.files, name) ? 'drwxr-xr-x 2' : '-rw-r--r-- 1'} you you ${pad(size(name), width)} Oct  2 15:30 ${name}`;
       return { out: joined([...(operands.length ? [] : [`total ${shown.length * 4}`]), ...shown.map(row)]), err, status };
     }
     // To a terminal ls sets names out in columns; into a pipe or file, one per line.
@@ -240,7 +336,11 @@ const commands = {
     const { read, err, status } = inputs('wc', operands, stdin, ctx);
     const kinds = ['l', 'w', 'c', 'm'].filter(k => opts[k]);
     const chosen = kinds.length ? kinds : ['l', 'w', 'c'];
-    const count = text => ({ l: (text.match(/\n/g) ?? []).length, w: text.split(/\s+/).filter(Boolean).length, c: bytes(text), m: [...text].length });
+    const count = text => {
+      const counts = {};
+      for (const k of new Set([...chosen, 'c'])) counts[k] = k === 'l' ? text.split('\n').length - 1 : k === 'w' ? (text.match(/\S+/g) ?? []).length : k === 'c' ? bytes(text) : [...text].length;
+      return counts;
+    };
     const rows = read.map(({ file, text }) => ({ name: file === '-' ? '' : file, counts: count(text) }));
     if (rows.length > 1) rows.push({ name: 'total', counts: Object.fromEntries(chosen.map(k => [k, rows.reduce((sum, row) => sum + row.counts[k], 0)])) });
     // GNU pads every count to the width of the largest possible one, or 7 when reading stdin, and
@@ -375,6 +475,7 @@ const commands = {
     const texts = operands.map(file => file === '-' ? ctx.readStdin(stdin) : ctx.files[file]);
     const gone = operands.find((_, i) => texts[i] === undefined);
     if (gone) return { out: '', err: `diff: ${gone}: No such file or directory\n`, status: 2 };
+    texts.forEach(text => ctx.took(text.length));
     const [a, b] = texts.map(lines);
     const norm = line => { const squeezed = opts.w ? line.replace(/\s+/g, '') : line; return opts.i ? squeezed.toLowerCase() : squeezed; };
     const changes = hunks(a.map(norm), b.map(norm));
@@ -520,7 +621,162 @@ const commands = {
   sleep: () => ({ out: '', err: '', status: 0 }),
   clear: () => ({ out: '', err: '', status: 0 }),
   cd: () => ({ out: '', err: '', status: 0 }),
+  printf(args) {
+    if (!args.length) return { out: '', err: 'printf: usage: printf format [arguments]\n', status: 2 };
+    const escapes = text => text.replace(/\\([ntr\\])/g, (_, c) => ({ n: '\n', t: '\t', r: '\r', '\\': '\\' })[c]);
+    let [format, ...rest] = args, out = '';
+    // The format is reused until every argument is used, as the shell's printf does.
+    do {
+      out += escapes(format).replace(/%(-?\d*)([sd%])/g, (_, width, kind) => {
+        if (kind === '%') return '%';
+        const value = kind === 'd' ? String(parseInt(rest.shift() ?? '0', 10) || 0) : rest.shift() ?? '';
+        const w = Math.abs(Number(width) || 0);
+        return width.startsWith('-') ? value.padEnd(w) : value.padStart(w);
+      });
+    } while (rest.length && /%[sd]/.test(format));
+    return { out, err: '', status: 0 };
+  },
+  hostname: () => ({ out: 'tearoom\n', err: '', status: 0 }),
+  uname: (args, stdin, ctx) => ({ out: `${args.includes('-a') ? (ctx.platform === 'macos' ? 'Darwin tearoom 24.0.0 Darwin Kernel Version 24.0.0 arm64' : 'Linux tearoom 6.8.0-sandbox #1 SMP x86_64 GNU/Linux') : ctx.platform === 'macos' ? 'Darwin' : 'Linux'}\n`, err: '', status: 0 }),
+  tty: (args, stdin, ctx) => ctx.stdinTty ? { out: ctx.platform === 'macos' ? '/dev/ttys000\n' : '/dev/pts/0\n', err: '', status: 0 } : { out: 'not a tty\n', err: '', status: 1 },
+  base64(args, stdin, ctx) {
+    const { opts, operands, error } = getopt(args, 'dDn', 'wbio', { decode: 'd', wrap: 'w', input: 'i' });
+    if (error) return fail('base64', error);
+    const { read, err, status } = inputs('base64', [opts.i, ...operands].filter(Boolean).slice(0, 1), stdin, ctx);
+    if (status) return { out: '', err, status };
+    const text = read[0].text;
+    if (opts.d || opts.D) {
+      try { return { out: fromBytes(atob(text.replace(/\s+/g, ''))), err: '', status: 0 }; } catch { return { out: '', err: 'base64: invalid input\n', status: 1 }; }
+    }
+    const encoded = btoa(toBytes(text));
+    const width = ctx.platform === 'macos' ? Number(opts.b ?? 0) : Number(opts.w ?? 76);
+    return { out: encoded ? `${width ? encoded.match(new RegExp(`.{1,${width}}`, 'g')).join('\n') : encoded}\n` : '', err: '', status: 0 };
+  },
+  comm(args, stdin, ctx) {
+    const { opts, operands, error } = getopt(args, '123i');
+    if (error) return fail('comm', error);
+    if (operands.length < 2) return fail('comm', operands.length ? `missing operand after '${operands[0]}'` : 'missing operand');
+    const texts = operands.slice(0, 2).map(file => file === '-' ? ctx.readStdin(stdin) : ctx.files[file]);
+    const gone = operands.find((_, i) => texts[i] === undefined);
+    if (gone) return { out: '', err: `comm: ${gone}: No such file or directory\n`, status: 1 };
+    texts.forEach(text => ctx.took(text.length));
+    const [a, b] = texts.map(lines), out = [], warnings = [];
+    const unsorted = list => list.some((line, i) => i && line < list[i - 1]);
+    let i = 0, j = 0;
+    const column = (n, line) => { if (!opts[n]) out.push(`${n > 1 && !opts[1] ? '\t' : ''}${n > 2 && !opts[2] ? '\t' : ''}${line}`); };
+    while (i < a.length || j < b.length) {
+      if (j >= b.length || (i < a.length && a[i] < b[j])) column(1, a[i++]);
+      else if (i >= a.length || b[j] < a[i]) column(2, b[j++]);
+      else { column(3, a[i]); i++; j++; }
+    }
+    if (unsorted(a)) warnings.push('comm: file 1 is not in sorted order');
+    if (unsorted(b)) warnings.push('comm: file 2 is not in sorted order');
+    if (warnings.length) warnings.push('comm: input is not in sorted order');
+    return { out: joined(out), err: joined(warnings), status: warnings.length ? 1 : 0 };
+  },
+  sysctl(args, stdin, ctx) {
+    const { opts, operands } = getopt(args, 'na');
+    const mac = ctx.platform === 'macos';
+    const values = mac ? { 'hw.ncpu': '8', 'hw.memsize': '17179869184', 'kern.hostname': 'tearoom', 'kern.ostype': 'Darwin' } : { 'kernel.hostname': 'tearoom', 'kernel.ostype': 'Linux', 'vm.swappiness': '60' };
+    const keys = opts.a ? Object.keys(values) : operands;
+    const out = [], err = [];
+    for (const key of keys) {
+      if (values[key] === undefined) err.push(mac ? `sysctl: unknown oid '${key}'` : `sysctl: cannot stat /proc/sys/${key.replace(/\./g, '/')}: No such file or directory`);
+      else out.push(opts.n ? values[key] : mac ? `${key}: ${values[key]}` : `${key} = ${values[key]}`);
+    }
+    return { out: joined(out), err: joined(err), status: err.length ? (mac ? 1 : 255) : 0 };
+  },
+  cp(args, stdin, ctx) { return copy('cp', args, ctx, false); },
+  mv(args, stdin, ctx) { return copy('mv', args, ctx, true); },
+  rm(args, stdin, ctx) {
+    const { opts, operands, error } = getopt(args, 'rRfi');
+    if (error) return fail('rm', error);
+    const err = [];
+    for (const file of operands) {
+      if (ctx.files[file] === undefined && !isDir(ctx.files, file)) { if (!opts.f) err.push(ctx.platform === 'macos' ? `rm: ${file}: No such file or directory` : `rm: cannot remove '${file}': No such file or directory`); continue; }
+      if (isDir(ctx.files, file) && !opts.r && !opts.R) { err.push(ctx.platform === 'macos' ? `rm: ${file}: is a directory` : `rm: cannot remove '${file}': Is a directory`); continue; }
+      ctx.remove(file);
+    }
+    return { out: '', err: joined(err), status: err.length ? 1 : 0 };
+  },
+  mkdir(args, stdin, ctx) {
+    const { opts, operands } = getopt(args, 'pv');
+    const err = [];
+    for (const dir of operands) {
+      if (isDir(ctx.files, dir) && !opts.p) err.push(ctx.platform === 'macos' ? `mkdir: ${dir}: File exists` : `mkdir: cannot create directory '${dir}': File exists`);
+      else ctx.write(`${dir.replace(/\/+$/, '')}/`, '', false);
+    }
+    return { out: '', err: joined(err), status: err.length ? 1 : 0 };
+  },
+  touch(args, stdin, ctx) {
+    for (const file of getopt(args, 'acm').operands ?? []) if (ctx.files[file] === undefined) ctx.write(file, '', false);
+    return { out: '', err: '', status: 0 };
+  },
+  sudo(args, stdin, ctx) {
+    const tool = ctx.lookup(args[0]);
+    if (!args.length) return { out: '', err: 'usage: sudo command\n', status: 1 };
+    if (!tool) return { out: '', err: `sudo: ${args[0]}: command not found\n`, status: 1 };
+    ctx.note('sudo', 'sudo runs one command as root, the administrator. A real one asks for your password first.');
+    return tool(args.slice(1), stdin, { ...ctx, root: true });
+  },
+  apt(args, stdin, ctx) {
+    const [verb, ...names] = args.filter(arg => !arg.startsWith('-'));
+    const warn = ctx.tty ? '' : '\nWARNING: apt does not have a stable CLI interface. Use with caution in scripts.\n\n';
+    if (verb === 'search') {
+      const hits = Object.entries(repository).filter(([name, pkg]) => names.every(word => `${name} ${pkg.about}`.includes(word)));
+      return { out: `Sorting... Done\nFull Text Search... Done\n${hits.map(([name, pkg]) => `${name}/noble ${pkg.version} all\n  ${pkg.about}\n`).join('\n')}`, err: warn, status: 0 };
+    }
+    if (verb !== 'install') return { out: '', err: `${warn}E: ${verb ? `Invalid operation ${verb}` : 'No operation given'}\n`, status: 100 };
+    if (!ctx.root) return { out: '', err: `${warn}E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\nE: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?\n`, status: 100 };
+    const unknown = names.find(name => !repository[name]);
+    if (unknown || !names.length) return { out: 'Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\n', err: `${warn}${unknown ? `E: Unable to locate package ${unknown}` : 'E: No packages given'}\n`, status: 100 };
+    names.forEach(name => ctx.install(repository[name].command));
+    return { out: `Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\nThe following NEW packages will be installed:\n  ${names.join(' ')}\n0 upgraded, ${names.length} newly installed, 0 to remove and 0 not upgraded.\n${names.map(name => `Unpacking ${name} (${repository[name].version}) ...\nSetting up ${name} (${repository[name].version}) ...\n`).join('')}`, err: warn, status: 0 };
+  },
+  brew(args, stdin, ctx) {
+    const [verb, ...names] = args.filter(arg => !arg.startsWith('-'));
+    if (ctx.root) return { out: '', err: 'Error: Running Homebrew as root is extremely dangerous and no longer supported.\nAs Homebrew does not drop privileges on installation you would be giving all\nbuild scripts full access to your system.\n', status: 1 };
+    const formula = name => name === 'fortune-mod' ? 'fortune' : name;
+    if (verb === 'search') return { out: joined(Object.keys(repository).map(formula).filter(name => names.every(word => name.includes(word)))), err: '', status: 0 };
+    if (verb !== 'install') return { out: '', err: verb ? `Error: Unknown command: ${verb}\n` : 'Example usage:\n  brew install FORMULA\n', status: 1 };
+    const known = names.map(name => Object.keys(repository).find(key => formula(key) === name));
+    if (!names.length || known.includes(undefined)) return { out: '', err: names.length ? `Error: No available formula with the name "${names[known.indexOf(undefined)]}".\n` : 'Error: Invalid usage: This command requires at least 1 formula or cask argument.\n', status: 1 };
+    known.forEach(key => ctx.install(repository[key].command));
+    const where = ctx.platform === 'macos' ? '/opt/homebrew' : '/home/linuxbrew/.linuxbrew';
+    return { out: names.map(name => `==> Fetching ${name}\n==> Pouring ${name}--${repository[known[names.indexOf(name)]].brew}.bottle.tar.gz\n🍺  ${where}/Cellar/${name}/${repository[known[names.indexOf(name)]].brew}: installed\n`).join(''), err: '', status: 0 };
+  },
 };
+commands['apt-get'] = commands.apt;
+const linuxOnly = new Set(['apt', 'apt-get', 'tac']);
+
+// Software that has to be installed first, from the pretend repository apt and brew share.
+const repository = {
+  cowsay: { command: 'cowsay', version: '3.03+dfsg2-8', brew: '3.8.4', about: 'configurable talking cow' },
+  'fortune-mod': { command: 'fortune', version: '1:1.99.1-7.3', brew: '9708', about: 'provides fortune cookies on demand' },
+};
+const packaged = {
+  cowsay(args, stdin, ctx) {
+    const text = (args.length ? args.join(' ') : ctx.readStdin(stdin)).replace(/\s+/g, ' ').trim();
+    return { out: ` ${'_'.repeat(text.length + 2)}\n< ${text} >\n ${'-'.repeat(text.length + 2)}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||\n`, err: '', status: 0 };
+  },
+  fortune: () => ({ out: 'Those who do not understand Unix are condemned to reinvent it, poorly.\n\t\t-- Henry Spencer\n', err: '', status: 0 }),
+};
+
+// cp and mv: one file to another, or several into a directory. Both stay quiet when they work.
+function copy(name, args, ctx, move) {
+  const { operands, error } = getopt(args, 'rRfivpa');
+  if (error) return fail(name, error);
+  if (operands.length < 2) return fail(name, operands.length ? `missing destination file operand after '${operands[0]}'` : 'missing file operand');
+  const target = operands.at(-1), into = isDir(ctx.files, target), err = [];
+  for (const source of operands.slice(0, -1)) {
+    const text = ctx.files[source];
+    if (text === undefined) { err.push(ctx.platform === 'macos' ? `${name}: ${source}: No such file or directory` : `${name}: cannot stat '${source}': No such file or directory`); continue; }
+    ctx.took(text.length);
+    ctx.write(into ? `${target.replace(/\/+$/, '')}/${source.split('/').at(-1)}` : target, text, false);
+    if (move) ctx.remove(source);
+  }
+  return { out: '', err: joined(err), status: err.length ? 1 : 0 };
+}
 commands.less = commands.more = (args, stdin, ctx) => commands.cat(args.filter(a => !a.startsWith('-')), stdin, ctx);
 commands.egrep = (args, stdin, ctx) => commands.grep(['-E', ...args], stdin, ctx);
 commands.fgrep = (args, stdin, ctx) => commands.grep(['-F', ...args], stdin, ctx);
@@ -531,8 +787,13 @@ function ends(name, args, stdin, ctx) {
   const { opts, operands, error } = getopt(shorthand, 'qvfF', 'nc', { lines: 'n', bytes: 'c' });
   if (error) return fail(name, error);
   const spec = String(opts.c ?? opts.n ?? '10');
-  if (!/^[+-]?\d+$/.test(spec)) return fail(name, `invalid number of ${opts.c ? 'bytes' : 'lines'}: '${spec}'`, 1, false);
-  const n = Math.abs(Number(spec)), from = spec.startsWith('+'), allBut = spec.startsWith('-');
+  // GNU takes sizes such as 1K and 1M (KiB and MiB) or 1KB and 1MB; BSD wants plain numbers.
+  const units = { '': 1, b: 512, K: 1024, KB: 1000, kB: 1000, M: 1 << 20, MB: 1e6, G: 1 << 30, GB: 1e9 };
+  const size = spec.match(/^([+-]?)(\d+)([a-zA-Z]*)$/);
+  if (!size || !(size[3] in units) || (size[3] && ctx.platform === 'macos')) {
+    return ctx.platform === 'macos' ? { out: '', err: `${name}: illegal ${opts.c ? 'byte' : 'line'} count -- ${spec}\n`, status: 1 } : fail(name, `invalid number of ${opts.c ? 'bytes' : 'lines'}: '${spec}'`, 1, false);
+  }
+  const n = Number(size[2]) * units[size[3]], from = size[1] === '+', allBut = size[1] === '-';
   const { read, err, status } = inputs(name, operands, stdin, ctx);
   const pick = list => name === 'head' ? (allBut ? list.slice(0, Math.max(0, list.length - n)) : list.slice(0, n)) : from ? list.slice(Math.max(0, n - 1)) : n ? list.slice(-n) : [];
   const out = read.map(({ file, text }, i) => {
@@ -607,25 +868,40 @@ function expand(word, files) {
 // Runs a parsed command line on a copy of files. Returns what reached the terminal, as chunks of
 // { fd, text } in the order they were written, the files afterwards, which ones were written, and
 // notes on anything the sandbox did differently from a real terminal.
+// How much of its input a command holds in memory at once. Most stream, holding about one pipe
+// buffer's worth whatever the size of their input; these must hold all of it before they can write
+// a line. (GNU sort spills to temporary files when memory runs short, but not at these sizes.)
+export const BUFFER = 64 * 1024;
+const holdsAll = new Set(['sort', 'tac', 'shuf', 'diff']);
+
 export function run(model, files, { platform = 'linux' } = {}) {
-  const fs = { ...files };
-  const terminal = [], written = new Map(), notes = new Map(), buffers = new Map();
+  const fs = withSystem(files, platform);
+  const terminal = [], written = new Map(), notes = new Map(), buffers = new Map(), ran = [], installed = new Set();
   const shell = platform === 'macos' ? 'zsh' : 'bash';
+  let shown = 0;
   const write = (dest, text) => {
     if (!text || !dest) return;
     if (dest.type === 'multio') return dest.targets.forEach(target => write(target, text));
     if (dest.type === 'terminal') {
-      if (dest.id === 'terminal-in') return;
+      if (dest.id === 'terminal-in' || shown > MAX) return;
+      text = text.slice(0, MAX - shown);
+      shown += text.length;
       const fd = dest.id === 'terminal-err' ? 2 : 1, last = terminal.at(-1);
       if (last?.fd === fd) last.text += text; else terminal.push({ fd, text });
     } else if (dest.type === 'file') {
+      if (isDevice(dest.label)) return;
       fs[dest.label] = (fs[dest.label] ?? '') + text;
       written.set(dest.label, true);
     } else if (dest.type === 'pipe') buffers.set(dest.id, (buffers.get(dest.id) ?? '') + text);
   };
+  // macOS has no apt, and no tac: the BSD tools spell it tail -r.
+  const lookup = name => platform === 'macos' && linuxOnly.has(name) ? undefined : commands[name] ?? (installed.has(name) ? packaged[name] : undefined);
   let status = 0;
   for (const pipeline of model.pipelines) {
-    if ((pipeline.operator === '&&' && status !== 0) || (pipeline.operator === '||' && status === 0)) continue;
+    if ((pipeline.operator === '&&' && status !== 0) || (pipeline.operator === '||' && status === 0)) {
+      for (const cmd of pipeline.commands) ran.push({ key: cmd.key, name: cmd.args[0], status: null, held: 0, all: false });
+      continue;
+    }
     if (pipeline.substitutions.length) {
       notes.set('procsub', 'Process substitutions and parallel jobs aren’t run in this sandbox. Try them in a real terminal.');
       status = 1;
@@ -637,7 +913,7 @@ export function run(model, files, { platform = 'linux' } = {}) {
     const opened = new Set();
     for (const cmd of pipeline.commands) for (const dest of Object.values(cmd.fds)) {
       for (const target of dest?.type === 'multio' ? dest.targets : [dest]) {
-        if (target?.type !== 'file' || opened.has(target.label)) continue;
+        if (target?.type !== 'file' || opened.has(target.label) || isDevice(target.label)) continue;
         opened.add(target.label);
         if (target.mode === 'write') fs[target.label] = '';
         else if (target.mode === 'append') fs[target.label] ??= '';
@@ -648,39 +924,52 @@ export function run(model, files, { platform = 'linux' } = {}) {
       const input = cmd.fds[0];
       let stdin = '';
       const readable = target => target?.type === 'file' ? fs[target.label] : target?.type === 'pipe' ? buffers.get(target.id) : undefined;
+      const name = cmd.args[0], record = { key: cmd.key, name, status: 1, held: 0, all: false };
+      ran.push(record);
       if (input?.type === 'file' && fs[input.label] === undefined) {
-        write(cmd.fds[2], `${shell}: ${input.label}: No such file or directory\n`);
+        write(cmd.fds[2], `${shell}: ${input.label}: ${isDir(fs, input.label) ? 'Is a directory' : 'No such file or directory'}\n`);
         status = 1;
         continue;
       }
       stdin = readable(input) ?? '';
-      const name = cmd.args[0];
       const args = cmd.args.slice(1).flatMap((arg, i) => cmd.globs?.[i + 1] ? expand(arg, fs) : [arg]);
-      const tool = commands[name];
+      const tool = lookup(name);
       if (!tool) {
         write(cmd.fds[2], platform === 'macos' ? `zsh: command not found: ${name}\n` : `bash: ${name}: command not found\n`);
-        status = 127;
+        status = record.status = 127;
         continue;
       }
+      let taken = 0;
+      if (input?.type === 'file' && endless.has(input.label) && name !== 'head') notes.set('endless', `${input.label} never runs dry: a real one keeps going until whatever reads it stops. This sandbox stops at 1.5 MiB.`);
       const ctx = {
-        files: fs, platform,
+        files: fs, platform, lookup,
         tty: cmd.fds[1]?.type === 'terminal',
+        stdinTty: input?.type === 'terminal',
+        took: n => { taken += n; },
+        install: command => installed.add(command),
+        remove: file => { for (const key of Object.keys(fs)) if (key === file || key.startsWith(`${file.replace(/\/+$/, '')}/`)) delete fs[key]; written.set(file, true); },
         // A command that reads stdin from the terminal would sit waiting for the keyboard.
         readStdin: () => {
+          taken += stdin.length;
           if (input?.type === 'terminal') notes.set(`keyboard-${cmd.key}`, `${name} is reading the keyboard. In a real terminal it would wait for you to type, until you press Ctrl-D (or Ctrl-C to give up). Give it a file, or pipe something in.`);
           return stdin;
         },
-        write: (file, text, append) => { fs[file] = (append ? fs[file] ?? '' : '') + text; written.set(file, true); },
+        write: (file, text, append) => { if (isDevice(file)) return; fs[file] = (append ? fs[file] ?? '' : '') + text; written.set(file, true); },
         note: (key, text) => notes.set(key, text),
       };
       let result;
       try { result = tool(args, stdin, ctx); } catch (error) { result = { out: '', err: `${name}: ${error.message}\n`, status: 2 }; }
-      write(cmd.fds[2], result.err.slice(0, MAX));
-      write(cmd.fds[1], result.out.slice(0, MAX));
-      status = result.status;
+      write(cmd.fds[2], result.err);
+      write(cmd.fds[1], result.out);
+      status = record.status = result.status;
+      const own = name === 'sudo' ? args[0] : name;
+      record.all = holdsAll.has(own);
+      record.held = record.all ? taken : Math.min(taken, BUFFER);
     }
   }
-  return { terminal, files: fs, written: [...written.keys()].filter(file => !(file in files) || fs[file] !== files[file]), notes: [...notes.values()], status };
+  // Files written and still there, not counting directories made by mkdir.
+  const changed = [...written.keys()].filter(file => !file.endsWith('/') && fs[file] !== undefined && fs[file] !== files[file]);
+  return { terminal, files: fs, written: changed, notes: [...notes.values()], status, commands: ran };
 }
 
 // What reached the terminal, as lines tagged with their stream.
