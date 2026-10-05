@@ -291,3 +291,6 @@ export function playScenes() {
     figure.querySelector('.scene-replay').addEventListener('click', start);
   }
 }
+
+// The intro's films are drawn with the same pieces.
+export { Take, STOP, draw, place, at, tool };

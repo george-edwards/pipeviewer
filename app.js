@@ -5,6 +5,7 @@ import { lessons as plumbing } from './lessons.js';
 import { slides } from './intro.js';
 import { reference } from './reference.js';
 import { showWhy } from './why.js';
+import { setupWelcome } from './welcome.js';
 import { showToolbox, setPlatform as toolboxPlatform } from './toolbox.js';
 
 const $ = selector => document.querySelector(selector);
@@ -1214,6 +1215,14 @@ $('#ref-entries').addEventListener('click', event => {
   $('#pipeline').focus();
 });
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
+// The Intro's last step draws either of its two commands in the viewer, leaving any course to do so.
+setupWelcome(source => {
+  if (training.active || page) exitTraining();
+  $('#pipeline').value = source;
+  fitEditor();
+  render();
+  $('#pipeline').focus();
+});
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 // Chapter starts in seconds, marked by hand when the talk was first published.
 const chapters = [

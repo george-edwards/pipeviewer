@@ -1,6 +1,6 @@
 import { mkdir, copyFile, cp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-const modules = ['app.js', 'parser.js', 'usage.js', 'training.js', 'lessons.js', 'intro.js', 'reference.js', 'sandbox.js', 'cases.js', 'toolbox.js', 'why.js', 'whyscenes.js', 'whyshell.js'];
+const modules = ['app.js', 'parser.js', 'usage.js', 'training.js', 'lessons.js', 'intro.js', 'reference.js', 'sandbox.js', 'cases.js', 'toolbox.js', 'why.js', 'whyscenes.js', 'whyshell.js', 'welcome.js'];
 await mkdir('dist', { recursive: true });
 await Promise.all([...modules, 'index.html', 'style.css', 'toolbox.html', 'favicon.svg', 'apple-touch-icon.png'].map(file => copyFile(file, `dist/${file}`)));
 await cp('commands', 'dist/commands', { recursive: true });
