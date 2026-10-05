@@ -1069,6 +1069,9 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .welcome-button svg { width: .875rem; height: .875rem; fill: currentColor; }
 .welcome-button.fresh:not(.waiting) { background: var(--purple); border-color: var(--purple); color: var(--surface); animation: welcome-glow 3.2s 1s ease-out infinite; }
 @keyframes welcome-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--purple) 45%, transparent); } 45%, 100% { box-shadow: 0 0 0 .75rem color-mix(in srgb, var(--purple) 0%, transparent); } }
+/* While an Intro example types itself in, everything but the editor dims, as the tour does. */
+.type-spot { position: fixed; z-index: 10; border-radius: .875rem; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .4s, visibility 0s .4s; box-shadow: 0 0 0 2px var(--purple), 0 0 0 200vmax rgb(6 9 14 / .66); }
+.type-spot.on { opacity: 1; visibility: visible; transition: opacity .4s; }
 .welcome-ball { position: fixed; z-index: 30; border-radius: 50%; background: var(--purple); pointer-events: none; }
 .welcome-dialog { width: min(52rem, calc(100% - 2rem)); padding: 1.25rem 1.5rem 1.25rem; }
 .welcome-dialog .modal-heading h2 { margin: 0; }

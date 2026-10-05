@@ -1216,23 +1216,38 @@ $('#ref-entries').addEventListener('click', event => {
 });
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
 // The Intro's last step types either of its two commands into the editor, a letter at a time, leaving
-// any course to do so. The picture redraws as it goes, except inside an open quote, which would only
-// flash an error. Typing or clicking in the editor stops it where it is.
-let typing = 0;
+// any course to do so. Everything but the editor dims while it types, and lights again just after.
+// The picture redraws as it goes, except inside an open quote, which would only flash an error.
+// Typing or clicking in the editor stops it where it is.
+let typing = 0, spotFrame = 0;
+function spotlight(on) {
+  const spot = $('#type-spot');
+  spot.classList.toggle('on', on);
+  cancelAnimationFrame(spotFrame);
+  if (!on) return;
+  const follow = () => {
+    const box = $('.code-editor').getBoundingClientRect(), pad = 6;
+    Object.assign(spot.style, { left: `${box.left - pad}px`, top: `${box.top - pad}px`, width: `${box.width + 2 * pad}px`, height: `${box.height + 2 * pad}px` });
+    spotFrame = requestAnimationFrame(follow);
+  };
+  follow();
+}
 setupWelcome(source => {
   if (training.active || page) exitTraining();
   const editor = $('#pipeline');
   clearTimeout(typing);
   editor.value = '';
   editor.focus();
+  editor.scrollIntoView({ block: 'nearest' });
+  spotlight(true);
   let n = matchMedia('(prefers-reduced-motion: reduce)').matches ? source.length - 1 : 0;
   const type = () => {
     editor.value = source.slice(0, ++n);
     fitEditor();
     if (editor.value.split('"').length % 2) render();
-    if (n < source.length) typing = setTimeout(type, 55);
+    typing = n < source.length ? setTimeout(type, 100) : setTimeout(() => spotlight(false), 900);
   };
-  const stop = () => clearTimeout(typing);
+  const stop = () => { clearTimeout(typing); spotlight(false); };
   editor.addEventListener('keydown', stop, { once: true });
   editor.addEventListener('pointerdown', stop, { once: true });
   type();
