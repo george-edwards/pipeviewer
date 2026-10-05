@@ -2,10 +2,10 @@ import { parsePipeline, destinationLabel, targetsOf, reaches, restyle } from './
 import { portUsage, pipeActivity, commands, ships } from './usage.js';
 import { compare, starsFor } from './training.js';
 import { lessons as plumbing } from './lessons.js';
-import { run, screenLines, sameLine, tools } from './sandbox.js';
-import { files as wayFiles, levels as wayLevels } from './unixway.js';
 import { slides } from './intro.js';
 import { reference } from './reference.js';
+import { showWhy } from './why.js';
+import { showToolbox, setPlatform as toolboxPlatform } from './toolbox.js';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -978,7 +978,6 @@ function render() {
     showVariations();
     showRedirectStyle();
     training.differences = null;
-    training.result = null;
     showTraining();
     return;
   }
@@ -1081,6 +1080,7 @@ $('#platform').addEventListener('click', event => {
   try { localStorage.setItem('pipeviewer-platform', platform); } catch {}
   showPlatform();
   showKnown();
+  toolboxPlatform(platform);
   // Training compares against the target as the chosen shell runs it.
   showTarget();
   render();
@@ -1263,7 +1263,8 @@ $('#talk-video').addEventListener('timeupdate', () => {
   if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
   else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
 });
-$('#talk-button').addEventListener('click', () => { $('#talk').showModal(); $('#talk-video').play().catch(() => {}); });
+// The talk opens from its card in the course picker.
+function openTalk() { $('#talk').showModal(); $('#talk-video').play().catch(() => {}); }
 $('#close-talk').addEventListener('click', () => $('#talk').close());
 // Closing pauses the talk; reopening carries on from the same point.
 $('#talk').addEventListener('close', () => $('#talk-video').pause());
@@ -1373,33 +1374,22 @@ $('#download').addEventListener('click', () => {
   const a = document.createElement('a'); a.href = url; a.download = 'pipeline.svg'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-// Training has two courses. In Toolbox each level runs the student's command on the case files and
-// compares what it prints with what the target prints. In Plumbing each level shows the picture of a
-// command the student cannot see, and they edit their own command until its picture matches. Their
-// diagram is the usual one under the editor; the target's is drawn above the editor, or beside
-// theirs on wide screens. Each course keeps the best stars per level under the level's id.
-// name, audience, about and length are shown on the course's card in the picker. A course with
-// files runs the student's commands on them and compares output; one without compares pictures.
-// gauges shows what each command holds in memory and how it exited, and next is the course its last
-// level leads on to. Toolbox, for newcomers, is a page of its own, toolbox.html.
+// Practise Plumbing runs on the training screen. Each level shows the picture of a command the
+// student cannot see, and they edit their own command until its picture matches. Their diagram is the
+// usual one under the editor; the target's is drawn above the editor, or beside theirs on wide
+// screens. The best stars per level are kept under the level's id. Why Unix? and Basic Training are
+// pages of their own, in place of the viewer: see showPage.
 const tracks = {
-  unixway: { levels: wayLevels, files: wayFiles, gauges: true, next: 'plumbing', store: 'pipeviewer-unixway', tour: 'pipeviewer-tour-unixway', hash: 'unixway', from: 1,
-    name: 'The Unix Way', audience: 'Why it works like this', about: 'Everything is a file, small tools that do one thing well, and streams that hold only what they must. Plus a few things Windows does differently.', length: 'about 10 minutes' },
-  plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0,
-    name: 'Plumbing', audience: 'Know your way around', about: 'Match the pictures: send stdin, stdout and stderr through pipes, files and each other until the redirects are second nature.', length: 'from n00b to process substitution' },
+  plumbing: { levels: plumbing, store: 'pipeviewer-training', tour: 'pipeviewer-tour', hash: 'training', from: 0 },
 };
 const saved = Object.fromEntries(Object.keys(tracks).map(name => [name, {}]));
 for (const name of Object.keys(tracks)) try { saved[name] = JSON.parse(localStorage.getItem(tracks[name].store)) ?? {}; } catch {}
-// Someone who has played Plumbing goes back to it; anyone else starts on The Unix Way.
-let track = Object.keys(saved.plumbing).length ? 'plumbing' : 'unixway';
-try { const chosen = localStorage.getItem('pipeviewer-track'); if (tracks[chosen]) track = chosen; } catch {}
+let track = 'plumbing';
 let lessons = tracks[track].levels, progress = saved[track];
-const runs = () => !!tracks[track].files;
 // A level's field as it reads on the chosen system: some levels differ on macOS.
 const field = (lesson, key) => platform === 'macos' && lesson.mac?.[key] !== undefined ? lesson.mac[key] : lesson[key];
 const targetOf = lesson => field(lesson, 'target');
-// Plumbing numbers its levels from 0, as descriptors are; Toolbox from 1. A level's button can show
-// a label instead.
+// Plumbing numbers its levels from 0, as descriptors are. A level's button can show a label instead.
 const levelNumber = i => i + tracks[track].from;
 const lessonStart = i => field(lessons[i], 'start') ?? targetOf(lessons[i - 1]);
 const levelName = i => lessons[i].label ?? String(levelNumber(i));
@@ -1407,133 +1397,17 @@ const star = filled => `<svg class="star${filled ? ' filled' : ''}" viewBox="0 0
 const stars = n => [0, 1, 2].map(i => star(i < n)).join('');
 const cheers = ['Nailed it.', 'Spot on.', 'Clean pipes.', 'Exactly right.', 'Plumbing works.'];
 
-function setTrack(name) {
-  track = name;
-  lessons = tracks[name].levels;
-  progress = saved[name];
-  try { localStorage.setItem('pipeviewer-track', name); } catch {}
-}
-// The course switch, and the parts of the screen that differ between courses.
-function showTrack() {
-  document.documentElement.classList.toggle('runs', runs());
-  document.documentElement.classList.toggle('gauged', !!tracks[track].gauges);
-  $('#output-panel').hidden = !runs();
-  $('#target-title').textContent = runs() ? 'Goal' : 'Target';
+// The course switch lights the course on screen.
+function showTrack(name = page ?? track) {
   $('#track-switch').querySelectorAll('[data-track]').forEach(button => {
-    const active = button.dataset.track === track;
+    const active = button.dataset.track === name;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
   slide($('#track-switch'));
-  const first = $('#hint-buttons [data-hint="1"]');
-  first.dataset.plumbing ??= first.textContent;
-  first.dataset.plumbingTitle ??= first.title;
-  first.textContent = runs() ? first.dataset.runs : first.dataset.plumbing;
-  first.title = runs() ? first.dataset.runsTitle : first.dataset.plumbingTitle;
 }
 
-// Toolbox compares what reaches the terminal, line by line: each line of the goal that the
-// student's output matches in the same place is a line put right.
-function check(model) {
-  if (!runs()) return compare(training.model, model);
-  training.result = run(model, tracks[track].files, { platform });
-  const mine = screenLines(training.result), goal = training.goal ?? [], differences = [];
-  for (let i = 0; i < Math.max(mine.length, goal.length); i++) if (!lineMatches(mine, goal, i)) differences.push({ kind: 'line', index: i });
-  // A level can also cap how much any one command holds.
-  const limit = lessons[training.level].memory;
-  if (limit) for (const cmd of training.result.commands) if (cmd.held > limit) differences.push({ kind: 'memory', name: cmd.name, held: cmd.held });
-  return differences;
-}
-const lineMatches = (mine, goal, i) => !!mine[i] && !!goal[i] && mine[i].fd === goal[i].fd && sameLine(mine[i].text, goal[i].text);
-
-// The student's screen shows what their command printed, stderr in its own colour, then any files
-// it wrote and anything the sandbox did differently from a terminal. The goal shows the target's
-// lines blacked out word by word, and uncovers each one the student's output matches.
-const SCREEN_LINES = 400;
-const lineCount = text => { const n = (text.match(/\n/g) ?? []).length + (text && !text.endsWith('\n') ? 1 : 0); return `${n.toLocaleString()} line${n === 1 ? '' : 's'}`; };
-// Bytes a terminal can't show come out as �, and NULs as nothing, roughly as a terminal shows them.
-const printable = text => text.replace(/\0/g, '').replace(/[\x01-\x08\x0b-\x1f\x7f-\xff]/g, '�');
-const size = n => n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KiB` : `${(n / (1 << 20)).toFixed(1)} MiB`;
-// The student's screen keeps a scrollback, as a terminal does: each earlier level they've solved,
-// its command as they wrote it and what it printed, dimmed above the command they're working on.
-// So a clue found in one level is still on screen in the next. Each solved spelling is kept under
-// the level's id, and its output is worked out afresh, on the chosen system, when a level opens.
-const SCROLLBACK_LINES = 20;
-const commandsKey = () => `${tracks[track].store}-commands`;
-const solvedCommands = () => { try { return JSON.parse(localStorage.getItem(commandsKey())) ?? {}; } catch { return {}; } };
-function keepCommand(id, command) {
-  const kept = solvedCommands();
-  kept[id] = command;
-  try { localStorage.setItem(commandsKey(), JSON.stringify(kept)); } catch {}
-}
-const promptSign = () => platform === 'macos' ? '%' : '$';
-function buildScrollback() {
-  const kept = solvedCommands();
-  training.scrollback = lessons.slice(0, training.level).filter(lesson => progress[lesson.id]).map(lesson => {
-    const command = kept[lesson.id] ?? targetOf(lesson);
-    let lines;
-    try { lines = screenLines(run(parsePipeline(command, { platform }), tracks[track].files, { platform })); } catch { return ''; }
-    const more = lines.length - SCROLLBACK_LINES;
-    return `<span class="line prompt-line past">${promptSign()} ${escape(command)}</span>${lines.slice(0, SCROLLBACK_LINES).map(line => `<span class="line past fd-${line.fd}">${escape(printable(line.text)) || ' '}</span>`).join('')}${more > 0 ? `<span class="screen-note past">… ${more.toLocaleString()} more line${more === 1 ? '' : 's'}</span>` : ''}`;
-  }).join('');
-  training.pin = true;
-}
-function showScreens() {
-  if (!runs() || !training.active) return;
-  const goal = training.goal ?? [], result = training.result, mine = result ? screenLines(result) : [];
-  const stale = $('#results').classList.contains('stale');
-  $('#output-panel').classList.toggle('stale', stale);
-  if (!stale) {
-    const shown = mine.slice(0, SCREEN_LINES).map((line, i) => `<span class="line fd-${line.fd}${lineMatches(mine, goal, i) ? ' hit' : ''}">${escape(printable(line.text)) || ' '}</span>`).join('');
-    const more = mine.length > SCREEN_LINES ? `<span class="screen-note">… and ${(mine.length - SCREEN_LINES).toLocaleString()} more lines</span>` : '';
-    const wrote = (result?.written ?? []).map(file => `<span class="screen-note wrote">→ ${escape(file)} <span>${lineCount(result.files[file])}</span></span>`).join('');
-    const notes = (result?.notes ?? []).map(note => `<span class="screen-note">${escape(note)}</span>`).join('');
-    const source = $('#pipeline').value.trim(), screen = $('#output');
-    // `clear` clears the scrollback, as it would a terminal.
-    const cleared = result?.commands.some(cmd => cmd.name === 'clear' && cmd.status === 0);
-    const live = `<span class="line prompt-line">${promptSign()} ${escape(source)}${source ? '' : '<i class="cursor"></i>'}</span>`;
-    // The screen stays scrolled to the bottom, unless the student has scrolled up to read.
-    const pin = training.pin || screen.scrollHeight - screen.scrollTop - screen.clientHeight < 24;
-    screen.innerHTML = (cleared ? '' : training.scrollback ?? '') + live + shown + more + wrote + notes;
-    if (pin) screen.scrollTop = screen.scrollHeight;
-    training.pin = false;
-    showGauges(result);
-  }
-  const hits = goal.filter((_, i) => lineMatches(mine, goal, i)).length;
-  $('#goal').innerHTML = goal.map((line, i) => {
-    if (!training.matched && !lineMatches(mine, goal, i)) return `<span class="line hidden fd-${line.fd}" aria-hidden="true">${escape(printable(line.text)).replace(/\S+/g, word => `<i>${word}</i>`) || ' '}</span>`;
-    const fresh = !training.revealed.has(i);
-    training.revealed.add(i);
-    return `<span class="line shown fd-${line.fd}${fresh ? ' fresh' : ''}">${escape(printable(line.text)) || ' '}</span>`;
-  }).join('') + `<span class="sr-only">${goal.length} line${goal.length === 1 ? '' : 's'}, ${hits} matched</span>`;
-  // A line covered again stays covered until it matches again, when it is uncovered afresh.
-  for (const i of training.revealed) if (!training.matched && !lineMatches(mine, goal, i)) training.revealed.delete(i);
-  const status = $('#output-status');
-  status.classList.toggle('matched', training.matched);
-  status.classList.toggle('differs', !training.matched && !!result);
-  const heavy = (training.differences ?? []).find(d => d.kind === 'memory');
-  status.textContent = training.matched ? '✓ Matches the goal' : !$('#pipeline').value.trim() ? 'Type a command' : stale ? 'Keep typing…'
-    : heavy && hits === goal.length && mine.length === goal.length ? `Output matches, but ${heavy.name} holds ${size(heavy.held)}`
-    : hits === goal.length && mine.length > goal.length ? `${mine.length - goal.length} line${mine.length - goal.length === 1 ? '' : 's'} too many` : `${hits} of ${goal.length} line${goal.length === 1 ? '' : 's'} match`;
-}
-
-// Under the output, a gauge for each command: a light for its exit status, and a bar, on a log
-// scale, for how much of its input it held at once. A command that streams holds about one pipe
-// buffer whatever passes through; one that must see everything holds all of it.
-function showGauges(result) {
-  const host = $('#gauges');
-  if (!tracks[track].gauges || !result?.commands.length) { host.innerHTML = ''; return; }
-  const limit = lessons[training.level].memory;
-  host.innerHTML = result.commands.map(cmd => {
-    const skipped = cmd.status === null, width = cmd.held ? Math.min(100, Math.max(4, (Math.log2(cmd.held) - 6) / (24 - 6) * 100)) : 0;
-    const light = skipped ? 'skipped' : cmd.status === 0 ? 'ok' : 'failed';
-    const says = skipped ? 'didn’t run' : `exit ${cmd.status}`;
-    return `<li class="gauge${cmd.all ? ' all' : ''}${limit && cmd.held > limit ? ' over' : ''}" title="${escape(cmd.name)}: ${says}${skipped ? '' : `, holds ${cmd.all ? 'all its input' : 'one buffer at most'}`}"><span class="light ${light}" aria-label="${says}"></span><code>${escape(cmd.name)}</code><span class="bar"><i style="width: ${width.toFixed(1)}%"></i></span><span class="held">${skipped ? '–' : cmd.all ? size(cmd.held) : cmd.held ? `≤ ${size(cmd.held)}` : '0 B'}</span></li>`;
-  }).join('');
-}
-
-// A tool's card: what it does and, in a hint, the options worth knowing first.
-const toolCard = (name, options = true) => `<span class="tool-card"><code>${escape(name)}</code> ${escape(tools[name].summary)}${options && tools[name].options.length ? `<span class="tool-options">${tools[name].options.map(([flag, text]) => `<span><code>${escape(flag)}</code> ${escape(text)}</span>`).join('')}</span>` : ''}</span>`;
+const check = model => compare(training.model, model);
 
 // The target gets ids of its own, so arrowheads and titles in one drawing never resolve to the other.
 function showTarget() {
@@ -1543,8 +1417,6 @@ function showTarget() {
   // The brief can differ between systems, so it follows the shell switch.
   $('#lesson-brief').innerHTML = prose(field(lesson, 'brief'));
   try { training.model = parsePipeline(targetOf(lesson), { platform }); } catch (error) { training.model = null; host.textContent = error.message; return; }
-  // In a course that runs commands the goal is what the target prints, as the chosen system's tools print it.
-  if (runs()) { training.goal = screenLines(run(training.model, tracks[track].files, { platform })); buildScrollback(); return; }
   host.innerHTML = diagram(training.model).replace(/\b(svg-title|svg-desc)\b/g, 'target-$1').replace(/(id="|url\(#)arrow-/g, '$1target-arrow-');
   fit(host, host.querySelector('svg'));
   frame();
@@ -1577,7 +1449,7 @@ const n00bIndex = plumbing.findIndex(lesson => lesson.intro);
 const n00bDone = () => !!saved.plumbing[plumbing[n00bIndex].id];
 let nudgeTimer = 0;
 function nudge() {
-  if (runs() || n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
+  if (n00bDone() || !training.active || training.matched || training.level === n00bIndex || tourStep >= 0) return;
   training.nudge = true;
   showLevels();
   replay($(`#levels [data-level="${n00bIndex}"]`), 'pulse');
@@ -1641,18 +1513,15 @@ function showCoach() {
         return `<span class="spark fd-${i % 3}" style="--dx: ${(Math.cos(angle) * reach * 1.6).toFixed(1)}px; --dy: ${(Math.sin(angle) * reach - 8).toFixed(1)}px; --delay: ${(i % 5) * 0.03}s" aria-hidden="true">${i % 3}</span>`;
       }).join('') : '';
       training.burst = false;
-      const following = tracks[tracks[track].next];
-      const finale = following
-        ? `<p class="solved-finale">You earned <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="next-course">On to ${escape(following.name)} <span aria-hidden="true">→</span></button><button type="button" class="text-button" data-coach="courses">All courses</button><button type="button" class="text-button" data-coach="viewer">Back to the viewer</button></div>`
-        : `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
+      const finale = `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
       const next = last ? finale
         : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${levelNumber(training.level + 1)}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
       coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
     } else {
       const parts = [
-        runs() ? `<div class="hint"><span class="row-label">${field(lesson, 'tools').length === 1 ? 'TOOL' : 'TOOLS'}</span>${field(lesson, 'tools').map(name => toolCard(name)).join('')}</div>` : `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
+        `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
         `<div class="hint"><span class="row-label">HOW</span><p>${prose(field(lesson, 'how'))}</p></div>`,
-        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(targetOf(lesson))}</code> <span class="answer-note">${runs() ? 'Type it in to see the output match.' : 'Type it in to see the pictures match.'}</span></p></div>`,
+        `<div class="hint"><span class="row-label">ANSWER</span><p><code class="answer">${escape(targetOf(lesson))}</code> <span class="answer-note">Type it in to see the pictures match.</span></p></div>`,
       ];
       coach.innerHTML = training.hints.length ? `<div class="hints">${training.hints.map(n => parts[n - 1]).join('')}</div>` : '';
     }
@@ -1661,7 +1530,7 @@ function showCoach() {
   const spelling = $('#solved-spelling');
   if (spelling) {
     const same = source.replace(/\s+/g, ' ') === targetOf(lesson);
-    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(targetOf(lesson))}</code>, which ${runs() ? 'prints the same' : 'draws the same picture'}.`;
+    spelling.innerHTML = same ? '' : `You wrote <code>${escape(source)}</code>. The target was written <code>${escape(targetOf(lesson))}</code>, which draws the same picture.`;
   }
   const list = $('#diff-list');
   if (list) list.innerHTML = training.differences ? training.differences.map(differenceMarkup).join('') : `<li class="diff-shape">${source ? 'Finish the command to compare it with the target.' : 'Type a command to compare it with the target.'}</li>`;
@@ -1678,7 +1547,6 @@ function showTraining() {
       progress[lesson.id] = training.earned;
       try { localStorage.setItem(tracks[track].store, JSON.stringify(progress)); } catch {}
     }
-    if (runs()) keepCommand(lesson.id, $('#pipeline').value.trim());
     training.burst = true;
     if (!training.hints.length) training.nudge = false;
     replay($('.diagram-panel'), 'matched-glow');
@@ -1691,7 +1559,6 @@ function showTraining() {
   status.classList.toggle('differs', !!differences?.length);
   status.textContent = matched ? '✓ Matches the target' : differences ? `${differences.length} difference${differences.length === 1 ? '' : 's'}` : $('#pipeline').value.trim() ? 'Keep typing…' : 'Type a command';
   markDifferences();
-  showScreens();
   showLevels();
   showHints();
   showCoach();
@@ -1700,10 +1567,10 @@ function showTraining() {
 // A level with an intro opens on its explainer, unless the student is only starting it over.
 function loadLesson(i, { keep = false, intro = true } = {}) {
   const lesson = lessons[i];
-  Object.assign(training, { level: i, hints: [], matched: false, coach: '', result: null, goal: null, revealed: new Set() });
+  Object.assign(training, { level: i, hints: [], matched: false, coach: '' });
   if (lesson.intro) training.nudge = false;
   clearTimeout(nudgeTimer);
-  if (!runs() && !n00bDone() && !lesson.intro) nudgeLater();
+  if (!n00bDone() && !lesson.intro) nudgeLater();
   const title = escape(lesson.title), label = lesson.label && escape(lesson.label);
   $('#lesson-title').innerHTML = `<span class="lesson-number">Level ${levelNumber(i)}</span> <span>${label ? title.replace(label, `<span class="lesson-label">${label}</span>`) : title}</span>`;
   history.replaceState(null, '', `#${tracks[track].hash}/${levelNumber(i)}`);
@@ -1796,12 +1663,13 @@ document.addEventListener('keydown', event => {
 // Training opens at the first unsolved level after level 0, which the student finds for themselves.
 const firstUnsolved = () => {
   const i = lessons.findIndex(lesson => !lesson.intro && !progress[lesson.id]);
-  return i < 0 ? (runs() ? 0 : 1) : i;
+  return i < 0 ? 1 : i;
 };
 // The editor's placeholder is an example for the viewer. In training it would hint at answers.
 const placeholder = $('#pipeline').placeholder;
 // Called with null, training opens on the course picker rather than a level.
 function enterTraining(level = firstUnsolved()) {
+  hidePage();
   if (!training.active) training.viewer = $('#pipeline').value;
   $('#pipeline').placeholder = '';
   training.active = true;
@@ -1815,30 +1683,19 @@ function enterTraining(level = firstUnsolved()) {
   loadLesson(Math.max(0, Math.min(level, lessons.length - 1)));
 }
 
-// The course picker: a card for each course, saying who it's for, with a small moving preview and
-// the student's progress. Choosing one opens it at its first unsolved level.
-const coursePreviews = {
-  unixway: () => `<ul class="course-preview gauges preview-gauges" aria-hidden="true">${[['seq', 0, ''], ['sort', 1, ' all'], ['head', 0, '']].map(([name, grows, all]) => `<li class="gauge${all}"><span class="light ok"></span><code>${name}</code><span class="bar"><i class="${grows ? 'grows' : ''}" style="width: ${grows ? 82 : 22}%"></i></span><span class="held">${grows ? 'all of it' : '≤ 64 KiB'}</span></li>`).join('')}</ul>`,
-  // Toolbox's preview is a real pipeline on the case, with its real counts.
-  toolbox: () => `<div class="course-preview preview-terminal" aria-hidden="true"><span class="preview-prompt">$ <span>grep kitchen swipes.log | cut -d ' ' -f 3 | sort | uniq -c | sort -rn</span></span><span class="preview-stages"><i>grep <b>153</b></i>|<i>cut <b>153</b></i>|<i>sort <b>153</b></i>|<i>uniq -c <b>15</b></i>|<i>sort -rn <b>15</b></i></span><span class="preview-out">19 tpham</span><span class="preview-out">19 jlee<i class="preview-cursor"></i></span></div>`,
-  plumbing: () => `<svg class="course-preview course-pipes" viewBox="0 0 260 112" aria-hidden="true">
+// The course picker, under the Want to learn? button: a card for each course and for the talk, each
+// only a title and a small moving picture.
+const courses = [
+  { name: 'why', title: 'Why Unix?', picture: () => `<div class="course-preview preview-why" aria-hidden="true">${[['cat', 22], ['grep', 9], ['uniq -c', 4], ['head', 2]].map(([name, width]) => `<span class="why-tool">${name}</span><span class="why-pipe" style="--w: ${width}px"></span>`).join('')}</div>` },
+  // Basic Training's picture is a real pipeline on its case, with its real counts.
+  { name: 'toolbox', title: 'Basic Training', picture: () => `<div class="course-preview preview-terminal" aria-hidden="true"><span class="preview-prompt">$ <span>grep kitchen swipes.log | cut -d ' ' -f 3 | sort | uniq -c | sort -rn</span></span><span class="preview-stages"><i>grep <b>153</b></i>|<i>cut <b>153</b></i>|<i>sort <b>153</b></i>|<i>uniq -c <b>15</b></i>|<i>sort -rn <b>15</b></i></span><span class="preview-out">19 tpham</span><span class="preview-out">19 jlee<i class="preview-cursor"></i></span></div>` },
+  { name: 'plumbing', title: 'Practise Plumbing', picture: () => `<svg class="course-preview course-pipes" viewBox="0 0 260 112" aria-hidden="true">
     <rect class="pic-card-body" x="70" y="18" width="96" height="76" rx="8"/><text class="course-cmd" x="82" y="40">make</text>
     <path class="course-stream fd0" d="M14 52H70"/><path class="course-stream fd1" d="M166 52H204"/><path class="course-stream fd2" d="M166 76H186V58H204"/>
     <circle class="course-port fd0" cx="70" cy="52" r="4"/><circle class="course-port fd1" cx="166" cy="52" r="4"/><circle class="course-port fd2" cx="166" cy="76" r="4"/>
-    <rect class="course-file" x="204" y="40" width="46" height="24" rx="4"/><text class="course-file-name" x="227" y="56" text-anchor="middle">log</text></svg>`,
-};
-// Toolbox lives on its own page; its card reads the progress that page saves.
-const toolboxCourse = { href: 'toolbox.html', name: 'Toolbox', audience: 'New to the shell', about: 'Crack a whodunit in a pretend terminal with `ls`, `grep`, `sort` and friends, and see what small tools can do when you pipe them together.', length: 'about 10 minutes' };
-function toolboxCard() {
-  let session = null;
-  try { session = JSON.parse(localStorage.getItem('pipeviewer-toolbox-session')); } catch {}
-  const action = !session?.history?.length ? 'Start' : session.closed ? 'Play again' : 'Carry on';
-  return `<a class="course-card beginner" href="${toolboxCourse.href}">
-    <span class="course-audience">${escape(toolboxCourse.audience)}</span>${coursePreviews.toolbox()}
-    <span class="course-name">${escape(toolboxCourse.name)}</span><span class="course-about">${prose(toolboxCourse.about)}</span>
-    <span class="course-meta"><span>7 questions · ${escape(toolboxCourse.length)}</span>${session?.found ? `<span class="course-stars">✓ ${session.found} / ${session.of}</span>` : ''}</span>
-    <span class="course-go">${action} <span aria-hidden="true">→</span></span></a>`;
-}
+    <rect class="course-file" x="204" y="40" width="46" height="24" rx="4"/><text class="course-file-name" x="227" y="56" text-anchor="middle">log</text></svg>` },
+  { name: 'talk', title: 'Tips & Tricks', picture: () => `<div class="course-preview preview-talk" aria-hidden="true"><span class="talk-play"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></svg></span><span class="talk-length">45 min talk</span></div>` },
+];
 function showCourses() {
   training.choosing = true;
   closeIntro();
@@ -1846,17 +1703,8 @@ function showCourses() {
   document.documentElement.classList.add('choosing');
   $('#courses').hidden = false;
   history.replaceState(null, '', '#courses');
-  $('#course-cards').innerHTML = toolboxCard() + Object.entries(tracks).map(([name, course]) => {
-    const done = saved[name], earned = course.levels.reduce((sum, level) => sum + (done[level.id] ?? 0), 0), max = course.levels.length * 3;
-    const next = course.levels.findIndex(level => !level.intro && !done[level.id]);
-    const action = !earned ? 'Start' : next < 0 ? 'Play again' : `Continue at level ${next + course.from}`;
-    return `<button type="button" class="course-card" data-course="${name}">
-      <span class="course-audience">${escape(course.audience)}</span>${coursePreviews[name]()}
-      <span class="course-name">${escape(course.name)}</span><span class="course-about">${prose(course.about)}</span>
-      <span class="course-meta"><span>${course.levels.length} levels · ${escape(course.length)}</span>${earned ? `<span class="course-stars">${star(true)}${earned} / ${max}</span>` : ''}</span>
-      <span class="course-go">${action} <span aria-hidden="true">→</span></span></button>`;
-  }).join('');
-  $(`#course-cards [data-course="${track}"]`)?.focus({ preventScroll: true });
+  $('#course-cards').innerHTML = courses.map(course => `<button type="button" class="course-card course-${course.name}" data-course="${course.name}">${course.picture()}<span class="course-name">${escape(course.title)}</span></button>`).join('');
+  $('#course-cards [data-course]').focus({ preventScroll: true });
 }
 function hideCourses() {
   training.choosing = false;
@@ -1865,26 +1713,56 @@ function hideCourses() {
 }
 $('#course-cards').addEventListener('click', event => {
   const name = event.target.closest('[data-course]')?.dataset.course;
-  if (!name) return;
-  transition(() => { setTrack(name); showTrack(); hideCourses(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+  if (name === 'talk') return openTalk();
+  if (pages[name]) return transition(() => showPage(name));
+  if (name === 'plumbing') transition(() => { hideCourses(); showTrack(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
 });
 
-function exitTraining() {
+// Why Unix? and Basic Training are pages of their own. Each stands in for the viewer under the course
+// switch, and opens where the student left it.
+const pages = { why: { at: '#why-page', show: showWhy }, toolbox: { at: '#toolbox-page', show: showToolbox } };
+let page = null;
+function showPage(name) {
+  leaveTraining();
+  hidePage();
+  page = name;
+  document.documentElement.classList.add('paged');
+  $('#training').hidden = $(pages[name].at).hidden = false;
+  $('.example-rows').hidden = true;
+  $('#training-button').setAttribute('aria-pressed', 'true');
+  showTrack(name);
+  history.replaceState(null, '', `#${name}`);
+  scrollTo(0, 0);
+  pages[name].show();
+}
+function hidePage() {
+  if (!page) return;
+  $(pages[page].at).hidden = true;
+  page = null;
+  document.documentElement.classList.remove('paged');
+}
+// Leaving Plumbing, or the picker, puts the viewer's own command back in the editor.
+function leaveTraining() {
+  if (!training.active) return;
   if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
   closeIntro();
   hideCourses();
   clearTimeout(nudgeTimer);
-  document.documentElement.classList.remove('training', 'runs');
-  $('#training').hidden = $('#target-panel').hidden = $('#output-panel').hidden = true;
-  $('#goal').innerHTML = $('#output').innerHTML = '';
+  document.documentElement.classList.remove('training');
+  $('#training').hidden = $('#target-panel').hidden = true;
+  $('#target-diagram').innerHTML = '';
+  $('#pipeline').value = training.viewer;
+  $('#pipeline').placeholder = placeholder;
+}
+function exitTraining() {
+  leaveTraining();
+  hidePage();
+  $('#training').hidden = true;
   $('.example-rows').hidden = false;
   slideAll();
   $('#training-button').setAttribute('aria-pressed', 'false');
-  $('#target-diagram').innerHTML = '';
   history.replaceState(null, '', location.pathname + location.search);
-  $('#pipeline').value = training.viewer;
-  $('#pipeline').placeholder = placeholder;
   fitEditor();
   render();
   $('#pipeline').focus({ preventScroll: true });
@@ -1894,19 +1772,19 @@ const nextLevel = () => { if (training.level < lessons.length - 1) loadLesson(tr
 // Training opens and closes with a crossfade where the browser has view transitions. The tour runs
 // once the new page has faded in, the first time training opens.
 const transition = change => document.startViewTransition ? document.startViewTransition(change).finished.catch(() => {}) : Promise.resolve(change());
-const openTraining = (level, name = track) => transition(() => { if (name !== track) setTrack(name); enterTraining(level); }).then(() => { if (!training.choosing && !toured() && training.slide < 0) startTour(); });
-// Switching course starts the new one at its first unsolved level.
+const openTraining = level => transition(() => enterTraining(level)).then(() => { if (!training.choosing && !toured() && training.slide < 0) startTour(); });
+// The course switch moves between the three courses. Plumbing opens at its first unsolved level.
 function switchTrack(name) {
-  if (name === 'toolbox') return location.assign(toolboxCourse.href);
-  if (name === track || tourStep >= 0) return;
-  transition(() => { setTrack(name); closeIntro(); showTrack(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
+  if (tourStep >= 0 || name === page) return;
+  if (pages[name]) return transition(() => showPage(name));
+  if (!training.active || training.choosing) openTraining();
 }
 $('#track-switch').addEventListener('click', event => {
   const button = event.target.closest('[data-track]');
   if (button) switchTrack(button.dataset.track);
 });
 // The Training button opens the picker, so every student sees which courses there are.
-$('#training-button').addEventListener('click', () => training.active ? transition(exitTraining) : openTraining(null));
+$('#training-button').addEventListener('click', () => training.active || page ? transition(exitTraining) : openTraining(null));
 $('#exit-training').addEventListener('click', () => transition(exitTraining));
 $('#levels').addEventListener('click', event => {
   const button = event.target.closest('[data-level]');
@@ -1924,8 +1802,7 @@ $('#restart').addEventListener('click', () => { loadLesson(training.level, { int
 $('#coach').addEventListener('click', event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();
-  if (action === 'replay') loadLesson(runs() ? 0 : 1);
-  if (action === 'next-course') switchTrack(tracks[track].next);
+  if (action === 'replay') loadLesson(1);
   if (action === 'courses') transition(showCourses);
   if (action === 'viewer') exitTraining();
 });
@@ -1936,31 +1813,25 @@ $('#pipeline').addEventListener('keydown', event => {
     nextLevel();
   }
 });
-// #training opens Plumbing at the first unsolved level, and #training/2 at level 2; #unixway and
-// #unixway/3 do the same for The Unix Way, and #courses opens the picker. #toolbox, from before Toolbox
-// had a page of its own, goes to that page. So a link can send a colleague straight there.
-const trainingLink = () => new RegExp(`^#(${Object.values(tracks).map(course => course.hash).join('|')}|courses|toolbox)(?:/(\\d+))?$`).exec(location.hash);
+// #training opens Plumbing at the first unsolved level, and #training/2 at level 2. #why and #toolbox
+// open those pages, and #courses the picker. #unixway and #whyunix, from earlier courses, open Why Unix?.
+// So a link can send a colleague straight there.
+const trainingLink = () => /^#(training|courses|why|toolbox|unixway|whyunix)(?:\/(\d+))?$/.exec(location.hash);
 const followLink = ([, hash, number]) => {
-  if (hash === 'toolbox') return location.replace(toolboxCourse.href);
   if (hash === 'courses') return training.choosing || openTraining(null);
-  const name = Object.keys(tracks).find(key => tracks[key].hash === hash);
-  openTraining(number === undefined ? undefined : Number(number) - tracks[name].from, name);
+  const name = ['unixway', 'whyunix'].includes(hash) ? 'why' : hash;
+  if (pages[name]) return page === name || transition(() => showPage(name));
+  openTraining(number === undefined ? undefined : Number(number) - tracks.plumbing.from);
 };
 addEventListener('hashchange', () => {
   const link = trainingLink();
   if (link) followLink(link);
-  else if (training.active) exitTraining();
+  else if (training.active || page) exitTraining();
 });
 // The tour walks a first-time student through the training screen: everything dims but one part,
 // which a spotlight picks out while a card beside it explains it. The spotlight glides from part to
 // part and follows it while the page scrolls.
-const tourSteps = { unixway: [
-  { at: '#training', title: 'The Unix Way', text: () => `Why Unix works the way it does, one idea a level, tried out on a pretend machine. There are ${lessons.length} levels, each worth up to three stars.` },
-  { at: '.editor-panel', title: 'Your command', text: () => 'Type here. Your command runs as you type. Nothing leaves your browser.' },
-  { at: '#output-panel', title: 'What it prints', text: () => 'Its output shows up here, errors in amber. Under it, each command gets a light for how it exited, and a gauge for how much it holds in memory at once.' },
-  { at: '#target-panel', title: 'Your goal', text: () => 'The output you’re after, blacked out. Each line uncovers itself when yours matches it.' },
-  { at: '#hint-buttons', title: 'Stuck?', text: () => 'Hints are here. A level is worth three stars, and each hint costs one.' },
-], plumbing: [
+const tourSteps = { plumbing: [
   { at: '#training', title: 'Training mode engaged', text: () => `Each level shows a picture. Your job is to write the command that draws it. There are ${lessons.length} levels, each worth up to three stars.` },
   { at: '.editor-panel', title: 'Your command', text: () => `This is where you type. We’ve started you off with <code>${escape($('#pipeline').value.trim())}</code>.` },
   { at: '#results > .diagram-panel', title: 'Your picture', text: () => 'This draws your command, and redraws it as you type. If the picture makes no sense whatsoever then best to start on the <button type="button" class="tour-link lesson-label" data-n00b>n00b</button> level.' },

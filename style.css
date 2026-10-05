@@ -1,5 +1,6 @@
 :root {
   --sans: 'DM Sans', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
   font-family: var(--sans);
   font-synthesis: none;
   color-scheme: light;
@@ -97,9 +98,6 @@ a { color: inherit; }
 .header-actions { display: flex; align-items: center; gap: 1.25rem; }
 .text-button { background: none; border: 0; color: var(--muted); font-size: .8125rem; font-weight: 500; padding: .625rem 0; }
 .text-button:hover { color: var(--purple); }
-.talk-button { display: flex; align-items: center; gap: .4375rem; min-height: 2.5rem; padding: .5rem .875rem .5rem .6875rem; border: 1px solid var(--purple-bg); border-radius: .4375rem; background: var(--purple-bg); color: var(--purple); font-size: .75rem; font-weight: 600; }
-.talk-button:hover { border-color: var(--purple); }
-.talk-button svg { width: 1rem; height: 1rem; fill: currentColor; }
 /* The shell switch sits in the header, a two-way toggle of the same height as its neighbours. Its two
    halves are equal, and a raised thumb slides under the chosen one, overshooting a touch as it lands. */
 .shell-switch { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: .125rem; min-height: 2.5rem; padding: .1875rem; border: 1px solid var(--border); border-radius: .4375rem; background: var(--inset); }
@@ -586,64 +584,10 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
   .solved { flex-direction: column; gap: .5rem; }
   .panel-hint { display: none; }
 }
-/* The course switch picks Toolbox or Plumbing, in stdin's green like the Training button. */
+/* The course switch moves between the three courses, in stdin's green like the Want to learn? button. */
 .track-switch button { font-weight: 600; letter-spacing: .01em; }
 #track-switch > button.active { color: var(--green); }
-/* Toolbox: the student's screen under the editor, and the goal's beside it on wide windows, above
-   the editor on narrow ones. The diagram follows, smaller, so the pipe being built is still drawn. */
-#goal { display: none; }
-.runs #goal { display: block; }
-.runs .target-scroll, .runs .diagram-panel .training-only { display: none !important; }
-.output-panel { border: 1px solid var(--term-border); border-radius: .6875rem; background: var(--term-bg); overflow: hidden; margin-top: .875rem; }
-.output-panel .diagram-toolbar { padding-bottom: .125rem; }
-.runs .target-panel { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
-.screen { margin: 0; padding: .625rem 1.1875rem .875rem; min-height: 4.75rem; max-height: 22rem; overflow: auto; font: .8125rem/1.55 'IBM Plex Mono', monospace; color: var(--term-text); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 8; transition: opacity .16s; }
-.screen .line { display: block; min-height: 1.55em; padding-left: .5rem; margin-left: -.5rem; border-left: 2px solid transparent; }
-.screen .line.fd-2 { color: var(--amber); }
-.screen .line.hit { border-left-color: var(--green); }
-/* The scrollback: earlier levels' commands and output, dimmed above the live command. */
-.screen .prompt-line { color: var(--term-prompt); }
-.screen .past { color: var(--term-muted); opacity: .75; }
-.screen .past.fd-2 { color: var(--amber); }
-.screen .past.prompt-line { color: var(--term-prompt); margin-top: .375rem; }
-.screen .past.prompt-line:first-child { margin-top: 0; }
-.screen .past + .prompt-line:not(.past) { margin-top: .5rem; padding-top: .5rem; border-top: 1px dashed var(--term-border); }
-.screen .cursor { display: inline-block; width: .55em; height: 1.1em; vertical-align: -.2em; margin-left: .1em; background: var(--term-caret); animation: blink 1.1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-.output-panel.stale .screen { opacity: .35; }
-.screen-note { display: block; margin-top: .5rem; color: var(--term-muted); font: italic .75rem/1.5 var(--sans); white-space: normal; max-width: 40rem; }
-.screen-note.wrote { font-style: normal; font-family: 'IBM Plex Mono', monospace; color: var(--purple); }
-.screen-note.wrote span { color: var(--term-muted); margin-left: .375rem; }
-/* The goal's words are blacked out until a line of the student's output matches, then it uncovers. */
-.goal { background: transparent; }
-.goal .line.hidden { color: transparent; user-select: none; }
-.goal .line.hidden i { font-style: normal; border-radius: .1875rem; background: color-mix(in srgb, var(--text) 20%, transparent); }
-.goal .line.shown { border-left-color: var(--green); }
-.goal .line.fresh { animation: uncover .7s ease-out; }
-@keyframes uncover { 0% { background: var(--green-bg); color: var(--green); } 100% { background: transparent; } }
-@media (min-width: 64em) {
-  .training.runs .output-panel { grid-column: auto; order: 3; margin-top: 0; }
-  .training.runs #target-panel { order: 4; }
-  .training.runs #results > .diagram-panel { grid-column: 1 / -1; order: 5; margin-top: .875rem; }
-  .runs .screen { max-height: 26rem; }
-}
-/* The Unix Way's gauges: per command, a light for its exit status and a bar, on a log scale, for
-   how much it holds in memory at once. A command that holds all its input is amber; one over the
-   level's limit turns the error colour. */
-.gauges { display: none; list-style: none; margin: 0; padding: .375rem 1.1875rem .875rem; border-top: 1px dashed var(--term-border); }
-.gauged .gauges:not(:empty) { display: grid; grid-template-columns: auto auto minmax(4rem, 1fr) auto; gap: .3125rem .625rem; align-items: center; }
-.gauge { display: contents; font: .75rem 'IBM Plex Mono', monospace; color: var(--term-text); }
-.gauge .light { width: .5625rem; height: .5625rem; border-radius: 50%; background: var(--term-muted); }
-.gauge .light.ok { background: var(--green); box-shadow: 0 0 .375rem var(--green); }
-.gauge .light.failed { background: var(--error); box-shadow: 0 0 .375rem var(--error); }
-.gauge .light.skipped { background: transparent; border: 1px solid var(--term-muted); }
-.gauge .bar { height: .4375rem; border-radius: .25rem; background: var(--inset); overflow: hidden; }
-.gauge .bar i { display: block; height: 100%; border-radius: inherit; background: var(--green); transition: width .4s cubic-bezier(.3, 1, .4, 1); }
-.gauge.all .bar i { background: var(--amber); }
-.gauge.over .bar i { background: var(--error); }
-.gauge .held { color: var(--term-muted); text-align: right; font-variant-numeric: tabular-nums; }
-.gauge.all .held { color: var(--amber); }
-.gauge.over .held { color: var(--error); font-weight: 600; }
 .course-preview.preview-terminal { display: flex; flex-direction: column; justify-content: flex-start; gap: .1875rem; padding: .5rem .875rem; background: #11161f; color: #dbe2ee; font: .6875rem/1.4 'IBM Plex Mono', monospace; overflow: hidden; }
 .preview-prompt { color: #6fdcb4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preview-prompt span { color: #dbe2ee; }
@@ -655,52 +599,41 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .preview-stages i:nth-of-type(5) { animation-delay: 1s; }
 .preview-stages b { font-weight: 400; color: #8995a9; margin-left: .25rem; }
 .preview-cursor { margin-left: .5rem; display: inline-block; width: .5em; height: 1em; vertical-align: -.15em; background: #6fdcb4; animation: blink 1.1s steps(1) infinite; }
-.preview-gauges { display: grid; grid-template-columns: auto auto minmax(3rem, 1fr) auto; align-content: center; gap: .5rem .625rem; align-items: center; padding: .75rem 1rem; border: 0; margin: .25rem 0 .375rem; list-style: none; }
-.preview-gauges .bar i.grows { animation: grows 4s ease-in-out infinite; }
-@keyframes grows { 0%, 10% { width: 4%; } 70%, 100% { width: 82%; } }
-/* A tool's card, in the first hint and when a level hands the tool over. */
-.tool-card { display: block; margin-top: .25rem; }
-.tool-card > code { font-weight: 600; color: var(--green) !important; background: var(--green-bg) !important; }
-.tool-options { display: grid; grid-template-columns: max-content 1fr; gap: .125rem .875rem; margin-top: .375rem; }
-.tool-options span { display: contents; }
-.tool-options code { justify-self: start; }
-/* The course picker stands in for the training screen until a course is chosen: one card per
-   course, saying who it's for, with a small moving preview. The beginners' card takes stdin's green. */
-.choosing :is(.training-top > :not(#exit-training), .lesson, .coach, .intro, #target-panel, .editor-panel, .output-panel, #results) { display: none !important; }
+/* The course picker stands in for the training screen until a course is chosen: a card for each
+   course, and one for the talk, each just a moving picture and a title. */
+.choosing :is(.training-top > :not(#exit-training), .lesson, .coach, .intro, #target-panel, .editor-panel, #results) { display: none !important; }
 .choosing .training-top { justify-content: flex-end; }
 .courses { margin-top: .25rem; }
-.courses-title { font-size: 1.375rem; letter-spacing: -.03em; margin-bottom: 1rem; }
-.course-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
-.course-card { text-decoration: none; display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; padding: 1.125rem 1.25rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; animation: solved-in .4s ease-out both; }
+.course-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.course-card { display: flex; flex-direction: column; gap: .875rem; padding: .875rem .875rem 1.125rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; animation: solved-in .4s ease-out both; }
 .course-card:nth-child(2) { animation-delay: .06s; }
 .course-card:nth-child(3) { animation-delay: .12s; }
-.course-card:hover, .course-card:focus-visible { border-color: var(--purple); transform: translateY(-2px); box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .08); }
-.course-card.beginner:hover, .course-card.beginner:focus-visible { border-color: var(--green); }
-.course-audience { font: 600 .625rem var(--sans); letter-spacing: .12em; text-transform: uppercase; padding: .1875rem .5rem; border-radius: .25rem; background: var(--purple-bg); color: var(--purple); }
-.beginner .course-audience { background: var(--green-bg); color: var(--green); }
-.course-preview { width: 100%; height: 7rem; margin: .25rem 0 .375rem; border-radius: .5rem; background: var(--inset); }
-pre.course-preview { min-height: 0; max-height: none; padding: .625rem .875rem; font-size: .75rem; line-height: 1.5; overflow: hidden; }
-.course-preview .prompt-line { color: var(--term-prompt); }
-.course-preview .cycle i { font-style: normal; border-radius: .1875rem; animation: preview-uncover 6s calc(var(--i) * .5s + .6s) infinite both; }
-@keyframes preview-uncover { 0% { color: transparent; background: color-mix(in srgb, var(--text) 20%, transparent); } 12%, 82% { color: var(--green); background: transparent; } 92%, 100% { color: transparent; background: color-mix(in srgb, var(--text) 20%, transparent); } }
+.course-card:nth-child(4) { animation-delay: .18s; }
+.course-card:hover, .course-card:focus-visible { border-color: var(--green); transform: translateY(-2px); box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .08); }
+.course-preview { width: 100%; height: 8.5rem; border-radius: .5rem; background: var(--inset); }
 .course-pipes .pic-card-body { fill: var(--surface); stroke: var(--border); }
-.course-cmd { font: 600 13px 'IBM Plex Mono', monospace; fill: var(--text); }
+.course-cmd { font: 600 13px var(--mono); fill: var(--text); }
 .course-stream { fill: none; stroke-width: 2; stroke-dasharray: 6 4; animation: flow .8s linear infinite; }
 .course-stream.fd0, .course-port.fd0 { stroke: var(--green); }
 .course-stream.fd1, .course-port.fd1 { stroke: var(--purple); }
 .course-stream.fd2, .course-port.fd2 { stroke: var(--amber); }
 .course-port { fill: var(--surface); stroke-width: 2; }
 .course-file { fill: var(--surface); stroke: var(--purple); }
-.course-file-name { font: 500 11px 'IBM Plex Mono', monospace; fill: var(--purple); }
-.course-name { font-size: 1.25rem; font-weight: 650; letter-spacing: -.02em; }
-.course-about { font-size: .875rem; line-height: 1.55; color: var(--muted); }
-.course-about code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
-.course-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .75rem; color: var(--muted); }
-.course-stars { display: inline-flex; align-items: center; gap: .25rem; font: 600 .75rem 'IBM Plex Mono', monospace; color: var(--text); }
-.course-stars .star { width: .875rem; height: .875rem; }
-.course-go { margin-top: auto; padding-top: .5rem; font-size: .8125rem; font-weight: 600; color: var(--purple); }
-.beginner .course-go { color: var(--green); }
-@media (prefers-reduced-motion: reduce) { .course-preview .cycle i { animation: none; color: var(--green); } }
+.course-file-name { font: 500 11px var(--mono); fill: var(--purple); }
+.course-name { padding: 0 .25rem; font-size: 1.25rem; font-weight: 650; letter-spacing: -.02em; }
+/* Why Unix?'s picture: small tools, joined by a stream that thins as each lets less through. */
+.course-preview.preview-why { display: flex; align-items: center; justify-content: center; padding: 0 .875rem; }
+.why-tool { font: 500 .6875rem var(--mono); padding: .25rem .4375rem; border: 1px solid var(--text); border-radius: .3125rem; white-space: nowrap; background: var(--surface); }
+.why-pipe { flex: 1 1 1rem; min-width: .75rem; height: var(--w); background: repeating-linear-gradient(90deg, var(--green) 0 6px, color-mix(in srgb, var(--green) 50%, transparent) 6px 12px); animation: why-flow .7s linear infinite; }
+.why-pipe:last-child { flex-basis: .75rem; }
+@keyframes why-flow { to { background-position: 12px 0; } }
+/* The talk's picture: a screen with a play button that breathes. */
+.course-preview.preview-talk { position: relative; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, #2a2350, #11161f 70%); }
+.talk-play { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: rgb(255 255 255 / .12); box-shadow: 0 0 0 0 rgb(185 167 255 / .5); animation: talk-breathe 2.4s ease-in-out infinite; }
+.talk-play svg { width: 1.5rem; height: 1.5rem; fill: #fff; margin-left: .1875rem; }
+.talk-length { position: absolute; right: .625rem; bottom: .5rem; font: 500 .6875rem var(--mono); color: #c3b4ff; }
+@keyframes talk-breathe { 50% { box-shadow: 0 0 0 .75rem rgb(185 167 255 / 0); background: rgb(255 255 255 / .2); } }
+@media (prefers-reduced-motion: reduce) { .why-pipe, .talk-play { animation: none; } }
 /* The tour dims the page but for a spotlight on one part, with a card beside it. The spotlight's
    shadow does the dimming, so the spot glides from part to part. The layer takes clicks so the
    dimmed page cannot be used until the tour ends. */
@@ -801,3 +734,318 @@ pre.course-preview { min-height: 0; max-height: none; padding: .625rem .875rem; 
   .diagram-toolbar button, .details-heading { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { *, .shell-switch::before { transition: none !important; animation: none !important; } }
+
+/* Why Unix? and Basic Training are pages that stand in for the viewer, under the course switch. */
+.paged :is(.example-rows, .editor-panel, #results, #target-panel, .level-buttons, .star-total, #tour-button, .lesson, .intro, .coach, .courses) { display: none !important; }
+.page-view { margin-top: 1.25rem; }
+
+/* Basic Training: a terminal and a case notebook, side by side. The terminal stays dark in every theme,
+   as most terminals are. */
+.toolbox-page {
+  --term-bg: #11161f; --term-edge: #263042; --term-text: #dbe2ee; --term-muted: #8995a9; --term-prompt: #6fdcb4;
+  --term-amber: #ffc579; --term-purple: #c3b4ff; --term-chip: #1b2331; --term-chip-edge: #33405a;
+}
+[data-theme="dark"] .toolbox-page { --term-bg: #0b0f15; --term-edge: #2a3446; }
+[data-theme="terminal"] .toolbox-page {
+  --term-bg: #000; --term-edge: #2b7a46; --term-text: #c4ffd2; --term-muted: #5fae75; --term-prompt: #4dff88;
+  --term-amber: #ffc247; --term-purple: #d3a2ff; --term-chip: #04140a; --term-chip-edge: #1f5532;
+}
+.toolbox-page button { font: inherit; color: inherit; cursor: pointer; }
+/* The desk: the terminal takes the room, the notebook a column beside it. */
+.toolbox-page .desk { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 21rem; grid-template-rows: minmax(0, 1fr); gap: 1.25rem; padding: 1.25rem max(1rem, calc((100vw - 90rem) / 2)); }
+/* The terminal. */
+.toolbox-page .terminal { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--term-edge); border-radius: .875rem; background: var(--term-bg); color: var(--term-text); font: .875rem/1.55 var(--mono); box-shadow: 0 1rem 2.5rem rgb(10 15 25 / .18); overflow: hidden; cursor: text; }
+.toolbox-page .scrollback { flex: 1; min-height: 0; overflow-y: auto; padding: 1rem 1.25rem .25rem; overscroll-behavior: contain; }
+.toolbox-page .entry { margin-bottom: .625rem; }
+.toolbox-page .cmdline { white-space: pre-wrap; overflow-wrap: anywhere; }
+.toolbox-page .ps, .toolbox-page .tb-prompt { color: var(--term-prompt); font-weight: 500; }
+.toolbox-page .typed { color: var(--term-text); }
+.toolbox-page .interrupt { color: var(--term-muted); margin-left: .25rem; }
+.toolbox-page .out { margin: .125rem 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 8; }
+.toolbox-page .out span { display: block; min-height: 1.55em; }
+.toolbox-page .out .fd-2 { color: var(--term-amber); }
+.toolbox-page .out b { font-weight: 500; color: var(--term-muted); }
+.toolbox-page .out b.used { color: var(--term-prompt); }
+.toolbox-page .tutor { margin: .375rem 0 0; padding-left: .875rem; border-left: 2px solid var(--term-purple); color: var(--term-purple); font: .8125rem/1.5 var(--sans); max-width: 46rem; }
+.toolbox-page .tutor code { color: var(--term-text); background: var(--term-chip); padding: .0625rem .3125rem; border-radius: .25rem; }
+.toolbox-page .new-tool { display: inline-flex; align-items: baseline; gap: .5rem; margin: .5rem 0 0; padding: .25rem .625rem; border: 1px solid color-mix(in srgb, var(--term-prompt) 40%, transparent); border-radius: .5rem; color: var(--term-muted); font: .8125rem/1.4 var(--sans); animation: tb-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.toolbox-page .new-tool span { font: 600 .625rem var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--term-prompt); }
+.toolbox-page .new-tool code { color: var(--term-prompt); font-weight: 600; }
+.toolbox-page .sys { margin: 0 0 .625rem; color: var(--term-muted); font: .8125rem/1.5 var(--sans); }
+.toolbox-page .sys b { color: var(--term-text); font-weight: 600; }
+.toolbox-page .sys kbd { font-size: .75rem; padding: 0 .3125rem; border: 1px solid var(--term-chip-edge); border-bottom-width: 2px; border-radius: .25rem; }
+.toolbox-page .sys.noted { color: var(--term-prompt); animation: tb-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.toolbox-page .sys.noted b { color: var(--term-prompt); }
+.toolbox-page .tick { font-weight: 700; margin-right: .25rem; }
+.toolbox-page .sys.mail { padding: .75rem 1rem; border: 1px dashed var(--term-amber); border-radius: .625rem; color: var(--term-text); max-width: 40rem; animation: tb-pop .5s cubic-bezier(.3, 1.6, .5, 1); }
+.toolbox-page .sys.mail b { color: var(--term-amber); }
+.toolbox-page .sys.mail .signed { color: var(--term-muted); }
+.toolbox-page .mail-icon { color: var(--term-amber); margin-right: .25rem; }
+.toolbox-page .sys.closed { padding: .875rem 1rem; border: 1px solid var(--term-prompt); border-radius: .625rem; background: color-mix(in srgb, var(--term-prompt) 10%, transparent); color: var(--term-text); font-size: .875rem; max-width: 40rem; }
+.toolbox-page .sys.closed b { color: var(--term-prompt); letter-spacing: .06em; }
+@keyframes tb-pop { from { opacity: 0; transform: translateY(.25rem) scale(.97); } }
+/* The X-ray: a pipeline's stages as chips, each with how much it passed on. */
+.toolbox-page .xray { display: flex; flex-wrap: wrap; align-items: center; gap: .3125rem; margin: .375rem 0 .25rem; }
+.toolbox-page .stage { display: inline-flex; align-items: baseline; gap: .5rem; padding: .1875rem .5625rem; border: 1px solid var(--term-chip-edge); border-radius: .4375rem; background: var(--term-chip); color: var(--term-text); font: .75rem/1.4 var(--mono); }
+.toolbox-page .stage:hover, .toolbox-page .stage[aria-expanded="true"] { border-color: var(--term-purple); }
+.toolbox-page .stage[aria-expanded="true"] { background: color-mix(in srgb, var(--term-purple) 16%, var(--term-chip)); }
+.toolbox-page .stage .count { color: var(--term-muted); font-family: var(--sans); font-size: .6875rem; white-space: nowrap; }
+.toolbox-page .stage.trouble .count { color: var(--term-amber); }
+.toolbox-page .pipe { color: var(--term-purple); font-weight: 600; }
+.toolbox-page .peek { margin: .25rem 0 .375rem; padding: .5rem .75rem; max-height: 14rem; overflow: auto; border-left: 2px solid var(--term-purple); background: var(--term-chip); font: .8125rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.toolbox-page .peek span { display: block; min-height: 1.5em; }
+.toolbox-page .peek .fd-2 { color: var(--term-amber); }
+.toolbox-page .peek-head { color: var(--term-purple); font: .75rem var(--sans); margin-bottom: .25rem; }
+.toolbox-page .peek-more { color: var(--term-muted); font: italic .75rem var(--sans); }
+/* The input line, with the prompt, at the foot of the terminal. */
+.toolbox-page .input-line { display: flex; align-items: baseline; gap: .625rem; padding: .625rem 1.25rem .375rem; border-top: 1px solid var(--term-edge); }
+.toolbox-page .input-line .tb-prompt { flex-shrink: 0; white-space: nowrap; }
+.toolbox-page #command { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--term-text); font: inherit; caret-color: var(--term-prompt); padding: 0; }
+.toolbox-page .keys { margin: 0; padding: 0 1.25rem .625rem; color: var(--term-muted); font: .6875rem var(--sans); }
+.toolbox-page .keys kbd { font-size: .625rem; padding: 0 .25rem; border: 1px solid var(--term-chip-edge); border-radius: .1875rem; }
+.toolbox-page .keys code { color: var(--term-text); }
+/* The case notebook. */
+.toolbox-page .notebook { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 1.125rem 1.125rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); }
+.toolbox-page .notes-head { display: flex; align-items: baseline; justify-content: space-between; width: 100%; padding: 0; border: 0; background: none; cursor: default; text-align: left; }
+.toolbox-page .notes-head h3 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
+.toolbox-page .tally { font: 600 .75rem var(--mono); color: var(--green); background: var(--green-bg); padding: .125rem .5rem; border-radius: 1rem; }
+.toolbox-page .clues { list-style: none; margin: .875rem 0 0; padding: 0; display: grid; gap: .5rem; }
+.toolbox-page .clue { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: .625rem; padding: .625rem .75rem; border: 1px solid transparent; border-radius: .625rem; font-size: .8125rem; line-height: 1.5; }
+.toolbox-page .mark { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid var(--border); font: 600 .6875rem var(--mono); color: var(--muted); }
+.toolbox-page .question { margin: .125rem 0 0; font-weight: 600; }
+.toolbox-page .clue.found .mark { background: var(--green); border-color: var(--green); color: var(--surface); }
+.toolbox-page .clue.found .question { font-weight: 500; color: var(--muted); }
+.toolbox-page .answer { margin: .25rem 0 0; color: var(--text); font-weight: 550; }
+.toolbox-page .tip { margin: .375rem 0 0; color: var(--muted); font-size: .75rem; }
+.toolbox-page .clue.now { border-color: var(--purple); background: var(--purple-bg); }
+.toolbox-page .clue.now .mark { border-color: var(--purple); color: var(--purple); animation: tb-beckon 2.4s ease-in-out infinite; }
+@keyframes tb-beckon { 50% { box-shadow: 0 0 0 .3125rem color-mix(in srgb, var(--purple) 18%, transparent); } }
+.toolbox-page .clue.ahead { opacity: .55; }
+.toolbox-page .clue.locked { opacity: .5; }
+.toolbox-page .clue.locked .mark { border-style: dashed; }
+.toolbox-page .clue.locked .question { font-weight: 450; font-style: italic; }
+.toolbox-page .clue code, .toolbox-page .card code { font-size: .75rem; padding: .0625rem .3125rem; border-radius: .25rem; background: var(--inset); color: var(--text); }
+.toolbox-page .nudges { margin: .375rem 0 0; padding-left: 1rem; display: grid; gap: .375rem; }
+.toolbox-page .nudges li { animation: tb-pop .35s ease-out; }
+.toolbox-page .try { display: inline; margin-top: .25rem; padding: .0625rem .4375rem; border: 1px solid var(--purple); border-radius: .3125rem; background: var(--surface); color: var(--purple); font: .75rem var(--mono); text-align: left; overflow-wrap: anywhere; }
+.toolbox-page .try:hover { background: var(--purple); color: var(--surface); }
+.toolbox-page .stuck { margin-top: .375rem; padding: .1875rem .625rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); color: var(--muted); font-size: .75rem; }
+.toolbox-page .stuck:hover { color: var(--purple); border-color: var(--purple); }
+.toolbox-page .closed-card { padding: .875rem 1rem; border: 1px solid var(--green); border-radius: .625rem; background: var(--green-bg); font-size: .8125rem; line-height: 1.5; }
+.toolbox-page .closed-card p { margin: 0 0 .375rem; }
+.toolbox-page .closed-card a { color: var(--green); font-weight: 600; }
+.toolbox-page .kit { margin-top: auto; padding-top: 1.25rem; }
+.toolbox-page .kit h4 { margin: 0 0 .5rem; font: 600 .625rem var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.toolbox-page .tools { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3125rem; }
+.toolbox-page .tools button { padding: .125rem .5rem; border: 1px solid color-mix(in srgb, var(--green) 35%, transparent); border-radius: .3125rem; background: var(--green-bg); color: var(--green); font: 500 .75rem var(--mono); }
+.toolbox-page .tools .none { color: var(--muted); font-size: .75rem; }
+.toolbox-page .card { margin-top: .625rem; padding: .625rem .75rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--inset); font-size: .75rem; line-height: 1.5; }
+.toolbox-page .card p { margin: 0 0 .25rem; }
+.toolbox-page .card .usage { font-family: var(--mono); color: var(--muted); }
+.toolbox-page .card dl { display: grid; grid-template-columns: max-content 1fr; gap: .125rem .75rem; margin: .375rem 0 0; }
+.toolbox-page .card dt { font-family: var(--mono); color: var(--green); }
+.toolbox-page .card dd { margin: 0; }
+/* Narrow screens: the notebook folds to a line above the terminal and opens on a tap. */
+@media (max-width: 52em) {
+  .toolbox-page .desk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: .75rem 1rem 1rem; gap: .75rem; }
+  .toolbox-page .notebook { order: -1; padding: .75rem 1rem; }
+  .toolbox-page .notes-head { cursor: pointer; }
+  .toolbox-page .notes-head::after { content: '▾'; margin-left: .5rem; color: var(--muted); transition: transform .2s; }
+  .toolbox-page .notes-head[aria-expanded="false"]::after { transform: rotate(-90deg); }
+  .toolbox-page .notes-head[aria-expanded="false"] ~ * { display: none; }
+  .toolbox-page .terminal { height: 75dvh; }
+  .toolbox-page #command { font-size: 16px; }
+  .toolbox-page .keys { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toolbox-page * { animation: none !important; transition: none !important; }
+}.toolbox-page .desk { padding: 0; height: max(30rem, calc(100dvh - 13rem)); }
+.toolbox-page .start-over { margin-top: 1rem; padding: 0; color: var(--muted); font-size: .8125rem; }
+.toolbox-page .start-over:hover { color: var(--text); }
+@media (max-width: 52em) {
+  .toolbox-page .desk { height: auto; }
+}
+
+/* Why Unix?: two films, then an investigation in steps. Pipes are drawn in stdin's green, output is
+   printed on green-bar paper, and the apps it is compared with wear their own window frames. */
+.why-page {
+  --band: color-mix(in srgb, var(--green-bg) 60%, var(--page));
+  --app-go: #2b8a3e;
+  max-width: 68rem; margin-inline: auto;
+}
+.why-page h3 { margin: .625rem 0 .5rem; font-size: clamp(1.375rem, 2.6vw, 1.875rem); line-height: 1.15; letter-spacing: -.03em; max-width: 26ch; }
+.why-page .kicker { font: 500 .75rem/1 var(--mono); letter-spacing: .06em; color: var(--green); }
+.why-page .lede { margin: 0; max-width: 58ch; font-size: 1.0625rem; line-height: 1.6; color: var(--muted); }
+.why-page .aside { margin: 1rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--muted); }
+.why-page code { font: .875em var(--mono); }
+.why-step { padding: 3rem 0 1rem; border-top: 1px solid var(--border); }
+.why-step.done > .kicker::after { content: ' ✓'; }
+.why-grid { display: grid; gap: 2rem; margin-top: 1.75rem; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+.why-hero { padding: 3.5rem 0 2.5rem; }
+.why-hero h3 { font-size: clamp(1.75rem, 4.2vw, 2.75rem); line-height: 1.05; max-width: 18ch; }
+.why-end { margin: 3.5rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: 1rem; line-height: 1.6; }
+.why-end a { color: var(--green); font-weight: 600; }
+
+/* The films. */
+.scene { margin: 0 0 1.25rem; padding: 1.125rem 1.5rem 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--surface); }
+.scene-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.scene h3 { margin: 0; font-size: 1.25rem; }
+.scene-replay { padding: .25rem 0; }
+.scene svg { display: block; width: 100%; height: auto; margin: .75rem 0 .25rem; overflow: visible; }
+.scene figcaption { min-height: 3.2em; max-width: 44rem; margin: 0 auto; text-align: center; font-size: 1.0625rem; line-height: 1.55; color: var(--muted); }
+.sc-box { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
+.sc-cmd { font: 500 16px var(--mono); fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+.sc-says { font: 14px var(--sans); fill: var(--muted); text-anchor: middle; }
+.sc-pipe { stroke: var(--green); stroke-width: 3; stroke-linecap: round; }
+.sc-wire { fill: none; stroke: color-mix(in srgb, var(--green) 70%, transparent); stroke-width: 1.5; }
+.sc-page { fill: var(--surface); stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; }
+.sc-ink { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linecap: round; }
+.sc-path { font: 500 10.5px var(--mono); fill: var(--green); text-anchor: middle; }
+.sc-file.lit .sc-page { stroke: var(--green); transition: stroke .6s; }
+.sc-icon path { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sc-line.a { fill: var(--purple); }
+.sc-line.b { fill: var(--green); }
+.sc-line.c { fill: var(--amber); }
+.sc-line.n { fill: color-mix(in srgb, var(--muted) 45%, transparent); }
+.sc-count { font: 600 14px var(--mono); dominant-baseline: middle; }
+.sc-count.a { fill: var(--purple); }
+.sc-count.b { fill: var(--green); }
+.sc-count.c { fill: var(--amber); }
+.sc-ring { fill: none; stroke: var(--purple); stroke-width: 2; }
+.sc-total { font: 600 28px var(--mono); fill: var(--green); text-anchor: middle; dominant-baseline: middle; }
+
+/* Tools and pipes: each tool is a block, and the pipe between two is as wide as the lines in it. */
+.why-page .tool { font: 500 .9375rem/1 var(--mono); color: var(--text); background: var(--surface); border: 1.5px solid var(--text); border-radius: .4375rem; padding: .625rem .875rem; white-space: pre; cursor: pointer; }
+.why-page .tool.src { cursor: default; background: var(--text); color: var(--surface); }
+.why-page .chain { display: flex; flex-direction: column; align-items: center; }
+.why-page .chain .tool.in { animation: why-drop .25s ease-out; }
+.why-page .chain button.tool:hover { border-style: dashed; opacity: .65; text-decoration: line-through; }
+@keyframes why-drop { from { opacity: 0; transform: translateY(-.5rem); } }
+.why-page .joint { all: unset; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; height: 2.875rem; cursor: crosshair; }
+.why-page .joint .pipe { grid-column: 2; width: var(--w, 4px); height: 100%; border-radius: 2px; transition: width .35s ease, box-shadow .15s;
+  background: repeating-linear-gradient(to bottom, var(--green) 0 7px, color-mix(in srgb, var(--green) 55%, transparent) 7px 14px); background-size: 100% 14px; animation: why-down .7s linear infinite; }
+@keyframes why-down { to { background-position: 0 14px; } }
+.why-page .joint.empty .pipe { opacity: .25; }
+.why-page .joint .n { grid-column: 3; justify-self: start; padding-left: .875rem; font: .8125rem var(--mono); color: var(--muted); white-space: nowrap; }
+.why-page .joint:is(:hover, :focus-visible, .on) .pipe { box-shadow: 0 0 0 4px var(--green-bg); }
+.why-page .joint:is(:hover, .on) .n { color: var(--green); }
+.why-page .joint:focus-visible .n { outline: 2px solid var(--focus); outline-offset: 2px; }
+.why-page .tray { display: flex; flex-wrap: wrap; gap: .625rem; justify-content: center; min-height: 3.875rem; margin-bottom: 1.375rem; }
+.why-page .tray .tool { display: flex; flex-direction: column; align-items: center; gap: .375rem; border-style: dashed; padding: .5625rem .75rem .5rem; }
+.why-page .tray .tool b { font-weight: 500; }
+.why-page .tray .tool span { font: .75rem/1 var(--sans); color: var(--muted); white-space: nowrap; }
+.why-page .tray .tool:hover { border-style: solid; background: var(--green-bg); }
+.why-page .tray.idle .tool { animation: why-nudge 2.4s ease-in-out infinite; }
+.why-page .tray.idle .tool:nth-child(2n) { animation-delay: .3s; }
+@keyframes why-nudge { 50% { border-color: var(--green); color: var(--green); } }
+.why-page .chain-cmd { margin: 1.25rem 0 .625rem; font: .875rem/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.why-page .chain-cmd b { color: var(--text); font-weight: 500; }
+.why-page .paper { font: .84375rem/22px var(--mono); border: 1px solid var(--border); border-radius: .5rem; overflow: auto; background-color: var(--surface);
+  background-image: repeating-linear-gradient(to bottom, var(--band) 0 66px, transparent 66px 132px); background-attachment: local; }
+.why-page .paper pre { margin: 0; padding: 0 1rem; min-height: 66px; font: inherit; white-space: pre; }
+.why-page .paper .hit { color: var(--amber); font-weight: 600; }
+.why-page .paper .gone { color: var(--muted); text-decoration: line-through; }
+.why-page .paper .foot { position: sticky; left: 0; padding: 0 1rem; color: var(--muted); font-style: italic; }
+.why-page .out1 { height: 17rem; }
+.why-page .out4 { height: 12.5rem; }
+.why-page .verdict { min-height: 1.5rem; margin: .875rem 0 0; font: 600 .9375rem var(--mono); color: var(--amber); opacity: 0; transition: opacity .4s; }
+.why-page .cracked .verdict { opacity: 1; }
+.why-page .cracked .chain .tool:not(.src) { border-color: var(--green); }
+
+/* The apps it is compared with. */
+.why-page .win { border: 1px solid var(--border); border-radius: .625rem; background: var(--surface); overflow: hidden; font-size: .8125rem; line-height: 1.4; box-shadow: 0 1.125rem 2.5rem -1.5rem rgb(20 30 50 / .35); }
+.why-page .win .bar { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; background: var(--inset); color: var(--muted); font-weight: 600; }
+.why-page .win .bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.why-page .win .bar i { width: 1rem; font-style: normal; text-align: center; opacity: .6; }
+.why-page .win .tb { display: flex; padding: .5rem .625rem; border-bottom: 1px solid var(--border); }
+.why-page .win input { flex: 1; min-width: 0; padding: .3125rem .5rem; border: 1px solid var(--border); border-radius: .3125rem; background: var(--surface); color: var(--text); font: inherit; }
+.why-page .win .tbl { height: 23.75rem; overflow: auto; }
+.why-page .win table { width: 100%; border-collapse: collapse; }
+.why-page .win th { position: sticky; top: 0; padding: .3125rem .5rem; background: var(--inset); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; cursor: pointer; user-select: none; }
+.why-page .win td { padding: .1875rem .5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.why-page .win td:nth-child(3) { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; }
+.why-page .win .st { padding: .3125rem .625rem; background: var(--inset); color: var(--muted); font-size: .75rem; }
+.why-page .menubar { display: flex; gap: 2px; padding: .25rem .375rem; background: var(--inset); border-bottom: 1px solid var(--border); }
+.why-page .menubar span { padding: .1875rem .5625rem; border-radius: .25rem; }
+.why-page .menubar .open { background: var(--purple); color: var(--surface); }
+.why-page .menu { width: 13rem; margin-left: 8.5rem; padding: .25rem 0; border: 1px solid var(--border); border-radius: 0 0 .375rem .375rem; background: var(--surface); box-shadow: 0 .625rem 1.5rem -.875rem rgb(0 0 0 / .4); }
+.why-page .menu div { display: flex; justify-content: space-between; padding: .3125rem .875rem; }
+.why-page .menu div:hover { background: var(--purple); color: var(--surface); }
+.why-page .menu small { opacity: .55; }
+.why-page .menu hr { margin: .25rem 0; border: 0; border-top: 1px solid var(--border); }
+.why-page .menu-room { height: 5.5rem; }
+.why-page .results { padding: .375rem .875rem .875rem; }
+.why-page .res { display: grid; gap: 2px; padding: .625rem 0; border-bottom: 1px solid var(--border); }
+.why-page .res:last-child { border-bottom: 0; }
+.why-page .res small { color: var(--muted); font-size: .71875rem; }
+.why-page .res b { color: var(--purple); font-size: .875rem; font-weight: 600; }
+.why-page .res .dl { justify-self: start; margin-top: .375rem; padding: .375rem .875rem; border-radius: .3125rem; background: var(--app-go); color: #fff; font-size: .75rem; font-weight: 700; }
+.why-page .res .dl.plain { padding: 0; background: none; color: var(--purple); font-weight: 400; text-decoration: underline; }
+
+/* Terminals: the shell on the pretend server. */
+.why-page .term { border: 1px solid var(--term-border); border-radius: .5rem; background: var(--term-bg); color: var(--term-text); font: .84375rem/1.55 var(--mono); cursor: text; }
+.why-page .term .scroll { height: 18.75rem; overflow: auto; padding: .75rem 1rem; }
+.why-page .term.short .scroll { height: 13.75rem; }
+.why-page .term .out div { min-height: 1.55em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.why-page .term .out .echo { margin-top: .375rem; }
+.why-page .term .out .err { color: var(--amber); }
+.why-page .term .out .more { color: var(--term-muted); font-style: italic; }
+.why-page .term .out .slow { animation: why-drop .2s ease-out both; }
+.why-page .term .ps1 { color: var(--green); font-weight: 500; user-select: none; }
+.why-page .term .line { display: flex; gap: .5rem; align-items: baseline; margin-top: .375rem; }
+.why-page .term input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: none; color: var(--term-text); font: inherit; caret-color: var(--green); }
+.why-page .term .enter { padding: 0 .3125rem; border: 1px solid currentColor; border-radius: .25rem; color: var(--green); font: .75rem var(--mono); opacity: 0; transition: opacity .2s; }
+.why-page .term .line.has .enter { opacity: .55; }
+.why-page .term .line.has.nudge .enter { animation: why-blink 1.6s ease-in-out infinite; }
+@keyframes why-blink { 50% { opacity: 1; } }
+.why-page .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.why-page .chip { padding: .3125rem .75rem; border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-radius: 99px; background: none; color: var(--green); font: .8125rem var(--mono); cursor: pointer; }
+.why-page .chip:hover { background: var(--green-bg); }
+
+/* Everything is a file: the files, the live log, and the wizard Windows uses instead. */
+.file-tree { display: flex; flex-direction: column; gap: 2px; font: .875rem/1 var(--mono); }
+.file-tree .dir { margin: .875rem 0 .375rem; color: var(--muted); }
+.file-tree .dir:first-child { margin-top: 0; }
+.file-tree button { all: unset; display: flex; justify-content: space-between; gap: .75rem; padding: .4375rem .625rem .4375rem 1.125rem; border-radius: .375rem; cursor: pointer; }
+.file-tree button:is(:hover, :focus-visible) { background: var(--green-bg); }
+.file-tree button b { font-weight: 400; }
+.file-tree button span { color: var(--muted); font-size: .75rem; }
+.file-tree button.changed { animation: why-flash 1.4s ease-out; }
+@keyframes why-flash { 0%, 30% { background: var(--amber-bg); } }
+.why-page .tailhead { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin: 1.125rem 0 .5rem; font: .8125rem var(--mono); color: var(--muted); }
+.why-page .rate { padding: .125rem .5625rem; border-radius: 99px; background: var(--amber-bg); color: var(--amber); white-space: nowrap; transition: background .4s, color .4s; }
+.why-page .blocked .rate { background: var(--green-bg); color: var(--green); }
+.why-page .tail { height: 12.5rem; overflow: hidden; }
+.why-page .tail pre div { animation: why-drop .3s ease-out; }
+.why-page .wizard { display: flex; gap: 1.375rem; align-items: flex-start; margin-top: 2.25rem; }
+.why-page .stack { position: relative; flex: none; width: 13rem; height: 11rem; }
+.why-page .stack div { position: absolute; width: 11rem; padding: .375rem .5rem; border: 1px solid var(--border); border-radius: .3125rem; background: var(--inset); color: var(--muted); font-size: .6875rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 10px -8px rgb(0 0 0 / .4); }
+.why-page .wizard p { margin: 0; font-size: .9375rem; line-height: 1.55; color: var(--muted); }
+
+/* What you type, you can keep: the script, before and after it's saved. */
+.why-page .script { border: 1.5px solid var(--text); border-radius: .5rem; overflow: hidden; background: var(--surface); }
+.why-page .script .name { padding: .5rem .875rem; border-bottom: 1.5px solid var(--text); font: 500 .8125rem var(--mono); }
+.why-page .script pre { margin: 0; padding: .875rem; font: .84375rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.why-page .script .arg { padding: 0 .1875rem; border-radius: .1875rem; background: var(--green); color: var(--surface); }
+.why-page .script .cmt { color: var(--muted); }
+.why-page .script.draft, .why-page .script.draft .name { border-style: dashed; }
+.why-page .save { margin: 0 .875rem .875rem; padding: .625rem 1rem; border: 0; border-radius: .4375rem; background: var(--green); color: var(--surface); font: 600 .9375rem var(--sans); cursor: pointer; animation: why-beckon 2.4s ease-in-out infinite; }
+@keyframes why-beckon { 50% { box-shadow: 0 0 0 5px var(--green-bg); } }
+
+/* Do one thing well: the question a pipeline answers, in words, with what a swap changed lit up. */
+.why-page .question { min-height: 2.3em; margin: 0 0 1.125rem; font-size: clamp(1.375rem, 2.6vw, 1.875rem); font-weight: 700; line-height: 1.2; letter-spacing: -.03em; }
+.why-page .question span { border-radius: .3125rem; transition: background .6s; }
+.why-page .question .fresh { background: var(--green-bg); animation: why-fresh 1.2s ease-out; }
+@keyframes why-fresh { from { background: color-mix(in srgb, var(--green) 45%, transparent); } }
+.why-page .chain select.tool { appearance: none; padding-right: 1.875rem; border-color: var(--green); cursor: pointer;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23699'/%3E%3C/svg%3E") no-repeat right .6875rem center; }
+
+@media (max-width: 56em) {
+  .why-grid { grid-template-columns: minmax(0, 1fr); }
+  .why-page .wizard { flex-direction: column; }
+  .scene { padding: 1rem; }
+  .why-page .menu { margin-left: 4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .why-page *, .why-page *::before { animation: none !important; transition: none !important; }
+}

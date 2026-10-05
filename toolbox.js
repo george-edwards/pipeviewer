@@ -1,4 +1,4 @@
-// Toolbox: learn the shell's small tools by cracking a case in a pretend terminal. The terminal is
+// Basic Training: learn the shell's small tools by cracking a case in a pretend terminal. The terminal is
 // the whole exercise. Commands run on Enter in the sandbox, and the case notebook beside it holds a
 // few open questions, each ticked off when its answer turns up in the output, however the student
 // got there. A pipeline's output carries an X-ray of its stages, so the student can see what each
@@ -168,7 +168,7 @@ function showNotebook() {
       ? `<p class="answer">${prose(clue.answer)}</p>${clue.tip && clue.id === state.latest ? `<p class="tip">${prose(clue.tip)}</p>` : ''}`
       : now ? `${nudges ? `<ul class="nudges">${nudges}</ul>` : ''}${seen < clue.nudges.length ? `<button type="button" class="stuck" data-clue="${clue.id}">${seen ? 'Another nudge' : 'Stuck?'}</button>` : ''}` : '';
     return `<li class="clue ${found ? 'found' : locked ? 'locked' : now ? 'now' : 'ahead'}"><span class="mark" aria-hidden="true">${found ? '✓' : i + 1}</span><div><p class="question">${locked ? 'Something may turn up…' : escape(clue.question)}</p>${body}</div></li>`;
-  }).join('') + (state.closed ? `<li class="closed-card"><p><b>Case closed.</b> ${plural(state.used.size, 'tool')} used, each doing one small job on lines of text.</p><p><a href="./#unixway">Try The Unix Way</a> · <a href="./">Back to Pipeviewer</a></p></li>` : '');
+  }).join('') + (state.closed ? `<li class="closed-card"><p><b>Case closed.</b> ${plural(state.used.size, 'tool')} used, each doing one small job on lines of text.</p><p><a href="#training">On to Practise Plumbing</a></p></li>` : '');
   // Earlier answers fold down to the answer alone; the tip stays on the latest, and the open
   // question is kept in view.
   $('#clues .clue.now')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -258,30 +258,19 @@ $('#terminal').addEventListener('click', event => {
   input.focus({ preventScroll: true });
 });
 
-// The header: the shell switch, the theme, and starting over.
-function showShell() {
-  $('#prompt').textContent = promptText();
-  document.querySelectorAll('#shells [data-platform]').forEach(button => button.setAttribute('aria-pressed', button.dataset.platform === platform));
-}
-$('#shells').addEventListener('click', event => {
-  const choice = event.target.closest('[data-platform]')?.dataset.platform;
-  if (!choice || choice === platform) return;
+// Pipeviewer's shell switch picks the system, and the page opens where the student left it.
+export function setPlatform(choice) {
+  if (choice === platform) return;
   platform = choice;
-  try { localStorage.setItem('pipeviewer-platform', platform); } catch {}
-  showShell();
+  $('#tb-prompt').textContent = promptText();
   system(platform === 'macos' ? 'Now in zsh, with the BSD and Apple versions of the tools, as on a Mac.' : 'Now in bash, with the GNU tools, as on Linux.');
   stick();
-  input.focus();
-});
-const themes = ['light', 'dark', 'terminal'], themeNames = { light: 'Light', dark: 'Dark', terminal: 'Terminal' };
-function showTheme() { $('#theme').textContent = themeNames[document.documentElement.dataset.theme]; }
-$('#theme').addEventListener('click', () => {
-  const next = themes[(themes.indexOf(document.documentElement.dataset.theme) + 1) % themes.length];
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem('pipeviewer-theme', next); } catch {}
-  showTheme();
-});
-$('#restart').addEventListener('click', () => {
+}
+export function showToolbox() {
+  stick();
+  input.focus({ preventScroll: true });
+}
+$('#toolbox-restart').addEventListener('click', () => {
   try { localStorage.removeItem(SESSION); } catch {}
   Object.assign(state, { history: [], found: new Set(), used: new Set(), nudges: {}, mailed: false, closed: false });
   scrollback.innerHTML = '';
@@ -293,8 +282,7 @@ $('#restart').addEventListener('click', () => {
 });
 
 // Start: put back the last session by replaying it, or welcome a newcomer.
-showShell();
-showTheme();
+$('#tb-prompt').textContent = promptText();
 welcome();
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(SESSION)); } catch {}
@@ -304,5 +292,3 @@ if (saved?.history?.length) {
   system('Picked up where you left off.');
 }
 showNotebook();
-stick();
-input.focus({ preventScroll: true });

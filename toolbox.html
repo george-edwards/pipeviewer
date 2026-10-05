@@ -2,46 +2,10 @@
 <html lang="en-AU">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Learn the Unix shell's small tools by cracking a case in a pretend terminal.">
-  <title>Toolbox · Pipeviewer</title>
-  <script>
-    let savedTheme;
-    try { savedTheme = localStorage.getItem('pipeviewer-theme'); } catch {}
-    document.documentElement.dataset.theme = ['light', 'dark', 'terminal'].includes(savedTheme)
-      ? savedTheme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  </script>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="toolbox.css">
+  <!-- Basic Training, once a page of its own, now lives inside Pipeviewer. -->
+  <meta http-equiv="refresh" content="0; url=./#toolbox">
+  <title>Basic Training · Pipeviewer</title>
+  <script>location.replace('./#toolbox');</script>
 </head>
-<body>
-  <header class="bar">
-    <a class="home" href="./" title="Back to Pipeviewer"><img src="favicon.svg" width="22" height="22" alt=""><span>pipeviewer</span></a>
-    <h1>Toolbox <span>The case of the missing Tim Tams</span></h1>
-    <div class="bar-actions">
-      <div class="shells" id="shells" role="group" aria-label="Shell"><button type="button" data-platform="linux">bash</button><button type="button" data-platform="macos">zsh</button></div>
-      <button type="button" class="quiet" id="theme" aria-label="Change theme"></button>
-      <button type="button" class="quiet" id="restart" title="Clear the terminal and the notebook">Start over</button>
-    </div>
-  </header>
-  <main class="desk">
-    <section class="terminal" id="terminal" aria-label="Terminal">
-      <div class="scrollback" id="scrollback" role="log" aria-live="polite"></div>
-      <form class="input-line" id="input-line" autocomplete="off">
-        <label class="prompt" id="prompt" for="command"></label>
-        <input id="command" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-describedby="keys">
-      </form>
-      <p class="keys" id="keys"><kbd>Enter</kbd> runs · <kbd>↑</kbd> history · <kbd>Tab</kbd> completes · <code>help</code> lists the tools</p>
-    </section>
-    <aside class="notebook" id="notebook" aria-labelledby="notes-title">
-      <button type="button" class="notes-head" id="notes-head" aria-expanded="true" aria-controls="clues"><h2 id="notes-title">Case notes</h2><span class="tally" id="tally"></span></button>
-      <ol class="clues" id="clues"></ol>
-      <div class="kit"><h3>Your tools</h3><ul class="tools" id="tools"></ul><div class="card" id="card" hidden></div></div>
-    </aside>
-  </main>
-  <script type="module" src="toolbox.js"></script>
-</body>
+<body><a href="./#toolbox">Basic Training has moved into Pipeviewer.</a></body>
 </html>

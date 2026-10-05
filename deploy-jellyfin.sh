@@ -27,9 +27,9 @@ echo "==> Building"
 rm -rf dist
 node build.mjs
 
-# This server hides the Tips & Tricks talk button. Only the deployed copy is changed.
-sed -i 's/ id="talk-button"/ id="talk-button" style="display: none;"/' dist/index.html
-grep -q 'id="talk-button" style="display: none;"' dist/index.html || { echo "Couldn't hide the talk button in dist/index.html; not deploying." >&2; exit 1; }
+# This server hides the Tips & Tricks talk's card in the course picker. Only the deployed copy is changed.
+sed -i 's|</head>|  <style>.course-talk { display: none; }</style>\n</head>|' dist/index.html
+grep -q '<style>.course-talk { display: none; }</style>' dist/index.html || { echo "Couldn't hide the talk's card in dist/index.html; not deploying." >&2; exit 1; }
 
 # The nginx site file and the install step, staged next to the site.
 extra=$(mktemp -d)
