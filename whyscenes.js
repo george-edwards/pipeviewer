@@ -1,10 +1,13 @@
 // Why Unix?'s two films, drawn in SVG and animated in the manner of 3Blue1Brown's Manim: outlines draw
 // themselves in and then fill, things glide and fade with one smooth ease, and a caption under the
-// picture says what is happening. Each film plays once when it first comes into view, and again from
-// its Replay button. With reduced motion a film shows its last frame at once.
+// picture says what is happening. Each caption stays up long enough to read, and a timeline under the
+// film has a segment per caption, filling as the film plays. A film waits on its play button, and plays
+// again from Replay. With reduced motion a film shows its last frame at once.
 
 const NS = 'http://www.w3.org/2000/svg';
 const SMOOTH = 'cubic-bezier(.65, 0, .35, 1)';
+// Every duration, delay and pause in the scripts is stretched by this much, to set the films' pace.
+const TEMPO = 1.7;
 const STOP = Symbol('stop');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const shapes = 'path, rect, circle, line, polyline, ellipse';
@@ -22,7 +25,8 @@ const place = (el, x, y, scale) => { el.at = [x, y]; if (scale) el.scale = scale
 
 // One showing of a film. Replaying stops the showing under way, wherever it has got to.
 class Take {
-  constructor(figure) {
+  constructor(figure, beats) {
+    this.figure = figure;
     this.svg = figure.querySelector('svg');
     this.caption = figure.querySelector('figcaption');
     this.fast = reduced.matches;
@@ -30,11 +34,18 @@ class Take {
     this.stopped = false;
     this.svg.replaceChildren();
     this.caption.textContent = '';
+    this.figure.classList.remove('finished');
+    // The timeline: a segment per caption, each filling over about as long as its part takes.
+    this.beats = beats;
+    this.segments = [...figure.querySelectorAll('.scene-timeline i')];
+    this.segments.forEach(segment => { segment.getAnimations().forEach(a => a.cancel()); segment.style.width = '0%'; });
+    this.beat = -1;
+    this.readUntil = 0;
   }
   stop() { this.stopped = true; this.running.forEach(animation => animation.cancel()); }
   async animate(el, keyframes, { duration = 800, delay = 0, easing = SMOOTH } = {}) {
     if (this.stopped) throw STOP;
-    const animation = el.animate(keyframes, { duration: this.fast ? 0 : duration, delay: this.fast ? 0 : delay, easing, fill: 'both' });
+    const animation = el.animate(keyframes, { duration: this.fast ? 0 : duration * TEMPO, delay: this.fast ? 0 : delay * TEMPO, easing, fill: 'both' });
     this.running.add(animation);
     try { await animation.finished; } catch { throw STOP; }
     this.running.delete(animation);
@@ -43,7 +54,7 @@ class Take {
     try { animation.commitStyles(); animation.cancel(); } catch {}
   }
   async wait(ms) {
-    if (!this.fast) await new Promise(resolve => setTimeout(resolve, ms));
+    if (!this.fast) await new Promise(resolve => setTimeout(resolve, ms * TEMPO));
     if (this.stopped) throw STOP;
   }
   // Manim's Create: each outline draws itself, then fills, and any words fade up.
@@ -75,12 +86,34 @@ class Take {
     el.scale = scale;
     return this.animate(el, [{ transform: from }, { transform: at(el) }], { duration, delay });
   }
-  // The caption fades across to the next line.
+  // The film holds until the caption on screen has been up long enough to read: a couple of seconds,
+  // and a quarter of a second more a word.
+  async read() {
+    const left = this.readUntil - performance.now();
+    if (!this.fast && left > 0) await new Promise(resolve => setTimeout(resolve, left));
+    if (this.stopped) throw STOP;
+  }
+  // Fills the last segment and starts the next.
+  next() {
+    const done = this.segments[this.beat];
+    if (done) { done.getAnimations().forEach(a => a.cancel()); done.style.width = '100%'; }
+    const segment = this.segments[++this.beat];
+    if (segment && !this.fast) segment.animate([{ width: '0%' }, { width: '100%' }], { duration: this.beats[this.beat], easing: 'linear', fill: 'forwards' });
+  }
+  // The caption fades across to the next line, once the last has been read.
   async say(text) {
-    if (this.fast) { this.caption.textContent = text; return; }
-    if (this.caption.textContent) await this.animate(this.caption, [{ opacity: 1 }, { opacity: 0 }], { duration: 250 });
+    await this.read();
+    this.next();
+    if (this.caption.textContent && !this.fast) await this.animate(this.caption, [{ opacity: 1 }, { opacity: 0 }], { duration: 250 });
     this.caption.textContent = text;
-    await this.animate(this.caption, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 450 });
+    this.readUntil = performance.now() + 2000 + text.split(/\s+/).length * 250;
+    if (!this.fast) await this.animate(this.caption, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 450 });
+  }
+  // The film ends once its last caption has been read.
+  async end() {
+    await this.read();
+    this.next();
+    this.figure.classList.add('finished');
   }
 }
 
@@ -113,12 +146,12 @@ async function smallTools(t) {
   const KIT = [['grep', 'finds lines'], ['sort', 'puts them in order'], ['uniq -c', 'counts repeats'], ['head -1', 'keeps the first']];
   const loose = [[175, 78], [520, 70], [255, 205], [590, 198]], row = [210, 340, 480, 620];
 
-  t.say('Unix comes with hundreds of small tools. Each does one job, and does it well.');
+  await t.say('Unix comes with hundreds of small tools. Each does one job, and does it well.');
   const kit = KIT.map(([name, says], i) => tool(boxes, name, says, ...loose[i]));
   await Promise.all(kit.map((k, i) => t.create(k.g, { delay: i * 220 })));
   await t.wait(1600);
 
-  t.say('Join them with pipes, and lines of text flow from one to the next.');
+  await t.say('Join them with pipes, and lines of text flow from one to the next.');
   await Promise.all(kit.map(k => t.fadeOut(k.says, { duration: 300 })));
   await Promise.all(kit.map((k, i) => t.move(k.g, row[i], Y, { duration: 1000, delay: i * 70 })));
   const doc = fileGlyph(boxes, 62, Y, 'access.log');
@@ -160,12 +193,12 @@ async function smallTools(t) {
     t.move(first.bar, stations[4], Y, { duration: 1100 }), t.move(first.label, stations[4], Y, { duration: 1100 }),
   ]);
   const ring = place(draw(top, 'circle', { r: 26, class: 'sc-ring' }), stations[4] + 8, Y);
-  t.say('Each did one small job. Together they found the address that failed most.');
+  await t.say('Each did one small job. Together they found the address that failed most.');
   await t.create(ring, { duration: 700 });
   await t.wait(2200);
 
   // Swapping the last tool makes a different program from the same parts.
-  t.say('Swap one tool and you have a different program. Now it counts the addresses.');
+  await t.say('Swap one tool and you have a different program. Now it counts the addresses.');
   const wc = tool(boxes, 'wc -l', null, row[3], Y);
   await Promise.all([t.fadeOut(kit[3].g, { duration: 400 }), t.fadeOut(ring, { duration: 400 }), t.fadeOut(first.bar, { duration: 400 }), t.fadeOut(first.label, { duration: 400 }), t.create(wc.g, { duration: 700, delay: 200 })]);
   const again = counts.map(group => ({ bar: bar(flow, group.kind, stations[3], group.y) }));
@@ -176,6 +209,7 @@ async function smallTools(t) {
   await t.wait(2400);
 
   await t.say('“Write programs that do one thing and do it well. Write programs to work together.” Doug McIlroy, who came up with Unix pipes.');
+  await t.end();
 }
 
 /* ---------- film two: everything is a file ---------- */
@@ -190,7 +224,7 @@ async function everythingIsAFile(t) {
   const Y = 96, xs = [110, 245, 380, 515, 650];
   const wires = draw(t.svg, 'g'), flow = draw(t.svg, 'g'), things = draw(t.svg, 'g');
 
-  t.say('A document. A setting. A disk. A running program. The terminal you type in.');
+  await t.say('A document. A setting. A disk. A running program. The terminal you type in.');
   const items = ICONS.map(([name, path, d], i) => {
     const icon = place(draw(things, 'g', { class: 'sc-icon' }), xs[i], Y, 'scale(1.2)');
     d.forEach(segment => draw(icon, 'path', { d: segment }));
@@ -200,7 +234,7 @@ async function everythingIsAFile(t) {
   await Promise.all(items.flatMap((item, i) => [t.create(item.icon, { delay: i * 260 }), t.fadeIn(item.label, { delay: i * 260 + 300 })]));
   await t.wait(1600);
 
-  t.say('To Unix, every one of them is a file, with a name you can type.');
+  await t.say('To Unix, every one of them is a file, with a name you can type.');
   const files = await Promise.all(items.map(async (item, i) => {
     await t.wait(i * 160);
     const file = fileGlyph(things, xs[i], Y, item.path);
@@ -213,7 +247,7 @@ async function everythingIsAFile(t) {
   }));
   await t.wait(1400);
 
-  t.say('So one small tool can read every one of them. No special app for each.');
+  await t.say('So one small tool can read every one of them. No special app for each.');
   const cat = tool(things, 'cat', null, 380, 238);
   await t.create(cat.g, { duration: 700 });
   const out = draw(wires, 'line', { x1: 380 + cat.w / 2, y1: 238, x2: 720, y2: 238, class: 'sc-pipe' });
@@ -232,29 +266,28 @@ async function everythingIsAFile(t) {
   }));
   files.forEach(file => file.classList.add('lit'));
   await t.say('Everything is a file. One way to read, write and connect all of it.');
+  await t.end();
 }
 
-const films = [['#scene-tools', smallTools], ['#scene-files', everythingIsAFile]];
+// Each film, with roughly how long each of its captions stays up, for the timeline.
+const films = [['#scene-tools', smallTools, [6700, 17300, 6200, 9800, 7800]], ['#scene-files', everythingIsAFile, [7300, 6500, 15100, 5500]]];
 const takes = new Map();
-function play(figure, script) {
+function play(figure, script, beats) {
   takes.get(figure)?.stop();
-  const take = new Take(figure);
+  const take = new Take(figure, beats);
   takes.set(figure, take);
   script(take).catch(error => { if (error !== STOP) throw error; });
 }
-// Each film starts when most of it is in view, the first time; Replay plays it again.
-let watching = false;
+// Each film waits for its play button, so it starts when the student is looking at it.
+let ready = false;
 export function playScenes() {
-  if (watching) return;
-  watching = true;
-  for (const [at, script] of films) {
+  if (ready) return;
+  ready = true;
+  for (const [at, script, beats] of films) {
     const figure = document.querySelector(at);
-    figure.querySelector('.scene-replay').addEventListener('click', () => play(figure, script));
-    const watch = new IntersectionObserver(entries => {
-      if (!entries[0].isIntersecting) return;
-      watch.disconnect();
-      play(figure, script);
-    }, { threshold: .55 });
-    watch.observe(figure);
+    figure.querySelector('.scene-timeline').innerHTML = beats.map(ms => `<span style="flex: ${ms}"><i></i></span>`).join('');
+    const start = () => { figure.classList.add('played'); play(figure, script, beats); };
+    figure.querySelector('.scene-play').addEventListener('click', start);
+    figure.querySelector('.scene-replay').addEventListener('click', start);
   }
 }
