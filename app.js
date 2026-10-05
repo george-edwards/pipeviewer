@@ -792,9 +792,9 @@ function drawPipeline(model, palette, colors, mono) {
 // It also runs the other way: hovering part of the diagram marks its text in the editor, and a
 // click selects that text. Hover lights the diagram as the caret would, and wins while it lasts.
 let targets = [], inspected = null, hovered = null, marked = null;
-// The Highlight switch turns the linking off in both directions.
-let highlighting = true;
-try { highlighting = localStorage.getItem('pipeviewer-highlight') !== 'off'; } catch {}
+// The Highlight switch turns the linking off in both directions. It starts off, until it's turned on.
+let highlighting = false;
+try { highlighting = localStorage.getItem('pipeviewer-highlight') === 'on'; } catch {}
 // Training compares whole pictures, so it never fades parts of them.
 const linking = () => highlighting && !training.active;
 // The Tags switch draws terminal stdin and stderr, and files one port uses, as tags beside their ports,
@@ -1215,13 +1215,27 @@ $('#ref-entries').addEventListener('click', event => {
   $('#pipeline').focus();
 });
 $('#reference-button').addEventListener('click', () => $('#reference').showModal());
-// The Intro's last step draws either of its two commands in the viewer, leaving any course to do so.
+// The Intro's last step types either of its two commands into the editor, a letter at a time, leaving
+// any course to do so. The picture redraws as it goes, except inside an open quote, which would only
+// flash an error. Typing or clicking in the editor stops it where it is.
+let typing = 0;
 setupWelcome(source => {
   if (training.active || page) exitTraining();
-  $('#pipeline').value = source;
-  fitEditor();
-  render();
-  $('#pipeline').focus();
+  const editor = $('#pipeline');
+  clearTimeout(typing);
+  editor.value = '';
+  editor.focus();
+  let n = matchMedia('(prefers-reduced-motion: reduce)').matches ? source.length - 1 : 0;
+  const type = () => {
+    editor.value = source.slice(0, ++n);
+    fitEditor();
+    if (editor.value.split('"').length % 2) render();
+    if (n < source.length) typing = setTimeout(type, 55);
+  };
+  const stop = () => clearTimeout(typing);
+  editor.addEventListener('keydown', stop, { once: true });
+  editor.addEventListener('pointerdown', stop, { once: true });
+  type();
 });
 $('#close-reference').addEventListener('click', () => $('#reference').close());
 // Chapter starts in seconds, marked by hand when the talk was first published.
