@@ -293,4 +293,4 @@ export function playScenes() {
 }
 
 // The intro's films are drawn with the same pieces.
-export { Take, STOP, draw, place, at, tool };
+export { Take, STOP, TEMPO, draw, place, at, tool };

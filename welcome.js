@@ -5,7 +5,7 @@
 // On a first visit the full stop in the brand hops along the header into the Intro button, which
 // stays lit until it's opened.
 
-import { Take, STOP, draw, place, at, tool } from './whyscenes.js';
+import { Take, STOP, TEMPO, draw, place, at, tool } from './whyscenes.js';
 
 const $ = selector => document.querySelector(selector);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -22,6 +22,8 @@ function terminal(t, parent) {
   const g = draw(parent, 'g');
   draw(g, 'rect', { x: 40, y: TERM, width: 680, height: 112, rx: 10, class: 'sc-term' });
   const line = n => place(draw(g, 'text', { class: 'sc-tty', x: LEFT, y: LINES[n] }), 0, 0);
+  // What has appeared under the command, so a rewind can take it away again.
+  const after = [];
   return {
     g,
     async type(command) {
@@ -33,12 +35,22 @@ function terminal(t, parent) {
         await t.wait(28);
       }
     },
-    print(n, words) { return t.fadeIn(place(draw(g, 'text', { class: 'sc-tty', x: LEFT, y: LINES[n] }, words), 0, 0), { shift: [0, 0], duration: 250 }); },
+    print(n, words) {
+      const text = place(draw(g, 'text', { class: 'sc-tty', x: LEFT, y: LINES[n] }, words), 0, 0);
+      after.push(text);
+      return t.fadeIn(text, { shift: [0, 0], duration: 250 });
+    },
     // A fresh prompt, with its cursor two letters along.
+    // Back to just after the command was typed.
+    async rewind() {
+      await Promise.all(after.map(el => t.fadeOut(el, { duration: 400 })));
+      after.splice(0).forEach(el => el.remove());
+    },
     prompt(n) {
       const ready = place(draw(g, 'g'), 0, 0);
       draw(ready, 'text', { class: 'sc-tty sc-prompt', x: LEFT, y: LINES[n] }, '$');
       draw(ready, 'rect', { x: LEFT + 18, y: LINES[n] - 13, width: 9, height: 17, class: 'sc-cursor' });
+      after.push(ready);
       return t.fadeIn(ready, { shift: [0, 0], duration: 300 });
     },
   };
@@ -97,11 +109,21 @@ function layers(t) {
 /* ---------- film one: sleep 2 | echo "hello, world" ---------- */
 async function echoLast(t) {
   const { wires, boxes, flow, top } = layers(t);
-  await t.say('You type this and press Enter. What shows up, and when?');
+  // First it just runs, in real time and with nothing to read, so the words showing up before the
+  // two seconds are up is the one thing to see.
+  t.next();
   const term = terminal(t, boxes);
-  await t.create(term.g.firstChild, { duration: 600 });
+  await t.create(term.g.firstChild, { duration: 400 });
   await term.type('sleep 2 | echo "hello, world"');
-  await t.wait(500);
+  await t.wait(450);
+  await term.print(1, 'hello, world');
+  await t.wait(2000 / TEMPO);
+  await term.prompt(2);
+  await t.wait(1600);
+
+  await t.say('The words came at once, and the prompt two seconds later. Now again, slowly.');
+  await t.wait(1200);
+  await term.rewind();
 
   await t.say('The shell starts both programs at the same moment, joined by a pipe.');
   const sleep = program(boxes, 'sleep 2', 170), echo = program(boxes, 'echo "hello, world"', 470);
@@ -126,7 +148,7 @@ async function echoLast(t) {
   await term.prompt(2);
   await t.wait(1200);
 
-  await t.say('Why so soon? echo never reads its stdin. Its words come from its own command line.');
+  await t.say('Why so soon? echo never reads its stdin. Its words come from its argument.');
   const underline = draw(top, 'line', { x1: echo.letter(5), y1: Y + 13, x2: echo.letter(19), y2: Y + 13, class: 'sc-underline' });
   await Promise.all([ping(t, top, echo.left, Y), t.create(underline, { duration: 700, delay: 900 })]);
   await t.wait(800);
@@ -177,7 +199,7 @@ async function echoFirst(t) {
 }
 
 // Each film, with roughly how long each of its captions stays up, for the timeline.
-const films = { 'scene-echo-last': [echoLast, [5800, 6700, 9500, 6100, 9400, 6000]], 'scene-echo-first': [echoFirst, [4900, 6000, 6300, 13000, 7200, 6000]] };
+const films = { 'scene-echo-last': [echoLast, [8600, 6000, 5700, 6400, 5200, 6500, 6200]], 'scene-echo-first': [echoFirst, [4900, 6000, 6300, 13000, 7200, 6000]] };
 let take = null;
 function play(figure) {
   take?.stop();
