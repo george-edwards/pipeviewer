@@ -1254,14 +1254,19 @@ setupWelcome(source => {
   type();
 });
 $('#close-reference').addEventListener('click', () => $('#reference').close());
-// Chapter starts in seconds, marked by hand when the talk was first published.
-const chapters = [
+// The recorded talks, each opened from its own card in the course picker. Chapter starts are in seconds,
+// marked by hand when the talk was first published.
+const talks = {
+  talk: { title: 'Shell tips and tricks', file: 'shell-tricks-ready-encoded-crf-44_aud-18K.webm', length: '45 minutes', date: '2023-03-16', chapters: [
   [0, 'columns'], [28, '{} magic'], [128, '-x debugging'], [209, 'strace'], [261, 'signals'], [406, 'reset'],
   [466, 'fg, bg'], [648, 'disown'], [724, 'bropages'], [865, 'Navigating directories'], [1035, 'Emergency space'],
   [1184, 'alt+.'], [1236, 'history'], [1440, 'caret ^'], [1477, 'GNU-isms'], [1911, 'tmpfs'], [2080, 'free'],
   [2116, 'Drop cache'], [2225, 'time / benchmarking'], [2288, '/dev/shm'], [2365, 'systemd?'],
   [2441, 'Ramdisk benchmark'], [2562, '/dev/[u]random'],
-];
+  ] },
+  demo: { title: 'Pipeviewer demo', file: 'pipeviewer-demo-2026-10-06.mp4', length: '34 minutes', date: '2026-10-06', chapters: [] },
+};
+let chapters = [];
 // The talk is slow-paced, so it starts a little faster. The switch also follows changes made in the browser's own player menu.
 function showSpeed() {
   const rate = $('#talk-video').playbackRate;
@@ -1279,7 +1284,6 @@ $('#talk-speed').addEventListener('click', event => {
   if (button) $('#talk-video').defaultPlaybackRate = $('#talk-video').playbackRate = Number(button.dataset.rate);
 });
 const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-$('#talk-chapters').innerHTML = chapters.map(([time, label]) => `<li><button type="button" data-time="${time}"><span class="chapter-time">${clock(time)}</span><span>${escape(label)}</span></button></li>`).join('');
 $('#talk-chapters').addEventListener('click', event => {
   const button = event.target.closest('[data-time]');
   if (!button) return;
@@ -1302,8 +1306,26 @@ $('#talk-video').addEventListener('timeupdate', () => {
   if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
   else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
 });
-// The talk opens from its card in the course picker.
-function openTalk() { $('#talk').showModal(); $('#talk-video').play().catch(() => {}); }
+// Opening a different talk loads it from the start; reopening the same one carries on where it was.
+let currentTalk;
+function openTalk(name) {
+  const talk = talks[name], video = $('#talk-video');
+  if (name !== currentTalk) {
+    currentTalk = name;
+    $('#talk-title').textContent = talk.title;
+    $('#talk-length').textContent = talk.length;
+    $('#talk-name').textContent = talk.file;
+    $('#talk-date').textContent = $('#talk-date').dateTime = talk.date;
+    $('#talk-download').href = `video/${talk.file}`;
+    video.src = `video/${talk.file}`;
+    chapters = talk.chapters;
+    currentChapter = -1;
+    $('#talk-chapters').innerHTML = chapters.map(([time, label]) => `<li><button type="button" data-time="${time}"><span class="chapter-time">${clock(time)}</span><span>${escape(label)}</span></button></li>`).join('');
+    $('#talk').classList.toggle('no-chapters', !chapters.length);
+  }
+  $('#talk').showModal();
+  video.play().catch(() => {});
+}
 $('#close-talk').addEventListener('click', () => $('#talk').close());
 // Closing pauses the talk; reopening carries on from the same point.
 $('#talk').addEventListener('close', () => $('#talk-video').pause());
@@ -1696,6 +1718,7 @@ function enterTraining(level = firstUnsolved()) {
 
 // The course picker, under the Want to learn? button: a card for each course and for the talk, each
 // only a title and a small moving picture.
+const talkPicture = length => `<div class="course-preview preview-talk" aria-hidden="true"><span class="talk-play"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></svg></span><span class="talk-length">${length}</span></div>`;
 const courses = [
   { name: 'why', title: 'Why Unix?', picture: () => `<div class="course-preview preview-why" aria-hidden="true">${[['cat', 22], ['grep', 9], ['uniq -c', 4], ['head', 2]].map(([name, width]) => `<span class="why-tool">${name}</span><span class="why-pipe" style="--w: ${width}px"></span>`).join('')}</div>` },
   // Basic Training's picture is a real pipeline on its case, with its real counts.
@@ -1705,7 +1728,8 @@ const courses = [
     <path class="course-stream fd0" d="M14 52H70"/><path class="course-stream fd1" d="M166 52H204"/><path class="course-stream fd2" d="M166 76H186V58H204"/>
     <circle class="course-port fd0" cx="70" cy="52" r="4"/><circle class="course-port fd1" cx="166" cy="52" r="4"/><circle class="course-port fd2" cx="166" cy="76" r="4"/>
     <rect class="course-file" x="204" y="40" width="46" height="24" rx="4"/><text class="course-file-name" x="227" y="56" text-anchor="middle">log</text></svg>` },
-  { name: 'talk', title: 'Tips & Tricks', picture: () => `<div class="course-preview preview-talk" aria-hidden="true"><span class="talk-play"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5Z"/></svg></span><span class="talk-length">45 min talk</span></div>` },
+  { name: 'talk', title: 'Tips & Tricks', picture: () => talkPicture('45 min talk') },
+  { name: 'demo', title: 'Pipeviewer Demo', picture: () => talkPicture('34 min demo') },
 ];
 function showCourses() {
   training.choosing = true;
@@ -1714,7 +1738,7 @@ function showCourses() {
   document.documentElement.classList.add('choosing');
   $('#courses').hidden = false;
   history.replaceState(null, '', '#courses');
-  $('#course-cards').innerHTML = courses.map(course => `<button type="button" class="course-card course-${course.name}" data-course="${course.name}">${course.picture()}<span class="course-name">${escape(course.title)}</span></button>`).join('');
+  $('#course-cards').innerHTML = courses.map(course => `<button type="button" class="course-card course-${course.name}${talks[course.name] ? ' course-talk' : ''}" data-course="${course.name}">${course.picture()}<span class="course-name">${escape(course.title)}</span></button>`).join('');
   $('#course-cards [data-course]').focus({ preventScroll: true });
 }
 function hideCourses() {
@@ -1724,7 +1748,7 @@ function hideCourses() {
 }
 $('#course-cards').addEventListener('click', event => {
   const name = event.target.closest('[data-course]')?.dataset.course;
-  if (name === 'talk') return openTalk();
+  if (talks[name]) return openTalk(name);
   if (pages[name]) return transition(() => showPage(name));
   if (name === 'plumbing') transition(() => { hideCourses(); showTrack(); loadLesson(firstUnsolved()); }).then(() => { if (!toured() && training.slide < 0) startTour(); });
 });
