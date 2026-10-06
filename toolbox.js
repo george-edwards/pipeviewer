@@ -83,8 +83,13 @@ function execute(source, { replay = false } = {}) {
     state.closed = true;
     system(`<b>CASE CLOSED.</b> Jo Lee, Hydrology, four trips in eight minutes, and a note in the bin to prove it. Solved in ${plural(state.history.length, 'command')}, with ${plural(state.used.size, 'tool')}.`, 'closed');
   }
-  if (state.found.size !== before || fresh.length) showNotebook();
-  if (!replay && state.found.size !== before) save();
+  // Running the open question's latest nudge reveals the next, as if Another nudge were pressed.
+  // A replay skips this, as the saved session already counts the nudges seen.
+  const open = openClue(), seen = open && (state.nudges[open.id] ?? 1);
+  const followed = !replay && open && seen < open.nudges.length && open.nudges[seen - 1].try === trimmed.replace(/\s+/g, ' ') && result.commands.every(cmd => cmd.status === 0);
+  if (followed) state.nudges[open.id] = seen + 1;
+  if (state.found.size !== before || fresh.length || followed) showNotebook();
+  if (!replay && (state.found.size !== before || followed)) save();
 }
 // One new tool gets its summary; several at once are listed together, with their cards in the notebook.
 const newTools = names => !names.length ? '' : names.length === 1
@@ -146,7 +151,7 @@ function tutor(source, result, lines) {
   }
   if (/illegal option -- -$/m.test(errors) && /--help\b/.test(source)) notes.push('The BSD tools on macOS have no <code>--help</code>. Try <code>man</code> and the tool’s name instead, as in <code>man grep</code>, or switch to bash for the GNU tools.');
   if (/^tr: extra operand/m.test(errors)) notes.push('<code>tr</code> reads only stdin, never a file name. Feed it the file with <code>&lt; file</code>, or pipe it in with <code>cat file |</code>.');
-  if (lines.length > SCREEN) notes.push(`That’s ${plural(lines.length, 'line')}, too many to read; here are the first ${SCREEN}. Try <code>head</code> to see the start, or <code>| wc -l</code> to count them.`);
+  if (lines.length > SCREEN) notes.push(`That’s too many lines to read. How many? Pipe into <code>wc -l</code> to find out, like this: <code>${escape(source.trim())} | wc -l</code>`);
   return notes;
 }
 
@@ -156,19 +161,21 @@ function help() {
   return `<pre class="out">${list.map(name => `<span><b class="${state.used.has(name) ? 'used' : ''}">${escape(name.padEnd(width))}</b>  ${escape(tools[name]?.summary ?? '')}</span>`).join('')}</pre><p class="tutor">Join them with <code>|</code>. For more on one, type <code>man</code> and its name, as in <code>man grep</code>.</p>`;
 }
 
-// The case notebook. The first open question shows its nudges, one at a time, on request.
+// The case notebook. The open question shows its first nudge, which names a command to try, and
+// the rest one at a time, on request.
+const openClue = () => clues.find(clue => !state.found.has(clue.id) && (!clue.mail || state.mailed));
 function showNotebook() {
-  const current = clues.find(clue => !state.found.has(clue.id) && (!clue.mail || state.mailed));
+  const current = openClue();
   $('#tally').textContent = `${state.found.size} / ${clues.length}`;
   $('#clues').innerHTML = clues.map((clue, i) => {
     const found = state.found.has(clue.id), locked = clue.mail && !state.mailed, now = clue === current;
-    const seen = state.nudges[clue.id] ?? (i === 0 ? 1 : 0);
+    const seen = state.nudges[clue.id] ?? 1;
     const nudges = clue.nudges.slice(0, seen).map(nudge => `<li>${prose(nudge.text)}${nudge.try ? ` <button type="button" class="try" data-try="${escape(nudge.try)}" title="Put this in the terminal">${escape(nudge.try)}</button>` : ''}</li>`).join('');
     const body = found
       ? `<p class="answer">${prose(clue.answer)}</p>${clue.tip && clue.id === state.latest ? `<p class="tip">${prose(clue.tip)}</p>` : ''}`
       : now ? `${nudges ? `<ul class="nudges">${nudges}</ul>` : ''}${seen < clue.nudges.length ? `<button type="button" class="stuck" data-clue="${clue.id}">${seen ? 'Another nudge' : 'Stuck?'}</button>` : ''}` : '';
     return `<li class="clue ${found ? 'found' : locked ? 'locked' : now ? 'now' : 'ahead'}"><span class="mark" aria-hidden="true">${found ? '✓' : i + 1}</span><div><p class="question">${locked ? 'Something may turn up…' : escape(clue.question)}</p>${body}</div></li>`;
-  }).join('') + (state.closed ? `<li class="closed-card"><p><b>Case closed.</b> ${plural(state.used.size, 'tool')} used, each doing one small job on lines of text.</p><p><a href="#training">On to Practise Plumbing</a></p></li>` : '');
+  }).join('') + (state.closed ? `<li class="closed-card"><p><b>Case closed.</b> ${plural(state.used.size, 'tool')} used, each doing one small job on lines of text.</p></li>` : '');
   // Earlier answers fold down to the answer alone; the tip stays on the latest, and the open
   // question is kept in view.
   $('#clues .clue.now')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -178,7 +185,7 @@ $('#clues').addEventListener('click', event => {
   const stuck = event.target.closest('.stuck'), attempt = event.target.closest('.try');
   if (stuck) {
     const clue = clues.find(c => c.id === stuck.dataset.clue);
-    state.nudges[clue.id] = (state.nudges[clue.id] ?? (clue === clues[0] ? 1 : 0)) + 1;
+    state.nudges[clue.id] = (state.nudges[clue.id] ?? 1) + 1;
     save();
     showNotebook();
   }

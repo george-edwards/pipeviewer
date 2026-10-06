@@ -65,7 +65,10 @@ Instant coffee        1 jar
 Vegemite              1 jar
 `;
 
-const rot13 = text => text.replace(/[a-z]/gi, c => String.fromCharCode((c <= 'Z' ? 65 : 97) + (c.toUpperCase().charCodeAt(0) - 52) % 26));
+// The note in the bin, torn into ten numbered scraps and picked up out of order. Ten, so that plain
+// `sort` puts 10 after 1 and `sort -n` is needed.
+const scraps = ['Sorry.', 'I had a grant', 'deadline and', 'no lunch.', 'I only meant', 'to have one.', 'Two new packets', 'on Monday,', 'promise.', 'J'];
+const pickedUp = [7, 2, 10, 5, 1, 8, 4, 9, 3, 6];
 
 export const files = {
   'README': `CASE FILE: THE MISSING TIM TAMS
@@ -82,10 +85,7 @@ Find out who did it. Use nothing but the shell.
 
   Facilities
 `,
-  'found-in-bin.txt': `${rot13(`Sorry. I had a grant deadline and no lunch.
-I only meant to have one.
-Two new packets on Monday, promise.
-  J`)}\n`,
+  'found-in-bin.txt': pickedUp.map(n => `${n} ${scraps[n - 1]}\n`).join(''),
   'pantry-1500.txt': pantry('1 packet'),
   'pantry-1510.txt': pantry('0 packets'),
   'staff.txt': `${staff.join('\n')}\n`,
@@ -93,8 +93,8 @@ Two new packets on Monday, promise.
 };
 
 // The case. Each clue is a question with a test of what reached the screen, the answer to note
-// down once it has, an optional tip, and nudges for a student who's stuck, from a pointer to a
-// command to try. The note in the bin turns up by mail once the student knows who went in most.
+// down once it has, an optional tip, and nudges, each with a command to try. The first is shown
+// straight away; the rest are for a student who's stuck. The note in the bin turns up by mail once the student knows who went in most.
 const inWindow = files['swipes.log'].trimEnd().split('\n').filter(line => line.startsWith('2026-10-02T15:0') && line.includes('kitchen'));
 const suspects = [...new Set(inWindow.map(line => line.split(' ')[2]))];
 const shown = text => text.split('\n').map(line => line.trim()).filter(Boolean);
@@ -116,10 +116,7 @@ export const clues = [
     found: text => /Tim Tams\s+1 packet/.test(text) && /Tim Tams\s+0 packets/.test(text),
     answer: 'On Friday, between 15:00 and 15:10.',
     tip: '`diff` shows only the lines that changed between two files. It’s how `git` shows changes to code.',
-    nudges: [
-      { text: 'The smart pantry listed its shelves at 15:00 and at 15:10. What changed between the two lists?' },
-      { text: '`diff` compares two files and prints only the lines that differ.', try: 'diff pantry-1500.txt pantry-1510.txt' },
-    ],
+    nudges: [{ text: 'The smart pantry listed its shelves at 15:00 and at 15:10. `diff` compares two files and prints only the lines that differ.', try: 'diff pantry-1500.txt pantry-1510.txt' }],
   },
   {
     id: 'kitchen', question: 'Who went into the kitchen in those ten minutes?',
@@ -133,9 +130,10 @@ export const clues = [
     answer: `${suspects.join(', ')}. One name keeps coming up.`,
     tip: 'Each `|` sent one command’s output into the next. Click the stages above a pipeline’s output to see what each one passed on.',
     nudges: [
-      { text: '`swipes.log` has every badge swipe this week, too many to read. `head` shows just the first few.', try: 'head swipes.log' },
-      { text: 'Each swipe starts with its time, such as `2026-10-02T15:04:18`. `grep` keeps the lines that contain a pattern, so `2026-10-02T15:0` finds Friday, 15:00 to 15:09.', try: 'grep 2026-10-02T15:0 swipes.log' },
-      { text: 'Some of those were at other doors. Send the lines through a second `grep` with `|`, to keep the kitchen’s.', try: 'grep 2026-10-02T15:0 swipes.log | grep kitchen' },
+      { text: '`swipes.log` has every badge swipe this week. Print it with `cat`.', try: 'cat swipes.log' },
+      { text: 'That’s too many lines to see properly. `head` prints just the first ten.', try: 'head swipes.log' },
+      { text: 'Each swipe starts with its time, such as `2026-10-02T15:04:18`. `grep` keeps the lines that contain a pattern, so `2026-10-02T15:0` finds Friday, 15:00 to 15:09. Send `cat`’s output into `grep` with `|`.', try: 'cat swipes.log | grep 2026-10-02T15:0' },
+      { text: 'Some of those were at other doors. Send the lines through a second `grep` with another `|`, to keep the kitchen’s.', try: 'cat swipes.log | grep 2026-10-02T15:0 | grep kitchen' },
     ],
   },
   {
@@ -144,8 +142,8 @@ export const clues = [
     answer: 'jlee: four trips in eight minutes.',
     tip: '`sort | uniq -c` is the shell’s tally. Add `| sort -rn | head -n 1` and it keeps just the top line.',
     nudges: [
-      { text: 'Keep only the names: `cut -d \' \' -f 3` splits each line at spaces and keeps the third field.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3" },
-      { text: '`uniq -c` counts repeated lines, but only when they’re next to each other. So `sort` them first.', try: "grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c" },
+      { text: 'Keep only the names: `cut -d \' \' -f 3` splits each line at spaces and keeps the third field.', try: "cat swipes.log | grep 2026-10-02T15:0 | grep kitchen | cut -d ' ' -f 3" },
+      { text: '`uniq -c` counts repeated lines, but only when they’re next to each other. So `sort` them first.', try: "cat swipes.log | grep 2026-10-02T15:0 | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c" },
     ],
   },
   {
@@ -157,13 +155,18 @@ export const clues = [
   },
   {
     id: 'note', question: 'What does the note say?', mail: true,
-    found: text => text.includes('Sorry. I had a grant deadline'),
+    // The scraps in order, with their numbers or without.
+    found: text => {
+      const lines = shown(text).map(line => line.replace(/^\d+\s+/, '')), start = lines.indexOf(scraps[0]);
+      return start >= 0 && scraps.every((scrap, k) => lines[start + k] === scrap);
+    },
     answer: 'A confession, and a promise of two new packets on Monday.',
-    tip: 'ROT13 moves each letter 13 places along the alphabet, so doing it twice gets you back where you started.',
+    tip: '`sort` compares lines character by character, as a dictionary does, so `10` comes before `2`. `sort -n` reads the numbers as numbers. `cut -d \' \' -f 2-` would drop them, leaving just the words.',
     nudges: [
       { text: 'Have a look at it first.', try: 'cat found-in-bin.txt' },
-      { text: 'It’s ROT13: each letter swapped for the one 13 places along. `tr` swaps characters from one set to another, and reads only stdin, so feed it the file with `<`.', try: 'tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt' },
+      { text: 'The scraps are numbered, but they were picked up out of order. `sort` puts lines in order: pipe the note into it.', try: 'cat found-in-bin.txt | sort' },
+      { text: 'Nearly: scrap 10 came out second, because `sort` compares character by character and `1` comes before `2`. `sort -n` sorts by number instead.', try: 'cat found-in-bin.txt | sort -n' },
     ],
   },
 ];
-export const mail = 'Cleaners found a screwed-up note in the kitchen bin. It’s in found-in-bin.txt now, but it’s gibberish to us.';
+export const mail = 'Cleaners found a torn-up note in the kitchen bin and picked up the scraps. They’re in found-in-bin.txt now, but we can’t make head or tail of it.';

@@ -21,6 +21,11 @@ test('each question’s last nudge finds its answer, on both systems, with no er
   }
   assert.equal(new Set(clues.map(clue => clue.id)).size, clues.length);
 });
+
+// Basic Training is for people who don't know the commands yet, so every nudge names one to try.
+test('every nudge gives a command to try', () => {
+  for (const clue of clues) for (const nudge of clue.nudges) assert.ok(nudge.try, `${clue.id}: ${nudge.text}`);
+});
 test('other routes to an answer count too', () => {
   const finds = (id, source) => { const result = shell(source); return clues.find(clue => clue.id === id).found(screenLines(result).map(line => line.text).join('\n'), result); };
   assert.ok(finds('kitchen', "grep kitchen swipes.log | grep 2026-10-02T15:0 | awk '{print $3}' | sort -u"));
@@ -30,17 +35,20 @@ test('other routes to an answer count too', () => {
   assert.ok(finds('when', 'cat pantry-1500.txt pantry-1510.txt'));
   assert.ok(!finds('look', 'cat README'));
   assert.ok(finds('whois', 'grep ^jlee: staff.txt'));
+  assert.ok(finds('note', "sort -n found-in-bin.txt | cut -d ' ' -f 2-"));
+  assert.ok(!finds('note', 'cat found-in-bin.txt | sort'));
 });
 test('the case comes out the same way every time', () => {
   assert.deepEqual(out("grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3 | sort | uniq -c | sort -rn | head -n 1").map(line => line.trim()), ['4 jlee']);
   assert.deepEqual(out('grep jlee staff.txt').length, 2);
   assert.deepEqual(out('grep -w jlee staff.txt'), ['jlee:Jo Lee:Hydrology:3']);
-  assert.match(out('tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt')[0], /^Sorry\./);
+  assert.deepEqual(out('sort -n found-in-bin.txt').slice(0, 2), ['1 Sorry.', '2 I had a grant']);
+  assert.equal(out('sort found-in-bin.txt')[1], '10 J');
   assert.ok(Number(out('wc -l < swipes.log')[0]) > 200);
 });
 test('other spellings of a target print the same', () => {
   const same = (a, b) => assert.ok(matches(screen(a), screen(b)), `${a} vs ${b}`);
-  same('tr A-Za-z N-ZA-Mn-za-m < found-in-bin.txt', 'cat found-in-bin.txt | tr A-Za-z N-ZA-Mn-za-m');
+  same('sort -n < found-in-bin.txt', 'cat found-in-bin.txt | sort -n');
   same("grep 2026-10-02T15:0 swipes.log | grep kitchen | cut -d ' ' -f 3", "grep kitchen swipes.log | grep 2026-10-02T15:0 | awk '{print $3}'");
   same('wc -l swipes.log', 'wc -l swipes.log');
   same('grep -w jlee staff.txt', 'grep ^jlee: staff.txt');
@@ -48,7 +56,7 @@ test('other spellings of a target print the same', () => {
   assert.ok(matches(screen('sort staff.txt | cut -c 1 | uniq -c', 'linux'), screen('sort staff.txt | cut -c 1 | uniq -c', 'macos')));
 });
 test('commands fail as the real ones do', () => {
-  assert.deepEqual(err('tr A-Za-z N-ZA-Mn-za-m found-in-bin.txt'), ["tr: extra operand 'found-in-bin.txt'", "Try 'tr --help' for more information."]);
+  assert.deepEqual(err('tr a-z A-Z staff.txt'), ["tr: extra operand 'staff.txt'", "Try 'tr --help' for more information."]);
   assert.deepEqual(err('cat nope.txt'), ['cat: nope.txt: No such file or directory']);
   assert.deepEqual(err('nope'), ['bash: nope: command not found']);
   assert.deepEqual(err('nope', 'macos'), ['zsh: command not found: nope']);
