@@ -866,23 +866,8 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
   .toolbox-page .desk { height: auto; }
 }
 
-/* Why Unix?: two films, then an investigation in steps. Pipes are drawn in stdin's green, output is
-   printed on green-bar paper, and the apps it is compared with wear their own window frames. */
-.why-page {
-  --band: color-mix(in srgb, var(--green-bg) 60%, var(--page));
-  --app-go: #2b8a3e;
-  max-width: 68rem; margin-inline: auto;
-}
-.why-page h3 { margin: .625rem 0 .5rem; font-size: clamp(1.375rem, 2.6vw, 1.875rem); line-height: 1.15; letter-spacing: -.03em; max-width: 26ch; }
-.why-page .kicker { font: 500 .75rem/1 var(--mono); letter-spacing: .06em; color: var(--green); }
-.why-page .lede { margin: 0; max-width: 58ch; font-size: 1.0625rem; line-height: 1.6; color: var(--muted); }
-.why-page .aside { margin: 1rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--muted); }
-.why-page code { font: .875em var(--mono); }
-.why-step { padding: 3rem 0 1rem; border-top: 1px solid var(--border); }
-.why-step.done > .kicker::after { content: ' ✓'; }
-.why-grid { display: grid; gap: 2rem; margin-top: 1.75rem; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
-.why-hero { padding: 3.5rem 0 2.5rem; }
-.why-hero h3 { font-size: clamp(1.75rem, 4.2vw, 2.75rem); line-height: 1.05; max-width: 18ch; }
+/* Why Unix?: four films, one under another. */
+.why-page { max-width: 68rem; margin-inline: auto; }
 .why-end { margin: 3.5rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: 1rem; line-height: 1.6; }
 .why-end a { color: var(--green); font-weight: 600; }
 
@@ -897,7 +882,8 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .scene-stage > svg { display: block; width: 100%; height: auto; overflow: visible; }
 /* Until it's played, a film is a play button that breathes, like the talk's. */
 .scene-play { position: absolute; inset: 0; margin: auto; display: grid; place-items: center; width: 4.5rem; height: 4.5rem; border: 0; border-radius: 50%; background: var(--green); color: var(--surface); box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 40%, transparent); cursor: pointer; animation: scene-breathe 2.4s ease-in-out infinite; transition: transform .2s; }
-.scene-play:hover { transform: scale(1.06); }
+.scene:has(.scene-play):not(.played) { cursor: pointer; }
+.scene:not(.played):hover .scene-play { transform: scale(1.06); }
 .scene-play svg { width: 2rem; height: 2rem; margin-left: .25rem; fill: currentColor; }
 .played .scene-play { display: none; }
 /* The timeline: a segment per caption, filling in stdin's green as the film plays. */
@@ -926,138 +912,38 @@ svg.flowing .stream-link:not(.unused-link) path:not(.link-hit, .glyph *) { strok
 .sc-count.c { fill: var(--amber); }
 .sc-ring { fill: none; stroke: var(--purple); stroke-width: 2; }
 .sc-total { font: 600 28px var(--mono); fill: var(--green); text-anchor: middle; dominant-baseline: middle; }
-
-/* Tools and pipes: each tool is a block, and the pipe between two is as wide as the lines in it. */
-.why-page .tool { font: 500 .9375rem/1 var(--mono); color: var(--text); background: var(--surface); border: 1.5px solid var(--text); border-radius: .4375rem; padding: .625rem .875rem; white-space: pre; cursor: pointer; }
-.why-page .tool.src { cursor: default; background: var(--text); color: var(--surface); }
-.why-page .chain { display: flex; flex-direction: column; align-items: center; }
-.why-page .chain .tool.in { animation: why-drop .25s ease-out; }
-.why-page .chain button.tool:hover { border-style: dashed; opacity: .65; text-decoration: line-through; }
-@keyframes why-drop { from { opacity: 0; transform: translateY(-.5rem); } }
-.why-page .joint { all: unset; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; height: 2.875rem; cursor: crosshair; }
-.why-page .joint .pipe { grid-column: 2; width: var(--w, 4px); height: 100%; border-radius: 2px; transition: width .35s ease, box-shadow .15s;
-  background: repeating-linear-gradient(to bottom, var(--green) 0 7px, color-mix(in srgb, var(--green) 55%, transparent) 7px 14px); background-size: 100% 14px; animation: why-down .7s linear infinite; }
-@keyframes why-down { to { background-position: 0 14px; } }
-.why-page .joint.empty .pipe { opacity: .25; }
-.why-page .joint .n { grid-column: 3; justify-self: start; padding-left: .875rem; font: .8125rem var(--mono); color: var(--muted); white-space: nowrap; }
-.why-page .joint:is(:hover, :focus-visible, .on) .pipe { box-shadow: 0 0 0 4px var(--green-bg); }
-.why-page .joint:is(:hover, .on) .n { color: var(--green); }
-.why-page .joint:focus-visible .n { outline: 2px solid var(--focus); outline-offset: 2px; }
-.why-page .tray { display: flex; flex-wrap: wrap; gap: .625rem; justify-content: center; min-height: 3.875rem; margin-bottom: 1.375rem; }
-.why-page .tray .tool { display: flex; flex-direction: column; align-items: center; gap: .375rem; border-style: dashed; padding: .5625rem .75rem .5rem; }
-.why-page .tray .tool b { font-weight: 500; }
-.why-page .tray .tool span { font: .75rem/1 var(--sans); color: var(--muted); white-space: nowrap; }
-.why-page .tray .tool:hover { border-style: solid; background: var(--green-bg); }
-.why-page .tray.idle .tool { animation: why-nudge 2.4s ease-in-out infinite; }
-.why-page .tray.idle .tool:nth-child(2n) { animation-delay: .3s; }
-@keyframes why-nudge { 50% { border-color: var(--green); color: var(--green); } }
-.why-page .chain-cmd { margin: 1.25rem 0 .625rem; font: .875rem/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
-.why-page .chain-cmd b { color: var(--text); font-weight: 500; }
-.why-page .paper { font: .84375rem/22px var(--mono); border: 1px solid var(--border); border-radius: .5rem; overflow: auto; background-color: var(--surface);
-  background-image: repeating-linear-gradient(to bottom, var(--band) 0 66px, transparent 66px 132px); background-attachment: local; }
-.why-page .paper pre { margin: 0; padding: 0 1rem; min-height: 66px; font: inherit; white-space: pre; }
-.why-page .paper .hit { color: var(--amber); font-weight: 600; }
-.why-page .paper .gone { color: var(--muted); text-decoration: line-through; }
-.why-page .paper .foot { position: sticky; left: 0; padding: 0 1rem; color: var(--muted); font-style: italic; }
-.why-page .out1 { height: 17rem; }
-.why-page .out4 { height: 12.5rem; }
-.why-page .verdict { min-height: 1.5rem; margin: .875rem 0 0; font: 600 .9375rem var(--mono); color: var(--amber); opacity: 0; transition: opacity .4s; }
-.why-page .cracked .verdict { opacity: 1; }
-.why-page .cracked .chain .tool:not(.src) { border-color: var(--green); }
-
-/* The apps it is compared with. */
-.why-page .win { border: 1px solid var(--border); border-radius: .625rem; background: var(--surface); overflow: hidden; font-size: .8125rem; line-height: 1.4; box-shadow: 0 1.125rem 2.5rem -1.5rem rgb(20 30 50 / .35); }
-.why-page .win .bar { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; background: var(--inset); color: var(--muted); font-weight: 600; }
-.why-page .win .bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.why-page .win .bar i { width: 1rem; font-style: normal; text-align: center; opacity: .6; }
-.why-page .win .tb { display: flex; padding: .5rem .625rem; border-bottom: 1px solid var(--border); }
-.why-page .win input { flex: 1; min-width: 0; padding: .3125rem .5rem; border: 1px solid var(--border); border-radius: .3125rem; background: var(--surface); color: var(--text); font: inherit; }
-.why-page .win .tbl { height: 23.75rem; overflow: auto; }
-.why-page .win table { width: 100%; border-collapse: collapse; }
-.why-page .win th { position: sticky; top: 0; padding: .3125rem .5rem; background: var(--inset); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; cursor: pointer; user-select: none; }
-.why-page .win td { padding: .1875rem .5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.why-page .win td:nth-child(3) { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; }
-.why-page .win .st { padding: .3125rem .625rem; background: var(--inset); color: var(--muted); font-size: .75rem; }
-.why-page .menubar { display: flex; gap: 2px; padding: .25rem .375rem; background: var(--inset); border-bottom: 1px solid var(--border); }
-.why-page .menubar span { padding: .1875rem .5625rem; border-radius: .25rem; }
-.why-page .menubar .open { background: var(--purple); color: var(--surface); }
-.why-page .menu { width: 13rem; margin-left: 8.5rem; padding: .25rem 0; border: 1px solid var(--border); border-radius: 0 0 .375rem .375rem; background: var(--surface); box-shadow: 0 .625rem 1.5rem -.875rem rgb(0 0 0 / .4); }
-.why-page .menu div { display: flex; justify-content: space-between; padding: .3125rem .875rem; }
-.why-page .menu div:hover { background: var(--purple); color: var(--surface); }
-.why-page .menu small { opacity: .55; }
-.why-page .menu hr { margin: .25rem 0; border: 0; border-top: 1px solid var(--border); }
-.why-page .menu-room { height: 5.5rem; }
-.why-page .results { padding: .375rem .875rem .875rem; }
-.why-page .res { display: grid; gap: 2px; padding: .625rem 0; border-bottom: 1px solid var(--border); }
-.why-page .res:last-child { border-bottom: 0; }
-.why-page .res small { color: var(--muted); font-size: .71875rem; }
-.why-page .res b { color: var(--purple); font-size: .875rem; font-weight: 600; }
-.why-page .res .dl { justify-self: start; margin-top: .375rem; padding: .375rem .875rem; border-radius: .3125rem; background: var(--app-go); color: #fff; font-size: .75rem; font-weight: 700; }
-.why-page .res .dl.plain { padding: 0; background: none; color: var(--purple); font-weight: 400; text-decoration: underline; }
-
-/* Terminals: the shell on the pretend server. */
-.why-page .term { border: 1px solid var(--term-border); border-radius: .5rem; background: var(--term-bg); color: var(--term-text); font: .84375rem/1.55 var(--mono); cursor: text; }
-.why-page .term .scroll { height: 18.75rem; overflow: auto; padding: .75rem 1rem; }
-.why-page .term.short .scroll { height: 13.75rem; }
-.why-page .term .out div { min-height: 1.55em; white-space: pre-wrap; overflow-wrap: anywhere; }
-.why-page .term .out .echo { margin-top: .375rem; }
-.why-page .term .out .err { color: var(--amber); }
-.why-page .term .out .more { color: var(--term-muted); font-style: italic; }
-.why-page .term .out .slow { animation: why-drop .2s ease-out both; }
-.why-page .term .ps1 { color: var(--green); font-weight: 500; user-select: none; }
-.why-page .term .line { display: flex; gap: .5rem; align-items: baseline; margin-top: .375rem; }
-.why-page .term input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: none; color: var(--term-text); font: inherit; caret-color: var(--green); }
-.why-page .term .enter { padding: 0 .3125rem; border: 1px solid currentColor; border-radius: .25rem; color: var(--green); font: .75rem var(--mono); opacity: 0; transition: opacity .2s; }
-.why-page .term .line.has .enter { opacity: .55; }
-.why-page .term .line.has.nudge .enter { animation: why-blink 1.6s ease-in-out infinite; }
-@keyframes why-blink { 50% { opacity: 1; } }
-.why-page .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
-.why-page .chip { padding: .3125rem .75rem; border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-radius: 99px; background: none; color: var(--green); font: .8125rem var(--mono); cursor: pointer; }
-.why-page .chip:hover { background: var(--green-bg); }
-
-/* Everything is a file: the files, the live log, and the wizard Windows uses instead. */
-.file-tree { display: flex; flex-direction: column; gap: 2px; font: .875rem/1 var(--mono); }
-.file-tree .dir { margin: .875rem 0 .375rem; color: var(--muted); }
-.file-tree .dir:first-child { margin-top: 0; }
-.file-tree button { all: unset; display: flex; justify-content: space-between; gap: .75rem; padding: .4375rem .625rem .4375rem 1.125rem; border-radius: .375rem; cursor: pointer; }
-.file-tree button:is(:hover, :focus-visible) { background: var(--green-bg); }
-.file-tree button b { font-weight: 400; }
-.file-tree button span { color: var(--muted); font-size: .75rem; }
-.file-tree button.changed { animation: why-flash 1.4s ease-out; }
-@keyframes why-flash { 0%, 30% { background: var(--amber-bg); } }
-.why-page .tailhead { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin: 1.125rem 0 .5rem; font: .8125rem var(--mono); color: var(--muted); }
-.why-page .rate { padding: .125rem .5625rem; border-radius: 99px; background: var(--amber-bg); color: var(--amber); white-space: nowrap; transition: background .4s, color .4s; }
-.why-page .blocked .rate { background: var(--green-bg); color: var(--green); }
-.why-page .tail { height: 12.5rem; overflow: hidden; }
-.why-page .tail pre div { animation: why-drop .3s ease-out; }
-.why-page .wizard { display: flex; gap: 1.375rem; align-items: flex-start; margin-top: 2.25rem; }
-.why-page .stack { position: relative; flex: none; width: 13rem; height: 11rem; }
-.why-page .stack div { position: absolute; width: 11rem; padding: .375rem .5rem; border: 1px solid var(--border); border-radius: .3125rem; background: var(--inset); color: var(--muted); font-size: .6875rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 10px -8px rgb(0 0 0 / .4); }
-.why-page .wizard p { margin: 0; font-size: .9375rem; line-height: 1.55; color: var(--muted); }
-
-/* What you type, you can keep: the script, before and after it's saved. */
-.why-page .script { border: 1.5px solid var(--text); border-radius: .5rem; overflow: hidden; background: var(--surface); }
-.why-page .script .name { padding: .5rem .875rem; border-bottom: 1.5px solid var(--text); font: 500 .8125rem var(--mono); }
-.why-page .script pre { margin: 0; padding: .875rem; font: .84375rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.why-page .script .arg { padding: 0 .1875rem; border-radius: .1875rem; background: var(--green); color: var(--surface); }
-.why-page .script .cmt { color: var(--muted); }
-.why-page .script.draft, .why-page .script.draft .name { border-style: dashed; }
-.why-page .save { margin: 0 .875rem .875rem; padding: .625rem 1rem; border: 0; border-radius: .4375rem; background: var(--green); color: var(--surface); font: 600 .9375rem var(--sans); cursor: pointer; animation: why-beckon 2.4s ease-in-out infinite; }
-@keyframes why-beckon { 50% { box-shadow: 0 0 0 5px var(--green-bg); } }
-
-/* Do one thing well: the question a pipeline answers, in words, with what a swap changed lit up. */
-.why-page .question { min-height: 2.3em; margin: 0 0 1.125rem; font-size: clamp(1.375rem, 2.6vw, 1.875rem); font-weight: 700; line-height: 1.2; letter-spacing: -.03em; }
-.why-page .question span { border-radius: .3125rem; transition: background .6s; }
-.why-page .question .fresh { background: var(--green-bg); animation: why-fresh 1.2s ease-out; }
-@keyframes why-fresh { from { background: color-mix(in srgb, var(--green) 45%, transparent); } }
-.why-page .chain select.tool { appearance: none; padding-right: 1.875rem; border-color: var(--green); cursor: pointer;
-  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23699'/%3E%3C/svg%3E") no-repeat right .6875rem center; }
+/* The software film: a web search, its installers, and the repository. */
+.sc-edge { fill: none; stroke: var(--border); stroke-width: 1.2; }
+.sc-field { fill: var(--inset); stroke: var(--border); }
+.sc-small { font: 10px var(--sans); fill: var(--muted); }
+.sc-body { font: 11px var(--sans); fill: var(--text); }
+.sc-ad { font: 600 9.5px var(--sans); fill: var(--amber); }
+.sc-meta { font: 9.5px var(--sans); fill: var(--muted); }
+.sc-title { font: 600 12px var(--sans); fill: var(--purple); }
+.sc-dl { fill: var(--green); }
+.sc-dl-text { font: 700 9.5px var(--sans); fill: var(--surface); text-anchor: middle; dominant-baseline: middle; }
+.sc-link { font: 9.5px var(--sans); fill: var(--purple); text-anchor: end; text-decoration: underline; }
+.sc-pointer { fill: var(--text); stroke: var(--surface); stroke-width: 1.2; stroke-linejoin: round; }
+.sc-q { font: 700 22px var(--sans); fill: var(--amber); text-anchor: middle; }
+.sc-btn { fill: var(--inset); stroke: var(--text); stroke-width: 1; }
+.sc-btn-text { font: 600 9.5px var(--sans); fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+.sc-status { font: 700 15px var(--sans); text-anchor: middle; }
+.sc-status.ok { fill: var(--green); }
+.sc-status.bad { fill: var(--amber); }
+.sc-shelf { fill: var(--inset); stroke: var(--text); stroke-width: 1.5; }
+.sc-pkgname { font: 500 11px var(--mono); fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+.sc-seal { fill: var(--green); }
+.sc-tick { fill: none; stroke: var(--surface); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sc-good { font: 600 14px var(--sans); fill: var(--green); text-anchor: middle; }
+/* Bell Labs' film, as a tape until it's played. */
+.bell-film { margin: 1.25rem 0 .75rem; }
+/* Shown just before the film jumps ahead, so the jump doesn't look like a fault. */
+.scene .skip-note { min-height: 0; font-size: 1.375rem; font-weight: 700; color: var(--text); opacity: 0; transition: opacity 2.2s; }
+#scene-bell:has(.near-skip) .skip-note { opacity: 1; }
+.bell-film .tape { width: min(20rem, 100%); }
 
 @media (max-width: 56em) {
-  .why-grid { grid-template-columns: minmax(0, 1fr); }
-  .why-page .wizard { flex-direction: column; }
   .scene { padding: 1rem; }
-  .why-page .menu { margin-left: 4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .why-page *, .why-page *::before { animation: none !important; transition: none !important; }
