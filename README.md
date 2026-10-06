@@ -21,6 +21,8 @@ Serve `dist/` with any static host, at a domain's root or under a subpath such a
 
 `./deploy-jellyfin.sh` tests, builds, and deploys to `https://pipeviewer.offelbrook.com` on the host `jellyfin`: it copies `dist/` to `/var/www/pipeviewer` over SSH, writes `/etc/nginx/sites-available/pipeviewer` (HTTPS and HTTP/2 with the `*.offelbrook.com` certificate in `/etc/letsencrypt/live/offelbrook.com/`, gzip for the code and icons, and HTTP redirected to HTTPS), links it into `sites-enabled`, and reloads nginx once `nginx -t` passes. If `nginx -t` fails, the previous site file is put back. The deployed copy hides the **Tips & Tricks** card in the course picker with a `<style>` added to its `index.html`; the source and local builds keep it. sudo on the server may ask for your password. The host, domain, folder and certificate are set at the top of the script.
 
+`./deploy-george.sh` does the same for `https://pipeviewer.it.csiro.au` on the host `george`. It copies to `/var/www/pipeviewer` and writes `/etc/nginx/sites-available/pipeviewer.it.csiro.au`, using `/etc/ssl/certs/pipeviewer.it.csiro.au--certificate.crt` and `/etc/ssl/private/pipeviewer.it.csiro.au.key`, the same naming as george's other sites. It stops before installing anything if either file is missing. The Tips & Tricks card is left showing.
+
 The **Tips & Tricks** card in the course picker plays a recorded talk from `video/`, which is not in git. Put the `.webm` file there before building, and `npm run build` copies it to `dist/video/`. Your static host must support HTTP range requests so the player can seek. The dev server supports them.
 
 ## Features
