@@ -4,9 +4,10 @@
 #   ./deploy-george.sh     test, build, copy the site, write the nginx site file, and reload nginx
 #
 # The site is copied to a staging folder in your home directory on the server first, and then
-# installed with sudo, so sudo can ask for your password as usual. The nginx site file is named
-# after the domain, like the others on george, and is written on every deploy; if nginx -t rejects
-# it, the previous file is put back.
+# installed with sudo, so sudo can ask for your password as usual. The certificate and key come
+# from scratch/ here and are installed beside george's others; the staged copies are deleted. The
+# nginx site file is named after the domain, like the others on george, and is written on every
+# deploy; if nginx -t rejects it, the previous file, certificate and key are put back.
 set -euo pipefail
 
 HOST=george
@@ -15,11 +16,17 @@ DOMAIN=pipeviewer.it.csiro.au
 ROOT=/var/www/$NAME
 CERT=/etc/ssl/certs/$DOMAIN--certificate.crt
 KEY=/etc/ssl/private/$DOMAIN.key
+LOCAL_CERT=scratch/$DOMAIN.crt   # relative to this script; scratch/ is not in git
+LOCAL_KEY=scratch/$DOMAIN.key
 STAGE=.cache/$NAME-deploy   # relative to your home directory on the server
 
 [ $# -eq 0 ] || { echo "usage: $0" >&2; exit 2; }
 
 cd "$(dirname "$0")"
+
+for file in "$LOCAL_CERT" "$LOCAL_KEY"; do
+  [ -r "$file" ] || { echo "$file is missing or unreadable; not deploying." >&2; exit 1; }
+done
 
 echo "==> Testing"
 node --test tests/*.test.mjs >/dev/null || { echo "Tests failed; not deploying. Run npm test to see why." >&2; exit 1; }
@@ -71,13 +78,17 @@ cat > "$extra/install.sh" <<EOF
 set -euo pipefail
 cd "\$(dirname "\$0")"
 
-for file in $CERT $KEY; do
-  [ -e "\$file" ] || { echo "\$file is missing, so nothing was installed. Set CERT and KEY in deploy-george.sh." >&2; exit 1; }
-done
+# The staged key is deleted however this ends.
+trap 'rm -f cert.crt cert.key' EXIT
 
 echo "==> Installing the site in $ROOT"
 mkdir -p $ROOT
 rsync -a --delete --chown=root:root --chmod=D755,F644 site/ $ROOT/
+
+echo "==> Installing the certificate and key"
+for file in $CERT $KEY; do if [ -e "\$file" ]; then cp -p "\$file" "\$file.previous"; fi; done
+install -m 644 -o root -g root cert.crt $CERT
+install -m 600 -o root -g root cert.key $KEY
 
 available=/etc/nginx/sites-available/$DOMAIN
 echo "==> Writing \$available"
@@ -87,16 +98,19 @@ ln -sfn "\$available" /etc/nginx/sites-enabled/$DOMAIN
 
 echo "==> Testing and reloading nginx"
 if ! nginx -t; then
+  for file in $CERT $KEY; do
+    if [ -e "\$file.previous" ]; then mv "\$file.previous" "\$file"; else rm -f "\$file"; fi
+  done
   if [ -e "\$available.previous" ]; then
     mv "\$available.previous" "\$available"
-    echo "nginx -t failed, so the previous \$available is back and nginx was not reloaded." >&2
+    echo "nginx -t failed, so the previous \$available, certificate and key are back and nginx was not reloaded." >&2
   else
     rm -f /etc/nginx/sites-enabled/$DOMAIN "\$available"
-    echo "nginx -t failed, so the new site was removed and nginx was not reloaded." >&2
+    echo "nginx -t failed, so the new site, certificate and key were removed and nginx was not reloaded." >&2
   fi
   exit 1
 fi
-rm -f "\$available.previous"
+rm -f "\$available.previous" $CERT.previous $KEY.previous
 systemctl reload nginx
 EOF
 
@@ -104,6 +118,8 @@ echo "==> Copying to $HOST"
 ssh "$HOST" "mkdir -p $STAGE"
 rsync -az --delete dist/ "$HOST:$STAGE/site/"
 rsync -az "$extra/$NAME.nginx" "$extra/install.sh" "$HOST:$STAGE/"
+rsync -z --chmod=F600 "$LOCAL_CERT" "$HOST:$STAGE/cert.crt"
+rsync -z --chmod=F600 "$LOCAL_KEY" "$HOST:$STAGE/cert.key"
 
 echo "==> Installing on $HOST (sudo may ask for your password)"
 ssh -t "$HOST" "sudo bash $STAGE/install.sh"
