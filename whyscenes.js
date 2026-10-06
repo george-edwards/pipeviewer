@@ -1,4 +1,4 @@
-// Why Unix?'s two films, drawn in SVG and animated in the manner of 3Blue1Brown's Manim: outlines draw
+// Why Unix?'s three drawn films, in SVG and animated in the manner of 3Blue1Brown's Manim: outlines draw
 // themselves in and then fill, things glide and fade with one smooth ease, and a caption under the
 // picture says what is happening. Each caption stays up long enough to read, and a timeline under the
 // film has a segment per caption, filling as the film plays. A film waits on its play button, and plays
@@ -269,8 +269,131 @@ async function everythingIsAFile(t) {
   await t.end();
 }
 
+/* ---------- film three: one trusted place for software ---------- */
+// A package from the repository: a box with its name on, and a seal that shows once it's checked.
+function pkg(parent, name, x, y) {
+  const g = place(draw(parent, 'g', { class: 'sc-pkg' }), x, y);
+  draw(g, 'rect', { x: -27, y: -14, width: 54, height: 28, rx: 4, class: 'sc-box' });
+  draw(g, 'text', { class: 'sc-pkgname', y: 1 }, name);
+  g.seal = place(draw(g, 'g', { opacity: 0 }), 25, -13);
+  draw(g.seal, 'circle', { r: 8, class: 'sc-seal' });
+  draw(g.seal, 'path', { d: 'M-3.5 0l2.5 2.5l4.5 -5', class: 'sc-tick' });
+  return g;
+}
+const sealed = (t, g, delay = 0) => t.animate(g.seal, [{ opacity: 0, transform: at(g.seal, 0, 0, 'scale(.4)') }, { opacity: 1, transform: at(g.seal) }], { duration: 400, delay });
+async function trustedSoftware(t) {
+  const win = draw(t.svg, 'g'), top = draw(t.svg, 'g');
+
+  // A web search for the tool, where two of the three downloads are ads dressed up as it.
+  await t.say('On Windows, when you need a program, you search the web for it.');
+  const browser = place(draw(win, 'g'), 250, 150);
+  draw(browser, 'rect', { x: -150, y: -100, width: 300, height: 200, rx: 8, class: 'sc-box' });
+  draw(browser, 'path', { d: 'M-150 -76h300', class: 'sc-edge' });
+  draw(browser, 'text', { x: -138, y: -84, class: 'sc-small' }, 'whois download windows - Search');
+  draw(browser, 'rect', { x: -136, y: -66, width: 272, height: 22, rx: 4, class: 'sc-field' });
+  draw(browser, 'text', { x: -128, y: -51, class: 'sc-body' }, 'whois download windows');
+  await t.create(browser, { duration: 900 });
+  const RESULTS = [['Ad · fastsoft-downloads.example', 'WHOIS Lookup Pro – Free 2026', 'sc-ad'], ['Ad · getwhois.example', 'Whois Tool ✓ 100% Safe ✓ Fast', 'sc-ad'], ['learn.microsoft.com › sysinternals', 'Whois v1.21 – Sysinternals', 'sc-meta']];
+  const rows = RESULTS.map(([where, title, kind], i) => {
+    const y = -26 + i * 42, row = place(draw(browser, 'g'), 0, y);
+    draw(row, 'text', { x: -136, y: 0, class: kind }, where);
+    draw(row, 'text', { x: -136, y: 15, class: 'sc-title' }, title);
+    if (i < 2) { draw(row, 'rect', { x: 68, y: -4, width: 68, height: 20, rx: 3, class: 'sc-dl' }); draw(row, 'text', { x: 102, y: 7, class: 'sc-dl-text' }, 'Download'); }
+    else draw(row, 'text', { x: 136, y: 10, class: 'sc-link' }, 'Download (387 KB)');
+    return row;
+  });
+  await Promise.all(rows.map((row, i) => t.fadeIn(row, { shift: [0, 6], delay: i * 250 })));
+  await t.wait(1200);
+
+  await t.say('Two of these downloads are ads dressed up as the real thing. Which one is safe?');
+  const cursor = place(draw(top, 'path', { d: 'M0 0v18l5 -5l4 9l3 -1.5l-4 -9h7z', class: 'sc-pointer' }), 470, 270);
+  await t.fadeIn(cursor, { shift: [10, 10] });
+  for (const [i, y] of [128, 170, 216].entries()) {
+    await t.move(cursor, 352, y, { duration: 700 });
+    const q = place(draw(top, 'text', { class: 'sc-q' }, '?'), 418, y + 10);
+    await t.fadeIn(q, { shift: [0, 6], duration: 350 });
+    await t.wait(i === 2 ? 900 : 500);
+  }
+
+  // The installer's screens, a toolbar slipped in among them, and the programs, each looking after itself.
+  await t.say('Then you click through its installer. And every program you get this way updates itself, or doesn’t.');
+  await Promise.all([t.fadeOut(cursor, { duration: 300 }), ...[...top.querySelectorAll('.sc-q')].map(q => t.fadeOut(q, { duration: 300 })), t.animate(win, [{ opacity: 1 }, { opacity: .35 }], { duration: 600 })]);
+  const STEPS = [['Welcome to Whois Pro Setup', 'Next >'], ['I accept the licence', 'I agree'], ['☑ Also install SpeedyBar', 'Next >'], ['Installing…', 'Finish']];
+  for (const [i, [body, button]] of STEPS.entries()) {
+    const dialog = place(draw(top, 'g'), 560 + i * 8, 90 + i * 18);
+    draw(dialog, 'rect', { x: -85, y: -48, width: 170, height: 96, rx: 6, class: 'sc-box' });
+    draw(dialog, 'path', { d: 'M-85 -32h170', class: 'sc-edge' });
+    draw(dialog, 'text', { x: -77, y: -37, class: 'sc-small' }, 'Whois Pro Setup');
+    draw(dialog, 'text', { x: -77, y: -6, class: 'sc-body' }, body);
+    draw(dialog, 'rect', { x: 22, y: 18, width: 56, height: 20, rx: 3, class: 'sc-btn' });
+    draw(dialog, 'text', { x: 50, y: 29, class: 'sc-btn-text' }, button);
+    await t.fadeIn(dialog, { shift: [0, 8], duration: 450 });
+    await t.wait(350);
+  }
+  const APPS = [['whois', '↻', 'ok'], ['7-Zip', '↻', 'ok'], ['VLC', '!', 'bad']];
+  const apps = APPS.map(([name, mark, kind], i) => {
+    const app = place(draw(top, 'g'), 540 + i * 66, 262);
+    draw(app, 'rect', { x: -24, y: -15, width: 48, height: 30, rx: 5, class: 'sc-box' });
+    draw(app, 'text', { class: 'sc-pkgname', y: 1 }, name);
+    draw(app, 'text', { x: 28, y: -12, class: `sc-status ${kind}` }, mark);
+    return app;
+  });
+  await Promise.all(apps.map((app, i) => t.fadeIn(app, { delay: i * 200 })));
+  await t.wait(1600);
+
+  // On Unix: one command, and the package manager fetches the tool from the repository.
+  await t.say('On Unix, you ask the package manager instead.');
+  await Promise.all([t.fadeOut(win, { duration: 500 }), t.fadeOut(top, { duration: 500 })]);
+  win.remove(); top.remove();
+  const back = draw(t.svg, 'g'), mid = draw(t.svg, 'g'), front = draw(t.svg, 'g');
+  const computer = place(draw(mid, 'g', { class: 'sc-icon' }), 120, 165, 'scale(1.5)');
+  ['M-24 -18h48v32h-48Z', 'M-8 22h16', 'M0 14v8', 'M-15 -8l5 4l-5 4', 'M-6 3h9'].forEach(d => draw(computer, 'path', { d }));
+  const you = place(draw(mid, 'text', { class: 'sc-says' }, 'your computer'), 120, 225);
+  await Promise.all([t.create(computer), t.fadeIn(you, { delay: 300 })]);
+  // Each piece is drawn only as its turn comes, or it would show, whole, until then.
+  const install = tool(mid, 'sudo apt install whois', null, 360, 62);
+  await t.create(install.g, { duration: 700 });
+  const shelf = place(draw(mid, 'g'), 620, 158);
+  draw(shelf, 'rect', { x: -95, y: -62, width: 190, height: 112, rx: 10, class: 'sc-shelf' });
+  const NAMES = ['whois', 'git', 'tree', 'vim', 'cowsay', 'curl'], slot = i => [620 + (i % 3 - 1) * 60, 158 + (i < 3 ? -25 : 21)];
+  const stock = NAMES.map((name, i) => pkg(mid, name, ...slot(i)));
+  const repo = place(draw(mid, 'text', { class: 'sc-says' }, 'one trusted repository'), 620, 236);
+  await Promise.all([t.create(shelf, { duration: 700 }), ...stock.map((g, i) => t.create(g, { duration: 600, delay: 300 + i * 90 })), t.fadeIn(repo, { delay: 700 })]);
+  await t.wait(1000);
+
+  await t.say('It fetches the tool from one trusted place, checks it’s signed, and installs it.');
+  const pipe = draw(back, 'line', { x1: 172, y1: 165, x2: 525, y2: 165, class: 'sc-pipe' });
+  await t.create(pipe, { duration: 600 });
+  const whois = pkg(front, 'whois', ...slot(0));
+  await t.move(whois, 360, 165, { duration: 1000 });
+  await sealed(t, whois);
+  await t.wait(500);
+  await t.move(whois, 120, 165, { duration: 900 });
+  const got = tool(front, 'whois', null, 120, 92);
+  await Promise.all([t.fadeOut(whois, { duration: 300 }), t.create(got.g, { duration: 700, delay: 150 })]);
+  await t.wait(1400);
+
+  await t.say('One more command updates everything you’ve installed, all at once.');
+  const upgrade = tool(mid, 'sudo apt upgrade', null, 360, 62);
+  await Promise.all([t.fadeOut(install.g, { duration: 400 }), t.create(upgrade.g, { duration: 700, delay: 200 })]);
+  await Promise.all(NAMES.map(async (name, i) => {
+    const g = pkg(front, name, ...slot(i));
+    await t.wait(i * 450);
+    await Promise.all([t.move(g, 360, 165, { duration: 900 }), sealed(t, g, 500)]);
+    await t.move(g, 120, 165, { duration: 800 });
+    await t.fadeOut(g, { duration: 250 });
+  }));
+  const fresh = place(draw(mid, 'text', { class: 'sc-good' }, 'all up to date'), 120, 225);
+  await Promise.all([t.fadeOut(you, { duration: 300 }), t.fadeIn(fresh, { delay: 200 })]);
+  await t.wait(1600);
+
+  await t.say('Like the app store on your phone, but a decade older. Windows now has winget, and Macs have Homebrew, which work the same way.');
+  await t.end();
+}
+
 // Each film, with roughly how long each of its captions stays up, for the timeline.
-const films = [['#scene-tools', smallTools, [6700, 17300, 6200, 9800, 7800]], ['#scene-files', everythingIsAFile, [7300, 6500, 15100, 5500]]];
+const films = [['#scene-tools', smallTools, [6700, 17300, 6200, 9800, 7800]], ['#scene-files', everythingIsAFile, [7300, 6500, 15100, 5500]],
+  ['#scene-install', trustedSoftware, [6700, 11000, 12200, 8700, 10800, 14100, 7900]]];
 const takes = new Map();
 function play(figure, script, beats) {
   takes.get(figure)?.stop();
@@ -278,7 +401,7 @@ function play(figure, script, beats) {
   takes.set(figure, take);
   script(take).catch(error => { if (error !== STOP) throw error; });
 }
-// Each film waits for its play button, so it starts when the student is looking at it.
+// Each film waits to be clicked, so it starts when the student is looking at it.
 let ready = false;
 export function playScenes() {
   if (ready) return;
@@ -287,7 +410,8 @@ export function playScenes() {
     const figure = document.querySelector(at);
     figure.querySelector('.scene-timeline').innerHTML = beats.map(ms => `<span style="flex: ${ms}"><i></i></span>`).join('');
     const start = () => { figure.classList.add('played'); play(figure, script, beats); };
-    figure.querySelector('.scene-play').addEventListener('click', start);
+    // Until it's played, a click anywhere on the film starts it, not just on its play button.
+    figure.addEventListener('click', () => { if (!figure.classList.contains('played')) start(); });
     figure.querySelector('.scene-replay').addEventListener('click', start);
   }
 }
