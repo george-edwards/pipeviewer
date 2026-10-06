@@ -1559,10 +1559,11 @@ function differenceMarkup(difference) {
   return `<li class="fd-${difference.fd}"><span class="fd-badge">${difference.fd}</span><span>${escape(difference.name)} ${arrow}</span><span>Yours: <strong>${escape(difference.yours)}</strong></span><span>Target: <strong>${escape(difference.target)}</strong></span></li>`;
 }
 
-// The coach, under the brief, holds the hints taken so far, or the result once the pictures match.
-// Its frame is rebuilt only when that changes, so its animations do not restart on every keystroke.
+// The coach, under the brief, holds the hints taken so far. Once the pictures match, it empties and the
+// result appears under the pictures instead, so nothing above the editor moves as the level is solved.
+// Both are rebuilt only when that changes, so their animations do not restart on every keystroke.
 function showCoach() {
-  const lesson = lessons[training.level], coach = $('#coach'), source = $('#pipeline').value.trim();
+  const lesson = lessons[training.level], coach = $('#coach'), solved = $('#solved'), source = $('#pipeline').value.trim();
   const key = `${track}:${training.matched ? `solved:${training.level}` : `hints:${training.level}:${training.hints.join(',')}`}`;
   if (key !== training.coach) {
     training.coach = key;
@@ -1573,12 +1574,16 @@ function showCoach() {
         const angle = (i / 18) * 2 * Math.PI, reach = 46 + (i * 37 % 30);
         return `<span class="spark fd-${i % 3}" style="--dx: ${(Math.cos(angle) * reach * 1.6).toFixed(1)}px; --dy: ${(Math.sin(angle) * reach - 8).toFixed(1)}px; --delay: ${(i % 5) * 0.03}s" aria-hidden="true">${i % 3}</span>`;
       }).join('') : '';
+      const fresh = training.burst;
       training.burst = false;
       const finale = `<p class="solved-finale">That’s every level so far: <strong>${total} of ${lessons.length * 3}</strong> stars.${total < lessons.length * 3 ? ' Replay a level to earn the rest.' : ' A perfect run!'}</p><div class="solved-actions"><button type="button" class="next-button" data-coach="viewer">Back to the viewer</button><button type="button" class="text-button" data-coach="replay">Start again from level 1</button></div>`;
       const next = last ? finale
         : `<div class="solved-actions"><button type="button" class="next-button" data-coach="next">Level ${levelNumber(training.level + 1)}: ${escape(lessons[training.level + 1].title)} <span aria-hidden="true">→</span></button><span class="key-hint">or press <kbd>Enter</kbd></span></div>`;
-      coach.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+      coach.innerHTML = '';
+      solved.innerHTML = `<div class="solved"><div class="solved-stars" role="img" aria-label="${training.earned} of 3 stars">${stars(training.earned)}${sparks}</div><div class="solved-body"><p class="solved-title"><strong>${cheers[training.level % cheers.length]}</strong> Level ${levelNumber(training.level)} solved.</p><p>${prose(field(lesson, 'learned'))}</p><p class="solved-spelling" id="solved-spelling"></p>${next}</div></div>`;
+      if (fresh) solved.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     } else {
+      solved.innerHTML = '';
       const parts = [
         `<div class="hint"><span class="row-label">WHAT’S DIFFERENT</span><ul class="diff-list" id="diff-list"></ul></div>`,
         `<div class="hint"><span class="row-label">HOW</span><p>${prose(field(lesson, 'how'))}</p></div>`,
@@ -1781,6 +1786,7 @@ function leaveTraining() {
   if (!training.active) return;
   if (tourStep >= 0) { tourStep = -1; $('#tour').hidden = true; $('#tour').classList.remove('open'); cancelAnimationFrame(tourFrame); }
   Object.assign(training, { active: false, model: null, differences: null, matched: false, coach: '' });
+  $('#solved').innerHTML = '';
   closeIntro();
   hideCourses();
   clearTimeout(nudgeTimer);
@@ -1834,13 +1840,15 @@ $('#hint-buttons').addEventListener('click', event => {
   showTraining();
 });
 $('#restart').addEventListener('click', () => { loadLesson(training.level, { intro: false }); nudge(); });
-$('#coach').addEventListener('click', event => {
+const coachAction = event => {
   const action = event.target.closest('[data-coach]')?.dataset.coach;
   if (action === 'next') nextLevel();
   if (action === 'replay') loadLesson(1);
   if (action === 'courses') transition(showCourses);
   if (action === 'viewer') exitTraining();
-});
+};
+$('#coach').addEventListener('click', coachAction);
+$('#solved').addEventListener('click', coachAction);
 // Once the pictures match, Enter moves on rather than starting a new line.
 $('#pipeline').addEventListener('keydown', event => {
   if (training.active && training.matched && event.key === 'Enter' && !event.shiftKey && !event.isComposing) {

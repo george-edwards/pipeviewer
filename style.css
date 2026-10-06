@@ -401,7 +401,7 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .lesson h2 { font-size: 1.375rem; letter-spacing: -.03em; display: flex; align-items: baseline; gap: .625rem; }
 .lesson-number { font: 600 .6875rem 'IBM Plex Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--green); background: var(--green-bg); padding: .1875rem .4375rem; border-radius: .25rem; transform: translateY(-.15em); }
 .lesson p { margin: .4375rem 0 0; font-size: .875rem; line-height: 1.6; color: var(--muted); max-width: 44rem; }
-.lesson code, .coach code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
+.lesson code, .coach code, .solved-slot code { font: .8125em 'IBM Plex Mono', monospace; color: var(--text); background: var(--inset); padding: .0625rem .3125rem; border-radius: .1875rem; }
 .hint-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; }
 .worth { display: inline-flex; align-items: center; gap: .0625rem; margin-right: .375rem; }
 .worth-label { font-size: .6875rem; color: var(--muted); margin-right: .3125rem; }
@@ -429,7 +429,9 @@ dialog p code { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
 .diff-list .fd-1 .fd-badge { background: var(--purple-bg); color: var(--purple); }
 .diff-list .fd-2 .fd-badge { background: var(--amber-bg); color: var(--amber); }
 .diff-list strong { font-weight: 550; overflow-wrap: anywhere; }
-/* The result of a solved level: the stars, what it showed, and the way on. */
+/* The result of a solved level, under the pictures: the stars, what it showed, and the way on. */
+.solved-slot { margin-top: .875rem; }
+.solved-slot:empty, html:not(.training) .solved-slot { display: none; }
 .solved { display: flex; gap: 1.5rem; align-items: flex-start; padding: 1rem 1.25rem; border: 1px solid var(--green); border-radius: .6875rem; background: var(--green-bg); animation: solved-in .35s cubic-bezier(.3, 1.3, .5, 1); }
 .solved-stars { position: relative; display: flex; gap: .25rem; padding-top: .25rem; }
 .solved-stars .star { width: 1.75rem; height: 1.75rem; animation: star-pop .5s cubic-bezier(.3, 1.6, .5, 1) both; }
